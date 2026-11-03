@@ -1,0 +1,374 @@
+{
+  "vimeo": {
+    "video": {
+      "id": 1,
+      "title": "Vimeo fixture",
+      "duration": 62,
+      "thumbs": {
+        "1280": "https://media.example/cover.jpg"
+      },
+      "owner": {
+        "name": "Channel"
+      }
+    },
+    "request": {
+      "files": {
+        "progressive": [
+          {
+            "url": "https://media.example/vimeo.mp4",
+            "width": 1280,
+            "height": 720,
+            "fps": 30
+          }
+        ],
+        "hls": {
+          "default_cdn": "cdn",
+          "cdns": {
+            "cdn": {
+              "url": "https://media.example/vimeo.m3u8"
+            }
+          }
+        },
+        "dash": {
+          "default_cdn": "cdn",
+          "cdns": {
+            "cdn": {
+              "url": "https://media.example/vimeo.mpd"
+            }
+          }
+        }
+      },
+      "text_tracks": [
+        {
+          "lang": "en",
+          "label": "English",
+          "url": "https://media.example/vimeo.vtt"
+        }
+      ]
+    }
+  },
+  "dailymotion": {
+    "id": "xfixture",
+    "title": "Dailymotion fixture",
+    "duration": 25,
+    "owner": {
+      "screenname": "Channel"
+    },
+    "thumbnails": {
+      "720": "https://media.example/dm.jpg"
+    },
+    "qualities": {
+      "auto": [
+        {
+          "type": "application/x-mpegURL",
+          "url": "https://media.example/dm.m3u8"
+        }
+      ]
+    },
+    "subtitles": {
+      "data": {
+        "en": {
+          "label": "English",
+          "urls": [
+            "https://media.example/dm.srt"
+          ]
+        }
+      }
+    }
+  },
+  "soundcloud": {
+    "id": 1,
+    "kind": "track",
+    "title": "SoundCloud fixture",
+    "duration": 65000,
+    "full_duration": 65000,
+    "policy": "ALLOW",
+    "artwork_url": "https://media.example/sc.jpg",
+    "permalink_url": "https://soundcloud.com/channel/track",
+    "user": {
+      "id": 2,
+      "username": "Channel"
+    },
+    "media": {
+      "transcodings": [
+        {
+          "url": "https://api-v2.soundcloud.com/media/example",
+          "format": {
+            "protocol": "hls",
+            "mime_type": "audio/ogg; codecs=\"opus\""
+          }
+        }
+      ]
+    }
+  },
+  "twitch": {
+    "video": {
+      "id": "1",
+      "title": "Twitch fixture",
+      "lengthSeconds": 90,
+      "previewThumbnailURL": "https://media.example/twitch.jpg",
+      "owner": {
+        "id": "2",
+        "displayName": "Channel"
+      }
+    },
+    "videoPlaybackAccessToken": {
+      "signature": "fixture-signature",
+      "value": "fixture-token"
+    }
+  },
+  "twitch_clip": {
+    "slug": "FixtureClip",
+    "title": "Clip fixture",
+    "durationSeconds": 15,
+    "thumbnailURL": "https://media.example/clip.jpg",
+    "broadcaster": {
+      "id": "2",
+      "displayName": "Channel"
+    },
+    "videoQualities": [
+      {
+        "frameRate": 60,
+        "quality": "720",
+        "sourceURL": "https://media.example/clip.mp4"
+      }
+    ],
+    "playbackAccessToken": {
+      "signature": "fixture-signature",
+      "value": "fixture-token"
+    }
+  },
+  "bilibili": {
+    "view": {
+      "bvid": "BVfixture",
+      "title": "BiliBili fixture",
+      "pic": "https://media.example/bili.jpg",
+      "duration": 100,
+      "owner": {
+        "mid": 2,
+        "name": "Channel"
+      }
+    },
+    "play": {
+      "code": 0,
+      "data": {
+        "dash": {
+          "video": [
+            {
+              "id": 80,
+              "baseUrl": "https://media.example/bili-video.mp4",
+              "mimeType": "video/mp4",
+              "codecs": "avc1.640028",
+              "width": 1920,
+              "height": 1080,
+              "frameRate": "60000/1001",
+              "bandwidth": 1000000
+            }
+          ],
+          "audio": [
+            {
+              "id": 30280,
+              "baseUrl": "https://media.example/bili-audio.m4a",
+              "mimeType": "audio/mp4",
+              "codecs": "mp4a.40.2",
+              "bandwidth": 128000
+            }
+          ]
+        }
+      }
+    }
+  },
+  "rumble": {
+    "vid": 1,
+    "title": "Rumble fixture",
+    "duration": 30,
+    "i": "https://media.example/rumble.jpg",
+    "author": {
+      "name": "Channel"
+    },
+    "ua": {
+      "mp4": {
+        "360": {
+          "url": "https://media.example/rumble.mp4",
+          "meta": {
+            "w": 640,
+            "h": 360,
+            "bitrate": 500000,
+            "size": 1000000
+          }
+        }
+      }
+    },
+    "cc": [
+      {
+        "lang": "en",
+        "name": "English",
+        "url": "https://media.example/rumble.vtt"
+      }
+    ]
+  },
+  "bitchute": {
+    "metadata": {
+      "video_id": "fixture",
+      "video_name": "BitChute fixture",
+      "duration": "01:30",
+      "thumbnail_url": "https://media.example/bc.jpg",
+      "channel": {
+        "channel_id": "2",
+        "channel_name": "Channel"
+      }
+    },
+    "payload": {
+      "media_type": "video/mp4",
+      "media_url": "https://media.example/bc.mp4"
+    }
+  },
+  "nico": {
+    "client": {
+      "watchTrackId": "fixture-tracking"
+    },
+    "video": {
+      "id": "sm9",
+      "title": "Nico fixture",
+      "description": "<p>Video description</p>",
+      "duration": 100,
+      "thumbnail": {
+        "player": "https://media.example/nico.jpg"
+      }
+    },
+    "media": {
+      "accessRightKey": "fixture-access-key",
+      "contents": {
+        "videos": [
+          {
+            "id": "video-lowest",
+            "isAvailable": true
+          }
+        ],
+        "audios": [
+          {
+            "id": "audio-lowest",
+            "isAvailable": true
+          }
+        ]
+      }
+    }
+  },
+  "likee": {
+    "code": 0,
+    "data": {
+      "videoInfos": [
+        {
+          "postId": "123456789",
+          "msg": "Likee fixture",
+          "videoUrl": "https://media.example/likee.mp4",
+          "coverUrl": "https://media.example/likee.jpg",
+          "videoTime": 15000
+        }
+      ]
+    }
+  },
+  "naver": {
+    "meta": {
+      "subject": "Naver fixture",
+      "cover": {
+        "source": "https://media.example/naver.jpg"
+      }
+    },
+    "videos": {
+      "list": [
+        {
+          "source": "https://media.example/naver.mp4",
+          "width": 1280,
+          "height": 720,
+          "videoBitrate": 1000,
+          "duration": 30,
+          "size": 123456
+        }
+      ]
+    },
+    "captions": {
+      "list": [
+        {
+          "locale": "ko",
+          "label": "Korean",
+          "source": "https://media.example/naver.vtt"
+        }
+      ]
+    }
+  },
+  "flickr": {
+    "info": {
+      "stat": "ok",
+      "photo": {
+        "id": "1",
+        "media": "video",
+        "secret": "fixture",
+        "server": "1",
+        "title": {
+          "_content": "Flickr fixture"
+        },
+        "description": {
+          "_content": "<p>Description</p>"
+        },
+        "video": {
+          "duration": 30
+        },
+        "owner": {
+          "nsid": "2@N00",
+          "username": "Channel"
+        }
+      }
+    },
+    "streams": {
+      "stat": "ok",
+      "streams": {
+        "stream": [
+          {
+            "type": "720p",
+            "_content": "https://media.example/flickr.mp4"
+          },
+          {
+            "type": "hls",
+            "_content": "https://media.example/flickr.m3u8"
+          }
+        ]
+      }
+    }
+  },
+  "tiktok": {
+    "id": "123456789",
+    "desc": "TikTok fixture",
+    "author": {
+      "id": "2",
+      "uniqueId": "channel"
+    },
+    "video": {
+      "width": 720,
+      "height": 1280,
+      "duration": 15,
+      "cover": "https://media.example/tk.jpg",
+      "playAddr": "https://media.example/tk.mp4?x=1&signature=fixture",
+      "downloadAddr": "https://media.example/tk-download.mp4",
+      "bitrateInfo": [
+        {
+          "Bitrate": 1000000,
+          "PlayAddr": {
+            "UrlList": [
+              "https://media.example/tk-hq.mp4"
+            ],
+            "Width": 1080,
+            "Height": 1920
+          }
+        }
+      ],
+      "subtitleInfos": [
+        {
+          "LanguageCodeName": "en",
+          "LanguageName": "English",
+          "Url": "https://media.example/tk.vtt"
+        }
+      ]
+    }
+  }
+}

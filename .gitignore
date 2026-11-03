@@ -11,3 +11,5 @@ dist/
 *.sqlite*
 .env*
 !.env.example
+/target/
+/vendor/**/*.original

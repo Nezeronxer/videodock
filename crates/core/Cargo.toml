@@ -1,0 +1,36 @@
+[package]
+name = "videodock-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license = "MIT"
+
+[dependencies]
+videodock-media = { path = "../media" }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls", "gzip", "brotli", "query"] }
+tokio = { version = "1", features = ["fs", "io-util", "rt-multi-thread", "macros", "process", "time", "sync", "net"] }
+tokio-util = "0.7"
+rusqlite = { version = "0.32", features = ["bundled"] }
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+regex = "1"
+sha2 = "0.10"
+m3u8-rs = "6"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+quick-xml = "0.42"
+tempfile = "3"
+isolang = { version = "2.4", default-features = false }
+roxmltree = "0.20"
+libloading = "0.8"
+hound = "3.5"
+tar = "0.4"
+bzip2 = "0.6"
+rustfft = "6"
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"

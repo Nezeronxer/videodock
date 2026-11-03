@@ -1,0 +1,5 @@
+# Reviewed false positives: public YouTube continuation/entity metadata in parser tests.
+vendor/rustypipe/src/client/channel.rs:generic-api-key:853
+vendor/rustypipe/src/client/channel.rs:generic-api-key:861
+vendor/rustypipe/testfiles/playlist/playlist_20261103_lockup.json:generic-api-key:49
+vendor/rustypipe/testfiles/playlist/playlist_20261103_lockup.json:generic-api-key:596

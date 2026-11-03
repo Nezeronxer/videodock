@@ -1,0 +1,54 @@
+[package]
+name = "rustypipe"
+version = "0.11.4"
+edition = "2021"
+license = "GPL-3.0"
+authors = ["ThetaDev <thetadev@magenta.de>"]
+repository = "https://github.com/TeamPiped/rustypipe"
+description = "Pinned RustyPipe with maintained YouTube challenge solver and modern playlist fixes"
+
+[features]
+default = ["default-tls"]
+default-tls = ["wreq/webpki-roots"]
+rss = ["dep:quick-xml"]
+userdata = []
+rustls-tls-native-roots = ["wreq/native-roots"]
+rustls-tls-webpki-roots = ["wreq/webpki-roots"]
+
+[dependencies]
+data-encoding = "2"
+fancy-regex = "0.18.0"
+flexon = { version = "=0.4.6", default-features = false, features = ["simd", "runtime-detection", "serde"] }
+localzone = "0.3.1"
+once_cell = "1"
+oxc_allocator = "0.133.0"
+oxc_ast = "0.133.0"
+oxc_parser = "0.133.0"
+oxc_span = "0.133.0"
+phf = "0.13.1"
+quick-xml = { version = "0.40.1", features = ["serialize"], optional = true }
+rand = "0.10.1"
+regex = "1"
+ress = "0.11.0"
+rquickjs = "0.12.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_plain = "1"
+serde_with = { version = "3", default-features = false, features = ["alloc", "macros"] }
+sha1 = "0.11.0"
+thiserror = "2"
+time = { version = "0.3.37", features = ["macros", "serde-human-readable", "serde-well-known", "local-offset"] }
+tokio = { version = "1", features = ["macros", "time", "process"] }
+tracing = { version = "0.1", features = ["log"] }
+url = "2"
+urlencoding = "2"
+wreq = { version = "=0.16.3", default-features = false, features = ["webpki-roots", "tokio-rt", "json", "query", "stream", "gzip", "brotli", "socks"] }
+futures-util = "0.3"
+http-body-util = "0.1"
+
+[dev-dependencies]
+insta = { version = "1", features = ["ron", "redactions"] }
+path_macro = "1"
+rstest = "0.26.1"
+tokio-test = "0.4"
+tracing-test = "0.2"
