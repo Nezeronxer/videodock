@@ -269,7 +269,11 @@ Run41843213464: Linux полностью PASS (165/0/42ignored, release,3Qt). ma
 
 - [x] Скачать и разобрать native macOS лог; причина отделена от успешных Rust tests/build.
 - [x] Кандидат исправления: split Qt libpaths, @loader_path для flat dylibs, повторная подпись и deep/strict verify; bundled tools обязательно запускаются. Нативный успех пока не подтверждён.
-- [ ] Проверить shell и contract regression; независимое review перед публикацией.
+- [x] Contract red/green, shell syntax, actionlint/diff PASS; независимое review59004d5..8f85766:critical/important нет. Нативный успех не заявлен.
 - [ ] Повторить настоящий macOS job и записать фактический результат.
 
 Первый native run41843213464 завершён:LinuxSUCCESS,WindowsSUCCESS(162/0/42ignored,release25м06с,production installer exit0),macOSFAIL(bundle ffmpeg134 после прошедших tests/build). Red/green contract воспроизвёл принятие broken executable старым installer и отказ исправленного. Для ручного macOS-повтора добавлен platform input workflow; обычный push по-прежнему проверяет все ОС.
+
+Кандидат macOS8f85766 опубликован в fix/macos-bundle; targeted run41850414274 (platform=macos) поставлен в очередь. Main59004d5 не содержит неподтверждённого Mac-кандидата.
+
+Состояние handoff: targeted macOS run41850414274 создан2026-11-04T14:43:29Z, в14:50UTC всё ещёqueued, steps=[]; повтор Linux/Windows штатноskipped. Зависимый шаг: дождаться фактического native Mac-результата для8f85766, при отказе скачать job log и исправить подтверждённый дефект; до PASS не считать bundle исправленным и не переносить кандидат в main. Это очередь внешнего runner, не результат тестирования.
