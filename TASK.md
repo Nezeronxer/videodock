@@ -194,5 +194,5 @@ CUA для сверки UI работает в отдельном Xvfb :99 че�
 - [x] Свежая workspace-регрессия:164 passed/0failed/42ignored; Clippy, сборка и Qt EN/RU. Реальные DASH/processing:5passed;15 файлов независимо полностью декодированы.
 - [x] Все42 ignored-сценария запущены явно: сетевые отказы сохранены, три длинных YouTube по-прежнему HTTP403. Исправлена подтверждённая подмена Tumblr-поста рекомендацией: red/green,2регрессии, полный реальный файл.
 - [x] Публичный состав: только исходники/тесты/docs; Gitleaks index-копии и всей истории:0секретов, Semgrep export:50rules/96files/0findings/0parseerrors; сохранены лицензии/атрибуция, закрытый appearance.rcc не публикуется.
-- [ ] Коммит от Nezeronxer, GitHub push и сверка remote SHA.
+- [x] Коммит исходников43b193b от Nezeronxer опубликован в [Nezeronxer/videodock](https://github.com/Nezeronxer/videodock), основная веткаmain; отдельно archive/python-prototype. Remote SHA совпал; анонимный README побайтово совпал с локальным.
 - [x] Отчёт фактических проверок и пробелов: [docs/publish-verification-2026-11-04.md](docs/publish-verification-2026-11-04.md). Статус PARTIAL, стабильный релиз/1:1 не заявлены.
