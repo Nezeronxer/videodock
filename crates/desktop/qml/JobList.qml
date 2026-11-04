@@ -154,6 +154,7 @@ Item {
                         }
                         ToolButton {
                             objectName: "thumbnailAction"
+                            HoverHandler { cursorShape: Qt.PointingHandCursor }
                             anchors.centerIn: parent
                             width: 24
                             height: 24

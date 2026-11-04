@@ -277,3 +277,24 @@ Run41843213464: Linux полностью PASS (165/0/42ignored, release,3Qt). ma
 Кандидат macOS8f85766 опубликован в fix/macos-bundle; targeted run41850414274 (platform=macos) поставлен в очередь. Main59004d5 не содержит неподтверждённого Mac-кандидата.
 
 Состояние handoff: targeted macOS run41850414274 создан2026-11-04T14:43:29Z, в14:50UTC всё ещёqueued, steps=[]; повтор Linux/Windows штатноskipped. Зависимый шаг: дождаться фактического native Mac-результата для8f85766, при отказе скачать job log и исправить подтверждённый дефект; до PASS не считать bundle исправленным и не переносить кандидат в main. Это очередь внешнего runner, не результат тестирования.
+
+## YouTube и реальная пользовательская проверка перед выпуском
+
+Результат: исправить подтверждённый YouTube media-CDN HTTP403, проверить целые короткие/длинные/HD файлы и пользовательские сценарии настоящим computer use; завершить платформенные блокеры, затем stable release. Объём: Rust extractor/transfer, собственный Qt UI и установочные пакеты; без yt-dlp/Python в runtime, без изменения оригинала/сетевых настроек и пользовательских аккаунтов. Проверка: red/green регрессия root cause, полные файлы+ffprobe+decode/restart, native CUA на физическом рабочем столе, native Linux/Windows/macOS пакеты, secret/license gates и анонимное скачивание релиза/checksum.
+
+- [ ] Восстановить native CUA через существующую регистрацию и получить свежий экран приложения.
+- [ ] Установить причину YouTube403 отдельно по client/signature/PO token/CDN transport; не добавлять неподтверждённые обходы.
+- [ ] Исправить shared Rust код и доказать полными файлами на доступных маршрутах.
+- [ ] Пройти пользовательские сценарии через computer use, исправить найденное.
+- [ ] Получить фактический macOS bundle PASS и закрыть прочие release gates.
+- [ ] Собрать, опубликовать stable и проверить артефакты без авторизации после всех gates.
+
+Дополнительно по живому пользовательскому замечанию: у импортированных локальных видео нет thumbnail в snapshot, thumbnailAction не задаёт pointing cursor. Веткаfix/youtube-delivery: регрессия Engine на локальный clip+сохранённую историю воспроизвела missing thumbnail (red). Добавлены bounded local FFmpeg PNG preview/cache, backfill library/history, fallback завершённой загрузки, HoverHandler на play; Qt harness проверяет реальный Image.Ready и pointing cursor. Нужен green и повтор на физическом desktop.
+CUA: старый MCP entry ссылается на GUIChatGPT; exposed Node REPL не имеет trusted sky service. Документированный standalone Linux Sky работает на DISPLAY=:1; собранный VideoDock запущен в отдельном QA-профиле на физическом рабочем столе,5шагов onboarding пройдены реальными кликами.
+YouTube PO: debug helper не работал из-за отсутствующего /tmp/.../js/98_global_scope_shared.js; это packaging debug-ресурсов, не отказ PO. Сохранившийся release helper0.1.2 токен генерирует, но Desktop player через SSH при одинаковом proxy для helper/метаданных даёт TryAgain. В продукт helper пока не подключён.
+
+Живые исправления preview/play подтверждены: release build exit0(2м30с), Sky на DISPLAY1 получил полный AT-SPI после process-local QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1. В реальном окне локального ролика появился кадр; native XFixes cursor capture над play — изображение руки(hotspot10,1,hashdaf22df359ad). Qt harness с настоящим Engine прошёл Image.Ready для завершённой загрузки и все прежние сценарии. Регрессия local library+saved history+restart green. Снимки и cursor PNG в research/youtube-release-userqa-2026-11-04/evidence. Для устойчивости между сообщениями QA-процесс запущен transient user unit videodock-userqa; глобальные настройки не изменены.
+
+Уточнения пользователя19:05: Windows-проверка с его зелёным zapret; приложение автоматически использует системный маршрут zapret/TUN, обнаруживает активный VPN proxy и выбирает его даже при proxy-only, без изменения конфигурации VPN/zapret. У ссылки/строки — значок соответствующей платформы(YouTube/TikTok/другие), как у4K. Вставка из системного буфера должна автоматически направлять URL в правильный handler и сразу показывать принятый источник.
+Наблюдение paste до правок: настоящий wl-copy с publicYouTube sample -> CUA click Paste; скрытое clipboardField содержит правильный URL, но Smart Mode перед metadata не создаёт ни строки, ни manual dialog(state.manual=null). Гипотеза«буфер вовсе не читается» не подтверждена; нужно немедленное отображение разбора и отдельная проверка внешнего clipboard/протоколов.
+Авто-триггер zaebal L1 относился к ненаправленному слову оTikTok — false trigger; точный injected dismiss command выполнен1раз, AppImage попыталсяGUI безDISPLAY и завершился1, счётчик не сброшен. Аудит не запрашивался; новые требования не объявлены повторным провалом уже завершённого исправления.

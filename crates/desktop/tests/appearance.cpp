@@ -524,6 +524,18 @@ int main(int argc, char **argv) {
             probe.start("ffprobe", {"-v", "error", "-show_entries", "stream=codec_type", "-of", "json", path});
             check(probe.waitForFinished(10000) && probe.exitCode() == 0, "Downloaded file failed ffprobe");
             check(QJsonDocument::fromJson(probe.readAllStandardOutput()).object()["streams"].toArray().size() == 2, "Downloaded video/audio streams missing");
+            check(job["thumbnail"].toString().startsWith("file:"), "Completed local video has no thumbnail");
+            evaluate("ui.activeTab = 'All'");
+            QQuickItem *previewRow = nullptr;
+            waitFor([&]() {
+                rows.clear(); checkRows(list);
+                for (auto *row : rows) if (engine.newQObject(row).property("modelData").property("id").toString() == job["id"].toString()) previewRow = row;
+                return previewRow != nullptr;
+            }, "Completed row did not appear");
+            waitFor([&]() { return named(previewRow, "downloadThumbnail")->property("status").toInt() == 1; }, "Video thumbnail did not render");
+            auto *playButton = qobject_cast<QQuickItem *>(named(previewRow, "thumbnailAction"));
+            QTest::mouseMove(window, playButton->mapToScene(QPointF(playButton->width()/2, playButton->height()/2)).toPoint());
+            QTest::qWait(100);
             capture("real-engine-complete");
             evaluate("ui.parse(" + QJsonDocument(QJsonArray{url + "?second=1"}).toJson(QJsonDocument::Compact).mid(1).chopped(1) + ")");
             waitFor([&]() { return backend->state["manual"].toObject()["state"] == "ready"; }, "Second media parsing did not reach ready");

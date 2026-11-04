@@ -19,6 +19,74 @@ pub struct LibraryFile {
 type Cache = HashMap<PathBuf, (u64, Option<SystemTime>, LibraryFile)>;
 static CACHE: OnceLock<Mutex<Cache>> = OnceLock::new();
 
+pub(crate) async fn thumbnail(path: &Path, directory: &Path) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    let metadata = tokio::fs::metadata(path).await?;
+    ensure!(metadata.is_file(), "Превью требует локальный файл");
+    let mut digest = Sha256::new();
+    digest.update(path.as_os_str().as_encoded_bytes());
+    digest.update(metadata.len().to_le_bytes());
+    digest.update(
+        metadata
+            .modified()?
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_nanos()
+            .to_le_bytes(),
+    );
+    let image = directory.join(format!("{:x}.png", digest.finalize()));
+    if !image.is_file() {
+        let output = tokio::time::timeout(
+            Duration::from_secs(10),
+            tokio::process::Command::new(crate::platform::media_tool("ffmpeg"))
+                .args([
+                    "-nostdin",
+                    "-v",
+                    "error",
+                    "-protocol_whitelist",
+                    "file,pipe,crypto,data",
+                    "-i",
+                ])
+                .arg(path)
+                .args([
+                    "-map",
+                    "0:v:0",
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "scale=160:90:force_original_aspect_ratio=decrease",
+                    "-f",
+                    "image2pipe",
+                    "-c:v",
+                    "png",
+                    "pipe:1",
+                ])
+                .stdin(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .kill_on_drop(true)
+                .output(),
+        )
+        .await??;
+        ensure!(
+            output.status.success()
+                && output.stdout.starts_with(b"\x89PNG\r\n\x1a\n")
+                && output.stdout.len() <= 256 * 1024,
+            "Не удалось получить превью"
+        );
+        tokio::fs::create_dir_all(directory).await?;
+        let temporary = directory.join(format!(".{}.png", uuid::Uuid::new_v4()));
+        tokio::fs::write(&temporary, output.stdout).await?;
+        if let Err(error) = tokio::fs::rename(&temporary, &image).await {
+            let _ = tokio::fs::remove_file(temporary).await;
+            if !image.is_file() {
+                return Err(error.into());
+            }
+        }
+    }
+    url::Url::from_file_path(image)
+        .map(|url| url.to_string())
+        .map_err(|_| anyhow::anyhow!("Некорректный путь превью"))
+}
+
 pub async fn scan(root: &Path) -> Result<Vec<LibraryFile>> {
     ensure!(root.is_absolute(), "Нужна абсолютная папка библиотеки");
     if !root.exists() {

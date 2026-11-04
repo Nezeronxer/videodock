@@ -995,7 +995,13 @@ if item["_parent"]==replacement{item["_parent"]=json!(id);}}
             }
         }) as Arc<dyn Fn(crate::pipeline::PipelineProgress)+Send+Sync>};
         let _inhibit=if settings["preventSleepEnabled"]==true{Some(crate::platform::SleepGuard::new()?)}else{None};
+        let needs_preview=media.thumbnail.is_empty();
         let output=crate::pipeline::run(media,client,crate::pipeline::Options{selection,output_dir:spec.output_dir,filename:spec.filename,embed_subtitles:spec.embed_subtitles.unwrap_or(settings["embedSubtitles"]==true),tags:spec.tags.unwrap_or(settings["tagsEnabled"]==true),skip_duplicates:spec.skip_duplicates.unwrap_or(settings["skipDuplicates"]==true)},staging.clone(),cancel.clone(),inner.limiter.clone(),callback).await?;
+        if needs_preview {
+            let directory=inner.directory.join("thumbnails");
+            let image=tokio::select!{_ = cancel.cancelled()=>return Ok(Some(output)),result=crate::library::thumbnail(&output.path,&directory)=>result};
+            if let Ok(image)=image && !inner.shutdown.is_cancelled() { change(&inner,|state|{if let Some(item)=job_mut(state,&id){item["thumbnail"]=json!(image);}Ok(())})?; }
+        }
         Ok::<_,anyhow::Error>(Some(output))
     }.await;
     if !inner.shutdown.is_cancelled() {
@@ -1830,17 +1836,30 @@ fn check_library(inner: &Arc<Inner>) {
         let result=async{
             let folder=folder.context("Не задана папка библиотеки")?;if !folder.exists(){return Ok(())}
             let files=tokio::select!{_ = inner.shutdown.cancelled()=>return Ok(()),result=crate::library::scan(&folder)=>result?};
+            let mut previews = HashMap::new();
+            let thumbnail_directory = inner.directory.join("thumbnails");
+            for file in &files {
+                let image = tokio::select!{_ = inner.shutdown.cancelled()=>return Ok(()),result=crate::library::thumbnail(&file.path,&thumbnail_directory)=>result};
+                if let Ok(image) = image { previews.insert(file.path.clone(),image); }
+            }
             if inner.shutdown.is_cancelled(){return Ok(())}
             change(&inner,|state|{
                 if state["settings"]["path"].as_str().map(PathBuf::from).as_ref()!=Some(&folder){return Ok(())}
                 use sha2::{Digest,Sha256};
+                for key in ["jobs","processing"] {
+                    for item in state[key].as_array_mut().unwrap() {
+                        if item["thumbnail"].as_str().is_none_or(str::is_empty)
+                            && let Some(path) = item["path"].as_str().and_then(|path|std::fs::canonicalize(path).ok())
+                            && let Some(image) = previews.get(&path) { item["thumbnail"] = json!(image); }
+                    }
+                }
                 let mut tracked=HashSet::new();
                 for key in ["jobs","processing"]{for item in state[key].as_array().unwrap(){if item["_library"]==true{continue}
 if let Some(path)=item["path"].as_str()&& let Ok(path)=std::fs::canonicalize(path){tracked.insert(path);}
 if let Some(paths)=item["files"].as_array(){for path in paths.iter().filter_map(Value::as_str){if let Ok(path)=std::fs::canonicalize(path){tracked.insert(path);}}}}}
                 let mut library=Vec::new();
                 for file in files{if tracked.contains(&file.path){continue}let id=format!("library-{:x}",Sha256::digest(file.path.to_string_lossy().as_bytes()));let kind=serde_json::to_value(&file.kind)?;
-                    library.push(json!({"id":id,"title":file.title,"kind":kind,"media_type":kind,"state":"complete","progress":100,"path":file.path,"files":[file.path],"size":bytes(file.size),"_size_bytes":file.size,"duration":file.duration,"format":file.path.extension().and_then(|ext|ext.to_str()).unwrap_or_default().to_ascii_uppercase(),"_library":true,"created_at":0}));
+                    library.push(json!({"id":id,"title":file.title,"kind":kind,"media_type":kind,"state":"complete","progress":100,"thumbnail":previews.get(&file.path),"path":file.path,"files":[file.path],"size":bytes(file.size),"_size_bytes":file.size,"duration":file.duration,"format":file.path.extension().and_then(|ext|ext.to_str()).unwrap_or_default().to_ascii_uppercase(),"_library":true,"created_at":0}));
                 }
                 let jobs=state["jobs"].as_array_mut().unwrap();jobs.retain(|item|item["_library"]!=true);ensure!(jobs.len()+library.len()<=250000,"Библиотека превышает 250000 элементов");jobs.extend(library);
                 state["capabilities"]["processing"]=json!(crate::processing::available(&inner.directory));Ok(())
