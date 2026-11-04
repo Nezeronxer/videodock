@@ -2,4 +2,5 @@ graphify-out/graph.json merge=graphify
 # Preserve the pinned upstream sources verbatim, including their whitespace.
 crates/desktop/attestation/bgutils/** -text whitespace=-blank-at-eol linguist-vendored
 LICENSES/*.txt -text
+LICENSES/rust/** -text
 LICENSES/rust/texts/** -text whitespace=-blank-at-eol,-blank-at-eof linguist-vendored
