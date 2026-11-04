@@ -262,3 +262,18 @@ Windows после удаления повреждённого кэша паке
 Независимое ревью diff019b160..602f03a:critical/important нет, обе lease-регрессии повторены. Источник Gitleaks export-предупреждений проверен:2 публичных continuation-token assert и2animationActivationEntityKey fixture, учётных данных нет. Generic повторён полным файлом52.208с/4368946B и полностью декодирован FFmpeg. Новая попытка длинного YouTube напрямую и через SOCKS не прошла metadata. Linux/macOS native CI прошёл тестовые шаги и выполняет release-сборки; Windows job ещё в работе.
 
 Windows после возобновления: свежий повтор162passed/0failed/42ignored,34suites,exit0. Production installer в пользовательской сессии PASS с ярлыком; freshQA app PATH толькоWindows/System32: ffmpeg/ffprobePASS, PEsubsystem2, idle/Responding/window=true, ScheduledTaskResult0. Снимок собственного onboarding подтверждает живое окно. Это startup smoke, не полный Windows user-flow.
+
+## macOS bundle: подтверждённый отказ native CI
+
+Run41843213464: Linux полностью PASS (165/0/42ignored, release,3Qt). macOS core/media тесты и release-сборка прошли, bundle упал на bundled ffmpeg exit134: transitive @rpath libwebp/libjxl_cms/libsharpyuv/libggml-base ищутся через Frameworks/../lib; macdeployqt также не разрешил split Qt frameworks и сообщил invalid signature libjxl_cms. Объём исправления: общий Darwin installer и его contract regression. Проверка: воспроизведение из native лога, локальный red/green contract для libpath/RPATH/signing, затем новый настоящий macOS job; Windows текущего run не отменять.
+
+- [x] Скачать и разобрать native macOS лог; причина отделена от успешных Rust tests/build.
+- [x] Кандидат исправления: split Qt libpaths, @loader_path для flat dylibs, повторная подпись и deep/strict verify; bundled tools обязательно запускаются. Нативный успех пока не подтверждён.
+- [x] Contract red/green, shell syntax, actionlint/diff PASS; независимое review59004d5..8f85766:critical/important нет. Нативный успех не заявлен.
+- [ ] Повторить настоящий macOS job и записать фактический результат.
+
+Первый native run41843213464 завершён:LinuxSUCCESS,WindowsSUCCESS(162/0/42ignored,release25м06с,production installer exit0),macOSFAIL(bundle ffmpeg134 после прошедших tests/build). Red/green contract воспроизвёл принятие broken executable старым installer и отказ исправленного. Для ручного macOS-повтора добавлен platform input workflow; обычный push по-прежнему проверяет все ОС.
+
+Кандидат macOS8f85766 опубликован в fix/macos-bundle; targeted run41850414274 (platform=macos) поставлен в очередь. Main59004d5 не содержит неподтверждённого Mac-кандидата.
+
+Состояние handoff: targeted macOS run41850414274 создан2026-11-04T14:43:29Z, в14:50UTC всё ещёqueued, steps=[]; повтор Linux/Windows штатноskipped. Зависимый шаг: дождаться фактического native Mac-результата для8f85766, при отказе скачать job log и исправить подтверждённый дефект; до PASS не считать bundle исправленным и не переносить кандидат в main. Это очередь внешнего runner, не результат тестирования.
