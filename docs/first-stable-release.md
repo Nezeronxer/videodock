@@ -8,7 +8,7 @@
 
 Детерминированная регрессия с `File::try_clone` воспроизвела отказ до исправления и прошла после него. Свежая независимая проверка отдельно подтвердила поведение std::fs, исключение второго владельца при живом клоне и сохранение блокировки нового владельца после закрытия старого дубликата. Это проверка эквивалентного дублирования дескриптора, а не реального fork/exec. Предыдущий упавший cookie/restart-тест также повторён успешно.
 
-Windows-only предупреждения в platform.rs устранены условной компиляцией Unix импортов/помощников. При настоящей Windows-упаковке обнаружен недостающий Qt6ShaderTools.dll: модуль qtshadertools добавлен в CI, установка в QA-госте завершилась успешно, DLL присутствует. Добавлен workflow нативных проверок для Linux, Windows и macOS, с read-only разрешениями и закреплённым commit checkout. Workflow не создаёт теги и релизы; статическая проверка actionlint пройдена. Результат облачного исполнения учитывается отдельно. Push ветки release/first-stable дважды отклонён GitHub: Internal Server Error и fatal error in commit_refs; облачные задания пока не запускались.
+Windows-only предупреждения в platform.rs устранены условной компиляцией Unix импортов/помощников. При настоящей Windows-упаковке обнаружен недостающий Qt6ShaderTools.dll: модуль qtshadertools добавлен в CI, установка в QA-госте завершилась успешно, DLL присутствует. Добавлен workflow нативных проверок для Linux, Windows и macOS, с read-only разрешениями и закреплённым commit checkout. Workflow не создаёт теги и релизы; статическая проверка actionlint пройдена. Результат облачного исполнения учитывается отдельно. Первоначальные два push были отклонены GitHub с Internal Server Error/fatal error in commit_refs. Затем ветка успешно отправлена; первый cloud run 41812660820 обнаружил отсутствие libvorbis в FFmpeg macOS и необходимость отключить Chromium sandbox только для root localhost fixtures Linux CI. Оба исправления отправлены. Текущий run 41843213464 проверяет коммит 602f03a; незавершённые jobs не считаются PASS.
 
 | Проверка текущего кода | Результат |
 |---|---|
@@ -36,3 +36,17 @@ Windows-only предупреждения в platform.rs устранены ус
 - Финальная упаковка, набор лицензий и полный пользовательский проход ещё не завершены.
 
 Локальные доказательства находятся вне публичного репозитория: `~/.local/share/videodock/research/first-release-2026-11-04/`. Бинарный релиз и релизный тег не созданы.
+
+## Продолжение: публикация инженерных изменений
+
+Коммит 602f03a добавляет Windows GUI subsystem в release EXE и обязательную PE-проверку упаковщика; Windows Qt SDK включает qtserialport, чтобы native deployment мог поставить нужную DLL. CI отменяет устаревшие прогоны одной ветки. Исследовательские player/Botguard диагностики оставлены вне публичных исходников.
+
+Свежая локальная проверка: workspace 165 passed / 0 failed / 42 ignored; Clippy с warnings denied PASS; Qt appearance с настоящим Engine, browser proxy и cookie bridge PASS; actionlint и diff check PASS. Независимое read-only ревью всей инженерной ветки не нашло critical/important дефектов, отдельно повторило обе lease-регрессии.
+
+Gitleaks истории: 0. Полный export tracked исходников дал 4 предупреждения generic-api-key: две assert-строки continuation-token tests и два поля animationActivationEntityKey в публичном RustyPipe playlist fixture. Проверен контекст каждой строки: это публичные данные тестирования, пользовательских учётных данных в них нет. Общий rustfmt-check обнаруживает существующее расхождение форматирования в vendor и других файлах; массовое переформатирование не выполнялось.
+
+Полный Generic sample повторён: 4,368,946 байт, 52.208 секунды, video+audio по ffprobe; независимое полное декодирование FFmpeg без ошибок. Длинный YouTube 720p повторён напрямую и через SOCKS, оба раза не прошёл метаданные. Прежний поздний HTTP403 этим прогоном не опровергнут, стабильность YouTube не заявляется.
+
+Windows: настоящий EXE имеет GUI subsystem 2; 330 файлов исходников core/media/desktop/vendor побайтово совпали с текущим деревом. Пакет с Qt DLL собран, bundled ffmpeg/ffprobe запускаются при PATH только из Windows/System32. Собственное окно onboarding видно на screenshot QA-гостя. Production installer успешно выполнен в обычной пользовательской сессии и создал Start Menu shortcut; запуск новой копии и свежий повтор Windows tests ещё проверяются. SYSTEM-запуск установщика не создаёт пользовательский ярлык, поскольку у SYSTEM нет Programs directory; системные execution policies не менялись.
+
+Linux release build текущего кода: exit0, 1м55с. Полный ручной GUI-проход и macOS runtime этим не подтверждены.

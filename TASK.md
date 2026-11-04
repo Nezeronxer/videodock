@@ -252,9 +252,11 @@ Windows после удаления повреждённого кэша паке
 Результат: завершить оставленные Windows packaging/GUI исправления и отправить проверенные исходники на GitHub. Объём: текущая инженерная ветка, существующий QA-гость и native workflow; stable и prerelease остаются запрещены до закрытия прежних gates. Проверка: Windows PE subsystem и запуск пакета без build PATH, workspace/Clippy/Qt/actionlint, secret scan, remote SHA и фактические native jobs.
 
 - [x] Восстановить последнюю рабочую сессию и сохранить незавершённые изменения.
-- [ ] Проверить Windows-пакет, исправить подтверждённые зависимости и GUI subsystem.
-- [ ] Выполнить свежие локальные проверки; исследовательские диагностики хранить вне публичного дерева.
+- [x] Windows: GUI subsystem 2 подтверждён на настоящем PE; production installer в пользовательской сессии завершён и создал ярлык, собственное окно видно на снимке; финальный smoke новой копии проверяется отдельно.
+- [x] Workspace165/0/42ignored, Clippy,3Qt harness, actionlint, Linux release PASS; диагностики сохранены вне репозитория;330 Windows source files побайтово совпали.
 - [ ] Отправить изменения на GitHub, проверить native jobs и доступность исходников.
 - [ ] Обновить фактические блокеры stable по результатам.
 
 Свежий локальный прогон возобновления: workspace 165/0/42ignored, Clippy PASS; Qt appearance с настоящим Engine PASS. Gitleaks history:0. В export исходников детектор отметил 4 публичные строки RustyPipe fixtures (continuation tokens), классификация выполняется отдельно. Повтор полного длинного YouTube напрямую снова завершился ошибкой; stable остаётся заблокирован.
+
+Независимое ревью diff019b160..602f03a:critical/important нет, обе lease-регрессии повторены. Источник Gitleaks export-предупреждений проверен:2 публичных continuation-token assert и2animationActivationEntityKey fixture, учётных данных нет. Generic повторён полным файлом52.208с/4368946B и полностью декодирован FFmpeg. Новая попытка длинного YouTube напрямую и через SOCKS не прошла metadata. Linux/macOS native CI прошёл тестовые шаги и выполняет release-сборки; Windows job ещё в работе.
