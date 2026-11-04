@@ -224,3 +224,7 @@ Linux release после lock fix пересобран: exit0, 2м13с. Чере
 Windows packaging прежнего архива выявил недостающий Qt6ShaderTools.dll: qtshadertools добавлен в native CI; установка в QA-госте guest-exec PID7952, текущая сборка PID7316 ещё выполняется. Новые Windows-unused импорты Command/Stdio также ограничены cfg(unix), повторный Linux Clippy exit0. Исследовательские диагностики и native screenshots сохранены вне репозитория.
 
 Qt ShaderTools в Windows QA установлен: aqt exit0, Qt6ShaderTools.dll присутствует. Native текущего source archive ещё в работе, не считать сборку/установку подтверждённой. Финальный Gitleaks текущей истории: 0 leaks.
+
+Текущий Windows source archive завершился ошибкой линковки PDB LNK1318 FILE_SYSTEM. Причина окружения подтверждена Get-PSDrive: 52,441,088 B свободно на QA C:. Запущен cargo clean --profile dev только в C:\VideoDockQA\target; исходники, release package и профиль не удаляются. Последний Linux release повторно exit0 за 2м13с.
+
+Причина Windows PDB подтверждена и устранена: cargo clean --profile dev освободил 22.5 GiB, свободно 22,497,370,112 B. Для повторной проверки отключены только dev/test debug symbols (также в Windows CI). Новый архив source-final.zip: SHA256 5057cfe0ad3341b83e1e9464df77c60956f42c32d927217f6c836b72b6d6b466; script diagnostics/videodock-windows-final.ps1, это текущий повтор, а не успешный результат.
