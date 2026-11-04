@@ -10,7 +10,7 @@ anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.13", default-features = false, features = ["http2", "json", "stream", "rustls", "gzip", "brotli", "form", "query", "socks"] }
-tokio = { version = "1", features = ["fs", "rt-multi-thread", "macros", "time", "sync"] }
+tokio = { version = "1", features = ["fs", "rt-multi-thread", "macros", "time", "sync", "process", "io-util"] }
 url = "2"
 regex = "1"
 scraper = "0.24"
@@ -18,3 +18,12 @@ scraper = "0.24"
 rustypipe = { path = "../../vendor/rustypipe" }
 wreq = { version = "=0.16.3", default-features = false }
 time = { version = "0.3", features = ["parsing", "formatting"] }
+
+data-encoding = "2"
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_Security"] }

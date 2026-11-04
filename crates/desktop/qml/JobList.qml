@@ -9,6 +9,31 @@ Item {
     required property var app
     property var rows: []
 
+    function platformIcon(url) {
+        var match = /^https?:\/\/(?:[^/@\s]+@)?([^/:?#\s]+)/i.exec(String(url || ""));
+        if (!match)
+            return "";
+        var host = match[1].toLowerCase();
+        var services = {
+            "youtube.com": "youtube", "youtu.be": "youtube", "youtube-nocookie.com": "youtube",
+            "tiktok.com": "tiktok", "vimeo.com": "vimeo", "soundcloud.com": "soundcloud",
+            "facebook.com": "facebook", "fb.watch": "facebook", "twitch.tv": "twitch",
+            "dailymotion.com": "dailymotion", "dai.ly": "dailymotion",
+            "bilibili.com": "bilibili", "b23.tv": "bilibili", "rumble.com": "rumble",
+            "tv.naver.com": "naver", "tv.naver.tv": "naver", "tumblr.com": "tumblr",
+            "nicovideo.jp": "nicovideo", "nico.ms": "nicovideo",
+            "likee.video": "likee", "likee.com": "likee", "likeevideo.ru": "likee",
+            "flickr.com": "flickr", "flic.kr": "flickr", "bitchute.com": "bitchute"
+        };
+        for (var domain in services) {
+            if (host === domain || host.endsWith("." + domain)) {
+                var service = services[domain];
+                return app.asset((service === "tiktok" ? "tik-tok" : service) + "-icon.svg", "icons/service-" + service + ".svg");
+            }
+        }
+        return "icons/browser.svg";
+    }
+
     function openCompleted(job) {
         if (job.state === "complete" && job.path)
             app.jobs("open", [job.id]);
@@ -41,21 +66,30 @@ Item {
 
         ScrollBar.vertical: ScrollBar {}
 
-        delegate: Rectangle {
-            id: row
+        delegate: Item {
+            id: slot
 
             required property var modelData
             required property int index
+            width: list.width
+            height: 64
+
+        // ListView owns the slot position; center the card independently inside it.
+        Rectangle {
+            id: row
+
+            readonly property var modelData: slot.modelData
+            readonly property int index: slot.index
             property bool selected: root.app.selectedIds.indexOf(modelData.id) >= 0
             readonly property bool current: root.app.focusedJob && root.app.focusedJob.id === modelData.id
             readonly property bool previousSelected: index > 0 && root.app.selectedIds.indexOf(root.rows[index - 1].id) >= 0
             readonly property bool nextSelected: index + 1 < root.rows.length && root.app.selectedIds.indexOf(root.rows[index + 1].id) >= 0
             readonly property bool nextCurrent: index + 1 < root.rows.length && root.app.focusedJob && root.app.focusedJob.id === root.rows[index + 1].id
-            readonly property bool busy: ["queued", "downloading", "processing"].indexOf(modelData.state) >= 0
+            readonly property bool busy: ["queued", "parsing", "downloading", "processing"].indexOf(modelData.state) >= 0
 
             objectName: "downloadRow"
             width: Math.min(list.width - 34, 1080)
-            x: (list.width - width) / 2
+            anchors.horizontalCenter: parent.horizontalCenter
             height: 64
             radius: 2
             topLeftRadius: selected && previousSelected ? 0 : 2
@@ -199,12 +233,24 @@ Item {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    Label {
-                        textFormat: Text.PlainText
-                        text: row.modelData.title || row.modelData.url || qsTr("Untitled")
+                    RowLayout {
                         Layout.fillWidth: true
-                        elide: Text.ElideRight
-                        font.pixelSize: 14
+                        spacing: 6
+                        Image {
+                            objectName: "downloadPlatformIcon"
+                            source: root.platformIcon(row.modelData.url)
+                            visible: source.toString().length > 0
+                            Layout.preferredWidth: 16
+                            Layout.preferredHeight: 16
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Label {
+                            textFormat: Text.PlainText
+                            text: row.modelData.title || row.modelData.url || qsTr("Untitled")
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            font.pixelSize: 14
+                        }
                     }
                     Label {
                         objectName: "downloadDescription"
@@ -251,6 +297,7 @@ Item {
                     }
                 }
             }
+        }
         }
     }
 

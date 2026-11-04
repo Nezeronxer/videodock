@@ -10,6 +10,7 @@ mod ffi {
         include!("platform.h");
         fn initialize_webengine();
         fn create_application() -> UniquePtr<QGuiApplication>;
+        fn create_proof_application(resolver_rules: &QString) -> UniquePtr<QGuiApplication>;
         fn application_data_directory() -> QString;
         fn prepare_profile(directory: &QString);
         fn configure_browser_proxy(address: &QString) -> bool;
@@ -17,6 +18,12 @@ mod ffi {
         fn clear_browser_cookies();
         fn install_translation(language: &QString);
         fn reference_asset(name: &QString) -> QString;
+        fn initialize_proof_runtime();
+        fn run_youtube_proof(
+            video_id: &QString,
+            proxy: &QString,
+            google_address: &QString,
+        ) -> QString;
     }
     extern "RustQt" {
         #[qobject]
@@ -47,10 +54,10 @@ mod ffi {
         );
     }
 }
-use cxx_qt::CxxQtType;
 use cxx_qt::casting::Upcast;
+use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::{
     path::PathBuf,
     pin::Pin,
@@ -68,6 +75,7 @@ pub struct BackendRust {
 }
 static ENGINE: OnceLock<Arc<Engine>> = OnceLock::new();
 static BROWSER_PROXY: OnceLock<(Option<String>, bool)> = OnceLock::new();
+static STARTUP_NETWORK_ERROR: OnceLock<String> = OnceLock::new();
 fn data_directory() -> PathBuf {
     std::env::var_os("VIDEODOCK_DATA_DIR")
         .map(PathBuf::from)
@@ -78,6 +86,22 @@ pub fn initialize_webengine() {
 }
 pub fn create_application() -> cxx::UniquePtr<cxx_qt_lib::QGuiApplication> {
     ffi::create_application()
+}
+pub fn create_proof_application(
+    resolver_rules: &str,
+) -> cxx::UniquePtr<cxx_qt_lib::QGuiApplication> {
+    ffi::create_proof_application(&QString::from(resolver_rules))
+}
+pub fn initialize_proof_runtime() {
+    ffi::initialize_proof_runtime();
+}
+pub fn run_youtube_proof(video_id: &str, proxy: &str, google_address: &str) -> String {
+    ffi::run_youtube_proof(
+        &QString::from(video_id),
+        &QString::from(proxy),
+        &QString::from(google_address),
+    )
+    .to_string()
 }
 pub fn prepare_profile() -> anyhow::Result<()> {
     let data = data_directory();
@@ -93,8 +117,22 @@ pub fn prepare_profile() -> anyhow::Result<()> {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
     }
-    let proxy = engine.network_proxy()?;
-    let supported = ffi::configure_browser_proxy(&QString::from(proxy.clone().unwrap_or_default()));
+    let (proxy, supported) = match engine.network_proxy() {
+        Ok(proxy) => {
+            let supported =
+                ffi::configure_browser_proxy(&QString::from(proxy.clone().unwrap_or_default()));
+            (proxy, supported)
+        }
+        Err(_) => {
+            // Keep settings reachable, but leave both browser and Rust networking fail-closed.
+            ffi::configure_browser_proxy(&QString::from("unsupported://invalid"));
+            let _ = STARTUP_NETWORK_ERROR.set(
+                "Не удалось определить системный прокси. Укажите прокси в настройках VideoDock."
+                    .into(),
+            );
+            (None, false)
+        }
+    };
     let _ = BROWSER_PROXY.set((proxy, supported));
     ffi::prepare_profile(&QString::from(directory.to_string_lossy().as_ref()));
     let state = engine.snapshot();
@@ -111,7 +149,7 @@ impl Default for BackendRust {
         let error = if engine.is_none() {
             Some("Движок не инициализирован".to_owned())
         } else {
-            None
+            STARTUP_NETWORK_ERROR.get().cloned()
         };
         Self {
             snapshot: QString::from("{}"),

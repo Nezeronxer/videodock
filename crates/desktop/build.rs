@@ -24,14 +24,17 @@ fn main() {
         .qt_module("QuickControls2")
         .qt_module("WebEngineQuick")
         .qt_module("WebEngineCore")
+        .qt_module("WebEngineWidgets")
         .qt_module("Widgets")
         .qrc("qml/translations.qrc")
         .qrc("qml/icons.qrc")
+        .qrc("attestation/proof.qrc")
         .include_dir("include");
     // Only add Qt glue; preserve all compiler flags selected by CXX-Qt.
     unsafe {
         builder.cc_builder(|cc| {
             cc.file("src/platform.cpp");
+            cc.file("src/attestation.cpp");
         })
     }
     .files(["src/bridge.rs"])

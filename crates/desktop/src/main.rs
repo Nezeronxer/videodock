@@ -1,8 +1,16 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod bridge;
+mod proof;
 use cxx_qt_lib::{QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 fn main() {
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--youtube-proof")) {
+        proof::run();
+        return;
+    }
+    if let Ok(executable) = std::env::current_exe() {
+        let _ = videodock_media::youtube::register_proof_worker(executable);
+    }
     bridge::initialize_webengine();
     let mut application = bridge::create_application();
     if bridge::prepare_profile().is_err() {

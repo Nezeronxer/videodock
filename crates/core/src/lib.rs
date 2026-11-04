@@ -7,6 +7,7 @@ pub mod library;
 pub mod pipeline;
 pub mod platform;
 pub mod processing;
+pub mod sabr;
 mod store;
 pub mod subtitles;
 pub mod transfer;

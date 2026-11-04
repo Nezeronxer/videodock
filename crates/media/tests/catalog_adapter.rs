@@ -6,6 +6,41 @@ use std::{
 use videodock_media::{Auth, catalog::Catalog};
 
 #[tokio::test]
+async fn automatic_proxy_bypasses_local_media_but_manual_proxy_remains_explicit() {
+    use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpListener, time::{timeout, Duration}};
+    let origin = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = format!("http://{}/video.mp4", origin.local_addr().unwrap());
+    let proxy = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let proxy_url = format!("http://fixture:synthetic@{}", proxy.local_addr().unwrap());
+    let origin_task = tokio::spawn(async move {
+        for _ in 0..2 {
+            let (mut stream, _) = timeout(Duration::from_secs(5), origin.accept()).await.unwrap().unwrap();
+            let mut request = [0; 8192];
+            let count = stream.read(&mut request).await.unwrap();
+            assert!(!String::from_utf8_lossy(&request[..count]).to_lowercase().contains("proxy-authorization"));
+            stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\nContent-Length: 16\r\nConnection: close\r\n\r\n\0\0\0\x18ftypisom\0\0\0\0").await.unwrap();
+        }
+    });
+    let proxy_task = tokio::spawn(async move {
+        for _ in 0..2 {
+            let (mut stream, _) = timeout(Duration::from_secs(5), proxy.accept()).await.unwrap().unwrap();
+            let mut request = [0; 8192];
+            let count = stream.read(&mut request).await.unwrap();
+            assert!(String::from_utf8_lossy(&request[..count]).to_lowercase().contains("proxy-authorization"));
+            stream.write_all(b"HTTP/1.1 418 Proxy marker\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+        }
+    });
+    let automatic = Catalog::new_automatic(Some(&proxy_url)).unwrap();
+    assert_eq!(automatic.inspect(&address, &Auth::default()).await.unwrap().formats.len(), 1);
+    assert_eq!(automatic.client().get(&address).send().await.unwrap().status().as_u16(), 200);
+    assert_eq!(automatic.client().get("http://media.example.invalid/video.mp4").send().await.unwrap().status().as_u16(), 418);
+    let manual = Catalog::new(Some(&proxy_url)).unwrap();
+    assert_eq!(manual.client().get(&address).send().await.unwrap().status().as_u16(), 418);
+    origin_task.await.unwrap();
+    proxy_task.await.unwrap();
+}
+
+#[tokio::test]
 async fn direct_media_uses_its_application_identity_for_metadata_and_transfer() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = format!("http://{}/video.mp4", listener.local_addr().unwrap());

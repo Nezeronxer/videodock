@@ -2366,6 +2366,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost"
+version = "0.13.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2796faa41db3ec313a31f7624d9286acf277b52de526150b7e69f3debf891ee5"
+dependencies = [
+ "bytes",
+ "prost-derive",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.13.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "qt-build-utils"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3675,6 +3698,7 @@ dependencies = [
  "libc",
  "libloading",
  "m3u8-rs",
+ "prost",
  "quick-xml",
  "regex",
  "reqwest",
@@ -3703,7 +3727,9 @@ dependencies = [
  "cxx-qt-build",
  "cxx-qt-lib",
  "serde_json",
+ "url",
  "videodock-core",
+ "videodock-media",
 ]
 
 [[package]]
@@ -3711,6 +3737,8 @@ name = "videodock-media"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "data-encoding",
+ "libc",
  "regex",
  "reqwest",
  "rustypipe",
@@ -3720,6 +3748,8 @@ dependencies = [
  "time",
  "tokio",
  "url",
+ "uuid",
+ "windows-sys 0.61.2",
  "wreq",
 ]
 

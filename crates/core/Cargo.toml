@@ -31,6 +31,7 @@ tar = "0.4"
 bzip2 = "0.6"
 rustfft = "6"
 libc = "0.2"
+prost = "0.13"
 
 [dev-dependencies]
 tempfile = "3"

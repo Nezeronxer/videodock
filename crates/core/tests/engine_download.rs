@@ -172,6 +172,48 @@ async fn source(directory: &std::path::Path) -> Source {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn smart_pastes_appear_before_metadata_and_keep_rapid_requests() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = source(temp.path()).await;
+    source.page_delay.store(500, Ordering::SeqCst);
+    let engine = Engine::new(temp.path().join("data")).unwrap();
+    engine
+        .dispatch(json!({"action":"settings","values":{
+            "smartMode":true,"path":temp.path().join("output")
+        }}))
+        .unwrap();
+    for suffix in ["first", "second"] {
+        let url = format!("{}/private/watch/{suffix}", source.base);
+        engine
+            .dispatch(json!({"action":"parse","url":url}))
+            .unwrap();
+        let snapshot = engine.snapshot();
+        assert!(
+            snapshot["jobs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|job| job["url"] == url),
+            "a pasted source must be visible before its metadata request finishes"
+        );
+        assert!(snapshot["manual"].is_null());
+    }
+    let state = wait(&engine, |state| {
+        let jobs = state["jobs"].as_array().unwrap();
+        jobs.len() == 2 && jobs.iter().all(|job| job["state"] == "complete")
+    })
+    .await;
+    assert_eq!(
+        source.page_reads.load(Ordering::SeqCst),
+        2,
+        "each source should be inspected once, without cancelling an earlier paste"
+    );
+    for job in state["jobs"].as_array().unwrap() {
+        assert!(std::path::Path::new(job["path"].as_str().unwrap()).is_file());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn manual_batch_pause_stops_new_inspections_and_resume_keeps_progress() {
     let temp = tempfile::tempdir().unwrap();
     let source = source(temp.path()).await;
@@ -388,9 +430,10 @@ async fn pause_restart_resume_reextracts_fresh_source_and_reuses_partial_bytes()
         .unwrap();
     let state = wait(&engine, |state| state["jobs"][0]["state"] == "complete").await;
     assert!(std::path::Path::new(state["jobs"][0]["path"].as_str().unwrap()).is_file());
-    assert!(
-        source.page_reads.load(Ordering::SeqCst) >= 3,
-        "source must be re-extracted before run and after resume"
+    assert_eq!(
+        source.page_reads.load(Ordering::SeqCst),
+        2,
+        "source must be extracted once per run, including after resume"
     );
     assert!(
         source

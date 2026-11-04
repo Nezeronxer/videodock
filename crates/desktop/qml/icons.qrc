@@ -39,4 +39,9 @@
   <file alias="service-dailymotion.svg">icons/service-dailymotion.svg</file>
   <file alias="service-rumble.svg">icons/service-rumble.svg</file>
   <file alias="service-twitch.svg">icons/service-twitch.svg</file>
+  <file alias="service-likee.svg">icons/service-likee.svg</file>
+  <file alias="service-nicovideo.svg">icons/service-nicovideo.svg</file>
+  <file alias="service-tumblr.svg">icons/service-tumblr.svg</file>
+  <file alias="service-flickr.svg">icons/service-flickr.svg</file>
+  <file alias="service-bitchute.svg">icons/service-bitchute.svg</file>
 </qresource><qresource prefix="/qt/qml/VideoDock/qml"><file alias="LanguageOptions.js">LanguageOptions.js</file></qresource></RCC>

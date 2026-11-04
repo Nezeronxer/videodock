@@ -277,6 +277,20 @@ int main(int argc, char **argv) {
         check(named(window, "manualContainer")->property("displayText").toString() == (russian ? QString::fromUtf8("Любой") : QStringLiteral("Any")), "Manual filters expose untranslated protocol values");
         invoke(named(window, "manualDownloadDialog"), "close");
 
+        // Paste reads the real Qt clipboard through the shipped Main.qml.
+        window->requestActivate();
+        QTest::qWait(100);
+        for (const QString &url : {"https://youtu.be/fixture", "https://www.tiktok.com/@fixture/video/1", "https://vimeo.com/1"}) {
+            QApplication::clipboard()->setText(url);
+            backend->lastAction = {};
+            click(window, named(window, "pasteButton"));
+            check(backend->lastAction["action"] == "parse" && backend->lastAction["url"] == url, "Paste Link lost the clipboard source");
+            backend->lastAction = {};
+            QTest::keyClick(window, Qt::Key_V, Qt::ControlModifier);
+            QTest::qWait(150);
+            check(backend->lastAction["action"] == "parse" && backend->lastAction["url"] == url, "Ctrl+V lost the clipboard source");
+        }
+
         backend->state["jobs"] = QJsonArray{
             QJsonObject{{"id", "fixture-video"}, {"title", "A very long video title to check clipping without hiding the controls"}, {"url", "https://example.invalid/video"}, {"kind", "video"}, {"state", "downloading"}, {"progress", 42}, {"format", "MP4"}, {"quality", "1080p"}, {"speed", "2.4 MB/s"}},
             QJsonObject{{"id", "fixture-audio"}, {"title", "Audio fixture"}, {"kind", "audio"}, {"state", "complete"}, {"format", "MP3"}, {"quality", "192 kbps"}},
@@ -298,6 +312,69 @@ int main(int argc, char **argv) {
         };
         checkRows(list);
         check(rows.size() == 3, "Expected three visible download rows");
+        const QSize originalSize = window->size();
+        for (int width : {1000, 2200, 1280, 2560, 1100}) {
+            window->resize(width, originalSize.height());
+            auto job = backend->state["jobs"].toArray().first().toObject();
+            auto jobs = backend->state["jobs"].toArray();
+            job["progress"] = width % 100;
+            jobs.replace(0, job);
+            backend->state["jobs"] = jobs;
+            backend->publish();
+            QTest::qWait(80);
+            rows.clear(); checkRows(list);
+            check(rows.size() == 3, "Resize or progress update lost download rows");
+            for (auto *item : rows) {
+                const qreal left = item->mapToItem(list, QPointF()).x();
+                const qreal expectedLeft = (list->width() - item->width()) / 2;
+                if (std::abs(left - expectedLeft) > 1)
+                    qWarning() << "Download alignment:" << list->width() << left << expectedLeft;
+                check(std::abs(left - expectedLeft) <= 1, "Download cards diverged after resize or progress update");
+                check(left >= 0 && left + item->width() <= list->width() + 1, "Download card escaped the viewport");
+            }
+        }
+        window->resize(originalSize);
+        QTest::qWait(80);
+        const QList<QPair<QString, QString>> platformIcons{
+            {"https://youtu.be/fixture", "service-youtube.svg"},
+            {"https://WWW.YOUTUBE.COM/watch?v=fixture", "service-youtube.svg"},
+            {"https://vm.tiktok.com/fixture", "service-tiktok.svg"},
+            {"https://vimeo.com/1", "service-vimeo.svg"},
+            {"https://soundcloud.com/fixture/clip", "service-soundcloud.svg"},
+            {"https://fb.watch/fixture", "service-facebook.svg"},
+            {"https://twitch.tv/fixture", "service-twitch.svg"},
+            {"https://dai.ly/fixture", "service-dailymotion.svg"},
+            {"https://b23.tv/fixture", "service-bilibili.svg"},
+            {"https://rumble.com/fixture", "service-rumble.svg"},
+            {"https://m.tv.naver.com/1", "service-naver.svg"},
+            {"https://fixture.tumblr.com/post/1", "service-tumblr.svg"},
+            {"https://nico.ms/fixture", "service-nicovideo.svg"},
+            {"https://likee.video/fixture", "service-likee.svg"},
+            {"https://flic.kr/fixture", "service-flickr.svg"},
+            {"https://www.bitchute.com/video/fixture", "service-bitchute.svg"},
+            {"https://youtube.com.example.invalid/fixture", "browser.svg"}
+        };
+        const QJsonValue originalJobs = backend->state["jobs"];
+        auto platformJob = originalJobs.toArray().first().toObject();
+        for (const auto &fixture : platformIcons) {
+            platformJob["url"] = fixture.first;
+            backend->state["jobs"] = QJsonArray{platformJob};
+            backend->publish();
+            QTest::qWait(150);
+            rows.clear(); checkRows(list);
+            check(rows.size() == 1, "Platform fixture row missing");
+            auto *icon = named(rows.first(), "downloadPlatformIcon");
+            check(icon->property("visible").toBool() && icon->property("status").toInt() == 1, "Platform icon did not render");
+            const QString source = icon->property("source").toUrl().toString();
+            const QString reference = fixture.second.mid(QStringLiteral("service-").size()).replace("tiktok", "tik-tok").replace(".svg", "-icon.svg");
+            check(source.endsWith(fixture.second) || source.endsWith(reference), "Wrong platform icon for source host");
+        }
+        backend->state["jobs"] = originalJobs;
+        backend->publish();
+        QTest::qWait(150);
+        rows.clear(); checkRows(list);
+        check(rows.size() == 3, "Platform tests did not restore the download fixtures");
+
         click(window, rows.first());
         check(evaluate("ui.selectedIds.length").toInt() == 1, "Row click did not select a download");
         QTest::mouseClick(window, Qt::LeftButton, Qt::ControlModifier, rows[1]->mapToScene(QPointF(rows[1]->width()/2, rows[1]->height()/2)).toPoint());
@@ -506,7 +583,8 @@ int main(int argc, char **argv) {
                 }
             });
             const QString url = QStringLiteral("http://127.0.0.1:%1/sample.mp4").arg(server.serverPort());
-            evaluate("ui.parse(" + QJsonDocument(QJsonArray{url}).toJson(QJsonDocument::Compact).mid(1).chopped(1) + ")");
+            QApplication::clipboard()->setText(url);
+            click(window, named(window, "pasteButton"));
             auto waitFor = [](const std::function<bool()> &predicate, const char *message) {
                 QElapsedTimer timer;
                 timer.start();
@@ -537,7 +615,8 @@ int main(int argc, char **argv) {
             QTest::mouseMove(window, playButton->mapToScene(QPointF(playButton->width()/2, playButton->height()/2)).toPoint());
             QTest::qWait(100);
             capture("real-engine-complete");
-            evaluate("ui.parse(" + QJsonDocument(QJsonArray{url + "?second=1"}).toJson(QJsonDocument::Compact).mid(1).chopped(1) + ")");
+            QApplication::clipboard()->setText(url + "?second=1");
+            QTest::keyClick(window, Qt::Key_V, Qt::ControlModifier);
             waitFor([&]() { return backend->state["manual"].toObject()["state"] == "ready"; }, "Second media parsing did not reach ready");
             click(window, named(window, "downloadButton"));
             waitFor([&]() {
@@ -584,6 +663,20 @@ int main(int argc, char **argv) {
             invoke(remove, "accept");
             check(backend->state["jobs"].toArray().size() == 1, "Repeated confirmation removed another entry");
             capture("real-engine-history-preserved");
+            backend->dispatch("{\"action\":\"settings\",\"values\":{\"smartMode\":true}}");
+            QApplication::clipboard()->setText(url + "?smart=first");
+            click(window, named(window, "pasteButton"));
+            check(backend->state["jobs"].toArray().size() == 2 && backend->state["manual"].isNull(), "Smart paste has no immediate queue row");
+            QApplication::clipboard()->setText(url + "?smart=second");
+            QTest::keyClick(window, Qt::Key_V, Qt::ControlModifier);
+            QTest::qWait(100);
+            check(backend->state["jobs"].toArray().size() == 3, "Second smart clipboard paste lost a source");
+            waitFor([&]() {
+                const auto jobs = backend->state["jobs"].toArray();
+                for (const auto &value : jobs) if (value.toObject()["state"] != "complete") return false;
+                return jobs.size() == 3;
+            }, "Smart clipboard downloads did not complete");
+            capture("real-engine-smart-paste");
             backend->stopEngine();
             qInfo("Real Engine: theme/restart, validation, settings, local UI download, ffprobe, durable history, context copy and safe removal passed.");
         }

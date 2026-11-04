@@ -1703,8 +1703,12 @@ Independent implementation.</source>
     <message>
         <location filename="../SettingsDialog.qml" line="594"/>
         <location filename="../SettingsDialog.qml" line="617"/>
-        <source>Enable Proxy</source>
-        <translation>Включить прокси</translation>
+        <source>Set proxy manually</source>
+        <translation>Указать прокси вручную</translation>
+    </message>
+    <message>
+        <source>Automatic: system and VPN settings</source>
+        <translation>Автоматически: настройки системы и VPN</translation>
     </message>
     <message>
         <location filename="../SettingsDialog.qml" line="601"/>

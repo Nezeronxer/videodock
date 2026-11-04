@@ -23,11 +23,19 @@ pub struct Catalog {
 
 impl Catalog {
     pub fn new(proxy: Option<&str>) -> Result<Self> {
+        Self::with_proxy(proxy, false)
+    }
+    pub fn new_automatic(proxy: Option<&str>) -> Result<Self> {
+        Self::with_proxy(proxy, true)
+    }
+    fn with_proxy(proxy: Option<&str>, automatic: bool) -> Result<Self> {
         let proxy = proxy
             .filter(|value| !value.trim().is_empty())
             .map(str::to_owned);
+        let dns = crate::dns::resolver(proxy.is_none())?;
         let builder = || -> Result<reqwest::ClientBuilder> {
             let mut builder = Client::builder()
+                .dns_resolver(dns.clone())
                 .default_headers(reqwest::header::HeaderMap::from_iter([(
                     reqwest::header::ACCEPT,
                     reqwest::header::HeaderValue::from_static("*/*"),
@@ -37,9 +45,14 @@ impl Catalog {
                 .user_agent(UA)
                 .connect_timeout(Duration::from_secs(30));
             if let Some(value) = &proxy {
-                builder = builder.proxy(
-                    reqwest::Proxy::all(value).map_err(|_| anyhow!("Некорректный адрес прокси"))?,
-                );
+                let mut proxy =
+                    reqwest::Proxy::all(value).map_err(|_| anyhow!("Некорректный адрес прокси"))?;
+                if automatic {
+                    proxy = proxy.no_proxy(reqwest::NoProxy::from_string(
+                        "localhost,.localhost,127.0.0.0/8,::1",
+                    ));
+                }
+                builder = builder.proxy(proxy);
             }
             Ok(builder)
         };

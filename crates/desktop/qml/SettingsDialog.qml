@@ -591,7 +591,7 @@ AppDialog {
                                     Layout.preferredHeight: 40
                                     spacing: 8
                                     Label {
-                                        text: qsTr("Enable Proxy")
+                                        text: qsTr("Set proxy manually")
                                         font.pixelSize: 14
                                     }
                                     Item {
@@ -605,7 +605,7 @@ AppDialog {
                                         onClicked: root.proxyEditing = true
                                     }
                                     Label {
-                                        visible: !root.proxyEditing && !!root.app.settings.proxyHost
+                                        visible: root.app.settings.proxyEnabled === true && !root.proxyEditing && !!root.app.settings.proxyHost
                                         text: (root.app.settings.proxyHost || "") + ":" + root.app.settings.proxyPort
                                         color: root.app.theme.secondary
                                         elide: Text.ElideRight
@@ -614,7 +614,7 @@ AppDialog {
                                     Switch {
                                         id: proxySwitch
                                         objectName: "proxyEnabledToggle"
-                                        Accessible.name: qsTr("Enable Proxy")
+                                        Accessible.name: qsTr("Set proxy manually")
                                         checked: root.app.settings.proxyEnabled === true || root.proxyEnableRequested
                                         padding: 0
                                         implicitWidth: 32
@@ -644,6 +644,16 @@ AppDialog {
                                         }
                                     }
                                 }
+                                Label {
+                                    visible: !proxySwitch.checked
+                                    text: qsTr("Automatic: system and VPN settings")
+                                    color: root.app.theme.secondary
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: 12
+                                    Layout.rightMargin: 12
+                                    Layout.bottomMargin: 12
+                                    wrapMode: Text.Wrap
+                                }
                                 ColumnLayout {
                                     visible: root.proxyEditing
                                     Layout.fillWidth: true
@@ -667,7 +677,7 @@ AppDialog {
 
                                             Layout.preferredWidth: 258
                                             implicitHeight: 40
-                                            model: ["HTTPS", "SOCKS5", "SOCKS4"]
+                                            model: ["HTTP", "HTTPS", "SOCKS5", "SOCKS4"]
                                             currentIndex: Math.max(0, model.indexOf(root.app.settings.proxyType || "HTTPS"))
                                         }
 

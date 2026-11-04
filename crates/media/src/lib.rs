@@ -1,7 +1,11 @@
 pub mod catalog;
+mod dns;
 pub mod model;
+mod proof;
 mod selection;
 pub mod youtube;
+pub mod sabr;
+pub use dns::anonymous_dns_bootstrap;
 pub use model::*;
 pub use selection::choose_formats;
 

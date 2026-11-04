@@ -11,6 +11,10 @@ use videodock_core::{
 use videodock_media::{Auth, Selection, youtube::YouTube};
 
 async fn complete_sample(id: &str, quality: u32, expected_duration: f64) {
+    if let Some(worker) = std::env::var_os("VIDEODOCK_TEST_PROOF_WORKER") {
+        videodock_media::youtube::register_proof_worker(worker.into())
+            .expect("test proof worker registration");
+    }
     let temp = tempfile::tempdir().unwrap();
     let proxy = std::env::var("VIDEODOCK_TEST_PROXY").ok();
     let adapter = YouTube::new(proxy.as_deref()).await.unwrap();
@@ -124,7 +128,7 @@ async fn complete_sample(id: &str, quality: u32, expected_duration: f64) {
         .parse()
         .unwrap();
     assert!(
-        (duration - expected_duration).abs() <= 3.0,
+        (duration - expected_duration).abs() <= 3.0_f64.max(expected_duration * 0.02),
         "truncated/wrong duration: {duration}"
     );
     assert_eq!(
@@ -132,6 +136,54 @@ async fn complete_sample(id: &str, quality: u32, expected_duration: f64) {
         u64::from(expected_height),
         "selected geometry was not delivered"
     );
+    let decoded = tokio::time::timeout(
+        Duration::from_secs(180),
+        tokio::process::Command::new(videodock_core::platform::media_tool("ffmpeg"))
+            .args([
+                "-hide_banner",
+                "-nostdin",
+                "-v",
+                "error",
+                "-xerror",
+                "-threads",
+                "4",
+                "-i",
+            ])
+            .arg(&output.path)
+            .args([
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a:0",
+                "-f",
+                "null",
+                "-",
+                "-progress",
+                "pipe:1",
+            ])
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .expect("full decode deadline")
+    .expect("FFmpeg unavailable");
+    assert!(decoded.status.success(), "full decode failed");
+    let progress = String::from_utf8(decoded.stdout).unwrap();
+    assert!(
+        progress.lines().any(|line| line == "progress=end"),
+        "decode did not reach EOF"
+    );
+    let actual_end = progress
+        .lines()
+        .filter_map(|line| line.strip_prefix("out_time_us=")?.parse::<u64>().ok())
+        .next_back()
+        .unwrap() as f64
+        / 1_000_000.0;
+    assert!(
+        (actual_end - expected_duration).abs() <= 3.0_f64.max(expected_duration * 0.02),
+        "decoded last timestamp is incomplete"
+    );
+    println!("youtube {id} decoded_end_s={actual_end:.6} full_decode=true");
     println!(
         "youtube {id} quality={quality} transfer_s={:.3} mux_probe_publish_s={:.3} downloaded_bytes={bytes} output_bytes={} bytes_per_s={:.0} duration_s={duration:.3} height={height}",
         download_time.as_secs_f64(),

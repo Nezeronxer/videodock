@@ -61,7 +61,7 @@ pub async fn prepare(client: &Client, media: &mut Media, cancel: &CancellationTo
             ..Default::default()
         };
         let result = match format.protocol {
-            Protocol::Http => Ok(()),
+            Protocol::Http | Protocol::Sabr => Ok(()),
             Protocol::Hls => adaptive::expand(client, &mut candidate, cancel).await,
             Protocol::Dash => crate::dash::expand(client, &mut candidate, cancel).await,
         };
@@ -377,6 +377,21 @@ pub async fn run(
                 });
             }) as Arc<dyn Fn(Progress) + Send + Sync>;
             let path = match format.protocol {
+                Protocol::Sabr => {
+                    crate::sabr::download(
+                        format
+                            .sabr
+                            .as_ref()
+                            .context("Нет временных данных SABR; обновите ссылку")?,
+                        format.has_video(),
+                        format.size.context("YouTube не указал размер SABR")?,
+                        &staging_dir.join(format!("sabr-{index}")),
+                        &cancel,
+                        &limiter,
+                        callback.clone(),
+                    )
+                    .await?
+                }
                 Protocol::Http => {
                     transfer::download_with_cookies(
                         &client,

@@ -33,13 +33,25 @@ QString application_data_directory() {
     return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
 }
 
+std::unique_ptr<QGuiApplication> create_proof_application(const QString &resolver_rules) {
+    static QByteArray name("videodock-proof");
+    static QByteArray marker("--webEngineArgs");
+    static QByteArray rules = QByteArray("--host-resolver-rules=") + resolver_rules.toUtf8();
+    static char *argv[] = {name.data(), marker.data(), rules.data(), nullptr};
+    static int argc = resolver_rules.isEmpty() ? 1 : 3;
+    auto application = std::make_unique<QApplication>(argc, argv);
+    QCoreApplication::setApplicationName(QStringLiteral("videodock-proof"));
+    return application;
+}
+
 bool configure_browser_proxy(const QString &address) {
     QNetworkProxy proxy(QNetworkProxy::NoProxy);
     if (!address.isEmpty()) {
         const QUrl url(address);
         const auto scheme = url.scheme();
         const bool socks = scheme == QStringLiteral("socks5h") || scheme == QStringLiteral("socks5");
-        if (!url.isValid() || url.host().isEmpty() || url.port() <= 0
+        const auto port = url.port(socks ? -1 : 80);
+        if (!url.isValid() || url.host().isEmpty() || port <= 0
             || (scheme != QStringLiteral("http") && !socks)
             || (socks && !url.userName().isEmpty())) {
             // WebEngine lacks HTTPS/SOCKS4 proxies and SOCKS authentication; never fall back to direct.
@@ -48,7 +60,7 @@ bool configure_browser_proxy(const QString &address) {
             return false;
         }
         proxy = QNetworkProxy(socks ? QNetworkProxy::Socks5Proxy : QNetworkProxy::HttpProxy,
-                              url.host(), quint16(url.port()), url.userName(), url.password());
+                              url.host(), quint16(port), url.userName(), url.password());
     }
     QNetworkProxy::setApplicationProxy(proxy);
     return true;

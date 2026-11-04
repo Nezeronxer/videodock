@@ -21,8 +21,12 @@ struct Spec {
     auth_origin: Option<String>,
 }
 pub(super) fn catalog(inner: &Inner) -> Result<videodock_media::catalog::Catalog> {
-    let proxy = secrets::proxy(inner)?;
-    videodock_media::catalog::Catalog::new(proxy.as_deref())
+    let (proxy, automatic) = secrets::proxy_policy(inner)?;
+    if automatic {
+        videodock_media::catalog::Catalog::new_automatic(proxy.as_deref())
+    } else {
+        videodock_media::catalog::Catalog::new(proxy.as_deref())
+    }
 }
 fn spec(settings: &Value, action: &Value) -> Result<Spec> {
     let output = action["output_dir"]
@@ -319,12 +323,24 @@ pub(super) fn parse(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
     let smart = settings["smartMode"] == true
         && action["force_manual"] != true
         && action["mode"] != "subscribe";
+    if smart {
+        let mut spec = spec(&settings, &json!({"_smart":true}))?;
+        spec.auth_origin = origin(&source);
+        change(inner, |state| {
+            state["manual"] = Value::Null;
+            state["notice"] = json!("");
+            state["jobs"].as_array_mut().unwrap().push(row(
+                &source,
+                &source,
+                &spec.selection.media_type,
+                &spec,
+            ));
+            Ok(())
+        })?;
+        return Ok(json!({"request_id":generation}));
+    }
     change(inner, |state| {
-        state["manual"] = if smart {
-            Value::Null
-        } else {
-            json!({"title":source,"url":source,"state":"parsing","kind":"video","formats":[],"items":[],"subtitles":[],"audio_tracks":[]})
-        };
+        state["manual"] = json!({"title":source,"url":source,"state":"parsing","kind":"video","formats":[],"items":[],"subtitles":[],"audio_tracks":[]});
         state["notice"] = json!("");
         Ok(())
     })?;
@@ -332,7 +348,7 @@ pub(super) fn parse(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
     let action = action.clone();
     runtime()?.spawn(async move {
         let Some(inner) = weak.upgrade() else { return };
-        let result = parse_async(&inner, &source, &action, smart, generation, &cancel).await;
+        let result = parse_async(&inner, &source, &action, generation, &cancel).await;
         if !cancel.is_cancelled()
             && inner.generation.load(Ordering::SeqCst) == generation
             && let Err(error) = result
@@ -340,10 +356,8 @@ pub(super) fn parse(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
             let message = error.to_string();
             let _ = change(&inner, |state| {
                 state["notice"] = json!(message);
-                if !smart {
-                    state["manual"]["state"] = json!("error");
-                    state["manual"]["error"] = json!(message);
-                }
+                state["manual"]["state"] = json!("error");
+                state["manual"]["error"] = json!(message);
                 Ok(())
             });
         }
@@ -455,7 +469,6 @@ async fn parse_async(
     inner: &Arc<Inner>,
     source: &str,
     action: &Value,
-    smart: bool,
     generation: u64,
     cancel: &CancellationToken,
 ) -> Result<()> {
@@ -463,16 +476,6 @@ async fn parse_async(
     let (mut media, client) = inspect(inner, source, cancel).await?;
     media.url = source.to_owned();
     ensure!(!cancel.is_cancelled(), "Разбор отменён");
-    if smart {
-        let settings = lock(&inner.state)["settings"].clone();
-        let action = json!({"_smart":true});
-        change(inner, |state| {
-            add_media(state, &media, &action, &settings, None)?;
-            state["notice"] = json!("");
-            Ok(())
-        })?;
-        return Ok(());
-    }
     let settings = lock(&inner.state)["settings"].clone();
     let batch = matches!(
         media.kind,
@@ -960,6 +963,7 @@ async fn run_job(weak: Weak<Inner>, id: String, cancel: CancellationToken) {
         let source=secrets::source(&inner,&saved)?;
         let (mut media,client)=inspect_in_context(&inner,&source,spec.auth_origin.as_deref(),&cancel).await?;
         media.url=source.clone();
+        ensure!(!cancel.is_cancelled(), "Загрузка отменена");
         if matches!(media.kind,MediaKind::Playlist|MediaKind::Channel|MediaKind::Search){
             let settings=lock(&inner.state)["settings"].clone();
             let action=json!({"format":serde_json::to_value(&spec.selection)?,"output_dir":spec.output_dir,"filename":spec.filename,"_smart":spec.smart,"_auth_origin":spec.auth_origin});

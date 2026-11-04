@@ -19,6 +19,7 @@ pub enum Protocol {
     Http,
     Hls,
     Dash,
+    Sabr,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,6 +62,8 @@ impl VideoVrMode {
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Format {
+    #[serde(skip)]
+    pub sabr: Option<crate::sabr::Delivery>,
     pub id: String,
     pub url: String,
     pub protocol: Protocol,

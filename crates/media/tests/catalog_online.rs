@@ -81,6 +81,7 @@ async fn public_sample(service: &str, address: &str) {
             String::from_utf8_lossy(&bytes).contains("<MPD"),
             "{service}: expected MPD"
         ),
+        Protocol::Sabr => assert!(stream.sabr.is_some()),
         Protocol::Http => assert!(
             bytes
                 .windows(4)

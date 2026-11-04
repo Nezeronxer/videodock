@@ -1,0 +1,246 @@
+use super::{codecs, subtitle_url};
+use crate::{
+    Format, Media, MediaKind, Protocol, Subtitle, VideoProjection,
+    proof::Proof,
+    sabr::{Delivery, Session},
+};
+use anyhow::{Result, ensure};
+use serde_json::Value;
+use std::{collections::BTreeMap, sync::Arc};
+fn integer(value: &Value) -> Option<u64> {
+    value.as_u64().or_else(|| value.as_str()?.parse().ok())
+}
+fn text(value: &Value) -> Option<String> {
+    value.as_str().filter(|v| !v.is_empty()).map(str::to_owned)
+}
+fn binary(value: &str) -> Result<Vec<u8>> {
+    ensure!(value.len() <= 128 * 1024, "Параметры SABR слишком велики");
+    data_encoding::BASE64URL_NOPAD
+        .decode(value.trim_end_matches('=').as_bytes())
+        .map_err(|_| anyhow::anyhow!("Некорректная кодировка SABR"))
+}
+
+pub(super) fn map(
+    data: Value,
+    id: &str,
+    url: String,
+    version: String,
+    proof: Proof,
+    http: reqwest::Client,
+) -> Result<Media> {
+    ensure!(
+        data["playabilityStatus"]["status"] == "OK",
+        "YouTube не разрешил анонимное воспроизведение"
+    );
+    let details = &data["videoDetails"];
+    ensure!(details["videoId"] == id, "YouTube вернул другое видео");
+    ensure!(
+        details["isLive"].as_bool() != Some(true),
+        "Для SABR требуется завершённое видео"
+    );
+    let duration = integer(&details["lengthSeconds"])
+        .filter(|n| *n > 0)
+        .ok_or_else(|| anyhow::anyhow!("YouTube не указал длительность"))?;
+    let streaming = &data["streamingData"];
+    ensure!(
+        streaming["drmParams"].is_null(),
+        "YouTube: видео защищено DRM"
+    );
+    let config=data["playerConfig"]["mediaCommonConfig"]["mediaUstreamerRequestConfig"]["videoPlaybackUstreamerConfig"].as_str().ok_or_else(||anyhow::anyhow!("Нет конфигурации SABR"))?;
+    let session = Arc::new(Session::new(
+        url,
+        id.to_owned(),
+        binary(config)?,
+        binary(&proof.content_po)?,
+        proof.user_agent,
+        version,
+        http,
+    )?);
+    let source = format!("https://www.youtube.com/watch?v={id}");
+    let entries = streaming["adaptiveFormats"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("Нет форматов SABR"))?;
+    ensure!(entries.len() <= 2048, "Слишком много форматов SABR");
+    let mut formats = Vec::new();
+    for f in entries {
+        if f["drmFamilies"].as_array().is_some_and(|v| !v.is_empty())
+            || !f["drmTrackType"].is_null()
+        {
+            continue;
+        }
+        let Some(itag) = integer(&f["itag"]).and_then(|n| u32::try_from(n).ok()) else {
+            continue;
+        };
+        let Some(last_modified) = integer(&f["lastModified"]) else {
+            continue;
+        };
+        let Some(size) = integer(&f["contentLength"]).filter(|n| *n > 0) else {
+            continue;
+        };
+        let Some(mime) = f["mimeType"].as_str() else {
+            continue;
+        };
+        let (video_codec, audio_codec) = codecs(mime);
+        if video_codec.is_none() && audio_codec.is_none() {
+            continue;
+        }
+        let ext = match mime.split(';').next().unwrap_or("") {
+            "video/mp4" => "mp4",
+            "audio/mp4" => "m4a",
+            "video/webm" | "audio/webm" => "webm",
+            _ => continue,
+        };
+        let xtags = text(&f["xtags"]);
+        ensure!(
+            xtags
+                .as_ref()
+                .is_none_or(|v| v.len() <= 1024 && !v.chars().any(char::is_control)),
+            "Некорректные метки SABR"
+        );
+        let tags: BTreeMap<_, _> = xtags
+            .as_deref()
+            .unwrap_or("")
+            .split(':')
+            .filter_map(|v| v.split_once('='))
+            .collect();
+        let track = &f["audioTrack"];
+        let track_id = text(&track["id"]).or_else(|| audio_codec.as_ref().and(xtags.clone()));
+        let language = tags.get("lang").map(|v| (*v).to_owned());
+        let original = tags.get("acont").map(|v| *v == "original");
+        let duration_ms = integer(&f["approxDurationMs"]).unwrap_or(duration.saturating_mul(1000));
+        let projection = text(&f["projectionType"]);
+        let stereo = text(&f["stereoLayout"]);
+        formats.push(Format {
+            id: track_id
+                .as_ref()
+                .map(|t| format!("{itag}:{t}"))
+                .unwrap_or_else(|| itag.to_string()),
+            url: source.clone(),
+            protocol: Protocol::Sabr,
+            ext: ext.into(),
+            sabr: Some(Delivery {
+                session: session.clone(),
+                itag,
+                last_modified,
+                xtags,
+                duration_ms,
+                mime_type: mime.to_owned(),
+                width: integer(&f["width"])
+                    .and_then(|n| n.try_into().ok())
+                    .unwrap_or(0),
+                height: integer(&f["height"])
+                    .and_then(|n| n.try_into().ok())
+                    .unwrap_or(0),
+                fps: integer(&f["fps"])
+                    .and_then(|n| n.try_into().ok())
+                    .unwrap_or(0),
+                bitrate: integer(&f["bitrate"]).unwrap_or(0),
+                channels: integer(&f["audioChannels"])
+                    .and_then(|n| n.try_into().ok())
+                    .unwrap_or(2),
+            }),
+            width: integer(&f["width"]).and_then(|n| n.try_into().ok()),
+            height: integer(&f["height"]).and_then(|n| n.try_into().ok()),
+            fps: f["fps"].as_f64(),
+            vr: projection
+                .as_deref()
+                .is_some_and(|v| matches!(v, "MESH" | "EQUIRECTANGULAR" | "360")),
+            projection: (projection.as_deref() == Some("RECTANGULAR"))
+                .then_some(VideoProjection::Flat),
+            projection_type: projection,
+            stereo_layout: stereo,
+            video_codec,
+            audio_codec,
+            audio_track_id: track_id,
+            audio_language: language.clone(),
+            audio_title: text(&track["displayName"]).or(language),
+            audio_default: track["audioIsDefault"].as_bool(),
+            audio_original: original,
+            bitrate: integer(&f["bitrate"]),
+            size: Some(size),
+            ..Default::default()
+        });
+    }
+    ensure!(
+        !formats.is_empty(),
+        "YouTube не вернул полные публичные SABR-форматы"
+    );
+    let mut subtitles = Vec::new();
+    if let Some(tracks) =
+        data["captions"]["playerCaptionsTracklistRenderer"]["captionTracks"].as_array()
+    {
+        ensure!(tracks.len() <= 256, "Слишком много субтитров");
+        for track in tracks {
+            let Some(url) = track["baseUrl"].as_str() else {
+                continue;
+            };
+            let Some(lang) = track["languageCode"].as_str() else {
+                continue;
+            };
+            subtitles.push(Subtitle {
+                language: lang.into(),
+                title: track["name"]["simpleText"].as_str().unwrap_or(lang).into(),
+                url: subtitle_url(url)?,
+                ext: "vtt".into(),
+                automatic: track["kind"] == "asr",
+                translatable: track["isTranslatable"].as_bool().unwrap_or(false),
+            });
+        }
+    }
+    let thumbnail = details["thumbnail"]["thumbnails"]
+        .as_array()
+        .and_then(|v| v.last())
+        .and_then(|v| v["url"].as_str())
+        .unwrap_or_default()
+        .to_owned();
+    Ok(Media {
+        id: id.into(),
+        url: source,
+        title: details["title"].as_str().unwrap_or(id).into(),
+        description: details["shortDescription"]
+            .as_str()
+            .unwrap_or_default()
+            .into(),
+        kind: MediaKind::Video,
+        duration: Some(duration as f64),
+        thumbnail,
+        channel_id: details["channelId"].as_str().unwrap_or_default().into(),
+        channel_title: details["author"].as_str().unwrap_or_default().into(),
+        formats,
+        subtitles,
+        ..Default::default()
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn native_metadata_preserves_quality_and_keeps_proof_and_signed_url_out_of_serialization()
+    {
+        let data = serde_json::json!({"playabilityStatus":{"status":"OK"},"videoDetails":{"videoId":"fixture0001","lengthSeconds":"2","title":"Fixture"},"streamingData":{"adaptiveFormats":[{"itag":136,"lastModified":"1","contentLength":"9","approxDurationMs":"2000","mimeType":"video/mp4; codecs=\"avc1.4d401f\"","width":1280,"height":720,"fps":30}]},"playerConfig":{"mediaCommonConfig":{"mediaUstreamerRequestConfig":{"videoPlaybackUstreamerConfig":"YWJj"}}}});
+        let media = map(
+            data,
+            "fixture0001",
+            "https://r.googlevideo.com/videoplayback?token=synthetic-signed-secret".into(),
+            "2.20261104".into(),
+            Proof {
+                content_po: "c3ludGhldGljLXBvLXNlY3JldA".into(),
+                visitor_data: "fixture".into(),
+                user_agent: "Fixture Agent".into(),
+            },
+            reqwest::Client::builder()
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(media.formats[0].height, Some(720));
+        assert_eq!(media.formats[0].sabr.as_ref().unwrap().duration_ms, 2000);
+        let serialized = serde_json::to_string(&media).unwrap();
+        assert!(!serialized.contains("synthetic-signed-secret"));
+        assert!(!serialized.contains("c3ludGhldGljLXBvLXNlY3JldA"));
+        assert!(!format!("{media:?}").contains("synthetic-signed-secret"));
+    }
+}

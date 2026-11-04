@@ -1,3 +1,4 @@
+pub use crate::proof::register_proof_worker;
 use crate::{Auth, Entry, Format, Media, MediaKind, Protocol, Subtitle, VideoProjection};
 use anyhow::{Result, anyhow, ensure};
 use rustypipe::{
@@ -31,39 +32,61 @@ impl std::fmt::Debug for AccountInfo {
     }
 }
 
+#[path = "youtube_sabr.rs"]
+mod native_sabr;
+
 pub struct YouTube {
+    proxy_url: Option<String>,
     proxy: Option<wreq::Proxy>,
 }
 
 impl YouTube {
     pub async fn new(proxy: Option<&str>) -> Result<Self> {
+        let proxy_url = proxy
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_owned);
         let proxy = proxy
             .filter(|value| !value.trim().is_empty())
             .map(|value| wreq::Proxy::all(value).map_err(|_| anyhow!("Некорректный адрес прокси")))
             .transpose()?;
-        Ok(Self { proxy })
+        Ok(Self { proxy, proxy_url })
     }
 
     async fn client(&self, auth: &Auth) -> Result<RustyPipe> {
+        self.client_identity(auth, None).await
+    }
+
+    async fn client_identity(
+        &self,
+        auth: &Auth,
+        proof: Option<&crate::proof::Proof>,
+    ) -> Result<RustyPipe> {
         ensure!(
             !auth.cookie_header.contains(['\r', '\n']),
             "Недопустимый Cookie-заголовок"
         );
         // shortcut: wreq 0.16 player POSTs reset HTTP/2 streams here; restore HTTP/2 after a verified transport update.
-        let mut http = wreq::Client::builder().no_proxy().http1_only();
+        let mut http = wreq::Client::builder()
+            .no_proxy()
+            .http1_only()
+            .dns_resolver(crate::dns::resolver(self.proxy.is_none())?);
         if let Some(proxy) = &self.proxy {
             http = http.proxy(proxy.clone());
         }
         // Credentials stay in this request's memory; disable filesystem reports and helper discovery.
-        let client = RustyPipe::builder()
+        let mut builder = RustyPipe::builder()
             .strict()
             .no_storage()
             .no_reporter()
             .no_botguard()
             .timeout(Duration::from_secs(30))
-            .n_http_retries(1)
-            .build_with_client(http)
-            .map_err(pipe_error)?;
+            .n_http_retries(1);
+        if let Some(proof) = proof {
+            builder = builder
+                .user_agent(&proof.user_agent)
+                .visitor_data(&proof.visitor_data);
+        }
+        let client = builder.build_with_client(http).map_err(pipe_error)?;
         if !auth.cookie_header.trim().is_empty() {
             client
                 .user_auth_set_cookie(auth.cookie_header.clone())
@@ -88,6 +111,41 @@ impl YouTube {
             .map_err(pipe_error)?;
         match target {
             UrlTarget::Video { id, .. } => {
+                if auth.cookie_header.trim().is_empty()
+                    && let Some(worker) = crate::proof::registered_worker()
+                {
+                    let proof =
+                        crate::proof::request(worker, &id, self.proxy_url.as_deref()).await?;
+                    let attested = self.client_identity(auth, Some(&proof)).await?;
+                    let attested = attested
+                        .query()
+                        .unauthenticated()
+                        .visitor_data(&proof.visitor_data);
+                    let (raw, version) = attested
+                        .attested_player(&id, &proof.visitor_data, &proof.content_po)
+                        .await
+                        .map_err(pipe_error)?;
+                    let data: serde_json::Value = serde_json::from_str(&raw)
+                        .map_err(|_| anyhow!("Некорректный ответ YouTube"))?;
+                    if data["videoDetails"]["isLive"].as_bool() != Some(true) {
+                        let delivery = data["streamingData"]["serverAbrStreamingUrl"]
+                            .as_str()
+                            .ok_or_else(|| anyhow!("YouTube не вернул адрес SABR"))?;
+                        crate::sabr::validate_url(delivery)?;
+                        let delivery = attested
+                            .decipher_stream_url(delivery)
+                            .await
+                            .map_err(pipe_error)?;
+                        return native_sabr::map(
+                            data,
+                            &id,
+                            delivery,
+                            version,
+                            proof,
+                            self.sabr_http()?,
+                        );
+                    }
+                }
                 let player = query.player(&id).await.map_err(pipe_error)?;
                 map_player(player, &query)
             }
@@ -129,6 +187,23 @@ impl YouTube {
             }
             _ => Err(anyhow!("Этот тип ссылки YouTube пока не поддерживается")),
         }
+    }
+
+    fn sabr_http(&self) -> Result<reqwest::Client> {
+        let mut client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(Duration::from_secs(20))
+            .read_timeout(Duration::from_secs(30))
+            .dns_resolver(crate::dns::resolver(self.proxy_url.is_none())?);
+        if let Some(proxy) = &self.proxy_url {
+            client = client.proxy(
+                reqwest::Proxy::all(proxy).map_err(|_| anyhow!("Некорректный прокси SABR"))?,
+            );
+        }
+        client
+            .build()
+            .map_err(|_| anyhow!("Не удалось создать транспорт SABR"))
     }
 
     pub async fn verify_auth(&self, auth: &Auth) -> Result<()> {

@@ -93,7 +93,16 @@ async fn proxy(socks: bool, auth: bool) -> Proxy {
                         other => panic!("unexpected address kind {other}"),
                     };
                     let port = downstream.read_u16().await.unwrap();
-                    let Ok(mut upstream) = TcpStream::connect((host.as_str(), port)).await else {
+                    let Ok(mut upstream) = TcpStream::connect((
+                        if host == "fixture.invalid" {
+                            "127.0.0.1"
+                        } else {
+                            host.as_str()
+                        },
+                        port,
+                    ))
+                    .await
+                    else {
                         return;
                     };
                     downstream
@@ -126,7 +135,11 @@ async fn proxy(socks: bool, auth: bool) -> Proxy {
                     };
                     let url = url::Url::parse(&address).unwrap();
                     let Ok(mut upstream) = TcpStream::connect((
-                        url.host_str().unwrap(),
+                        if url.host_str() == Some("fixture.invalid") {
+                            "127.0.0.1"
+                        } else {
+                            url.host_str().unwrap()
+                        },
                         url.port_or_known_default().unwrap(),
                     ))
                     .await
@@ -497,6 +510,238 @@ async fn engine_proxy_routes_hls_segments_and_subtitles() {
             if socks { "SOCKS5" } else { "HTTP" },
             routed.len()
         );
+    }
+    for socks in [false, true] {
+        let proxy = proxy(socks, true).await;
+        let before = requests.lock().unwrap().len();
+        let mut command = tokio::process::Command::new(std::env::current_exe().unwrap());
+        command.args([
+            "--exact",
+            "automatic_proxy_configuration_routes_metadata_and_whole_file",
+            "--nocapture",
+        ]);
+        for key in [
+            "https_proxy",
+            "HTTPS_PROXY",
+            "all_proxy",
+            "ALL_PROXY",
+            "http_proxy",
+            "HTTP_PROXY",
+        ] {
+            command.env_remove(key);
+        }
+        let result = command
+            .env("HTTPS_PROXY", &proxy.url)
+            .env("NO_PROXY", "*")
+            .env("VIDEODOCK_AUTO_PROXY_CHILD", "hls")
+            .env(
+                "VIDEODOCK_AUTO_SOURCE",
+                format!("{address}/entry").replace("127.0.0.1", "fixture.invalid"),
+            )
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "automatic HLS child failed socks={socks}: {} {}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let requests = requests.lock().unwrap();
+        let routed = &requests[before..];
+        assert!(routed.iter().any(|path| path.ends_with(".ts")));
+        assert!(routed.iter().any(|path| path.ends_with(".vtt")));
+        assert_eq!(
+            proxy.accepted.load(Ordering::SeqCst),
+            routed.len(),
+            "automatic HLS request bypassed proxy"
+        );
+        println!(
+            "Engine automatic proxy={} auth=yes requests={} complete-HLS+captions+duration+ffprobe=pass",
+            if socks { "SOCKS5" } else { "HTTP" },
+            routed.len()
+        );
+    }
+    server.abort();
+}
+
+// Separate processes avoid mutating the test runner's global proxy environment.
+#[tokio::test]
+async fn automatic_proxy_configuration_routes_metadata_and_whole_file() {
+    const TEST: &str = "automatic_proxy_configuration_routes_metadata_and_whole_file";
+    if let Ok(mode) = std::env::var("VIDEODOCK_AUTO_PROXY_CHILD") {
+        let temp = tempfile::tempdir().unwrap();
+        let engine = videodock_core::Engine::new(temp.path().join("profile")).unwrap();
+        if mode == "manual" {
+            let selected =
+                url::Url::parse(&std::env::var("VIDEODOCK_AUTO_SELECTED").unwrap()).unwrap();
+            engine.dispatch(serde_json::json!({"action":"settings","values":{
+                "proxyEnabled":true,"proxyType":"HTTP","proxyHost":"127.0.0.1",
+                "proxyPort":selected.port().unwrap(),"proxyLogin":"test","proxyPassword":"synthetic"
+            }})).unwrap();
+        }
+        if mode == "hls" {
+            engine
+                .dispatch(serde_json::json!({"action":"settings","values":{
+                    "path":temp.path().join("output"),"tagsEnabled":false,"smartMode":true,
+                    "quality":180,"container":"mp4","subtitles":["en"],"embedSubtitles":false
+                }}))
+                .unwrap();
+            let source = std::env::var("VIDEODOCK_AUTO_SOURCE").unwrap();
+            engine
+                .dispatch(serde_json::json!({"action":"parse","url":source}))
+                .unwrap();
+            let started = std::time::Instant::now();
+            let job = loop {
+                let state = engine.snapshot();
+                assert!(
+                    !state.to_string().contains("synthetic"),
+                    "automatic proxy credentials escaped into snapshot"
+                );
+                assert!(
+                    state["notice"].as_str().unwrap_or_default().is_empty(),
+                    "automatic metadata failed"
+                );
+                if let Some(job) = state["jobs"].as_array().and_then(|jobs| jobs.first()) {
+                    assert_ne!(job["state"], "error", "automatic HLS queue failed");
+                    if job["state"] == "complete" {
+                        break job.clone();
+                    }
+                }
+                assert!(
+                    started.elapsed() < Duration::from_secs(20),
+                    "automatic HLS queue deadline"
+                );
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            };
+            let info = videodock_core::pipeline::probe(std::path::Path::new(
+                job["path"].as_str().unwrap(),
+            ))
+            .await
+            .unwrap();
+            let streams = info["streams"].as_array().unwrap();
+            assert!(streams.iter().any(|stream| stream["codec_type"] == "video"));
+            assert!(streams.iter().any(|stream| stream["codec_type"] == "audio"));
+            let duration = info["format"]["duration"]
+                .as_str()
+                .unwrap()
+                .parse::<f64>()
+                .unwrap();
+            assert!((duration - 2.0).abs() < 0.3);
+            return;
+        }
+        if mode == "invalid" {
+            let error = engine.network_proxy().unwrap_err().to_string();
+            assert!(!error.contains("synthetic"));
+            return;
+        }
+        let selected = engine.network_proxy().unwrap();
+        assert!(
+            selected.is_some(),
+            "automatic mode ignored the configured system/environment proxy"
+        );
+        assert!(!engine.snapshot().to_string().contains("synthetic"));
+        let catalog = if mode == "manual" {
+            Catalog::new(selected.as_deref())
+        } else {
+            Catalog::new_automatic(selected.as_deref())
+        }
+        .unwrap();
+        let source = std::env::var("VIDEODOCK_AUTO_SOURCE").unwrap();
+        let response = catalog.client().get(&source).send().await;
+        if mode == "dead" || mode == "wrong" {
+            assert!(
+                response.is_err()
+                    || response
+                        .as_ref()
+                        .is_ok_and(|response| response.status().is_client_error()
+                            || response.status().is_server_error()),
+                "failed configured proxy silently bypassed to origin"
+            );
+            return;
+        }
+        assert_eq!(response.unwrap().bytes().await.unwrap().as_ref(), b"abcdef");
+        download(
+            &catalog.client(),
+            &source,
+            &BTreeMap::new(),
+            &temp.path().join("media"),
+            &CancellationToken::new(),
+            &Limiter::new(0),
+            Arc::new(|_| {}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            tokio::fs::read(temp.path().join("media")).await.unwrap(),
+            b"abcdef"
+        );
+        return;
+    }
+    let (source, reads, server) = source().await;
+    for (mode, socks) in [
+        ("auto", false),
+        ("auto", true),
+        ("manual", false),
+        ("wrong", false),
+        ("wrong", true),
+        ("dead", false),
+        ("invalid", false),
+    ] {
+        let proxy = proxy(socks, true).await;
+        let before = reads.load(Ordering::SeqCst);
+        let mut command = tokio::process::Command::new(std::env::current_exe().unwrap());
+        command.args(["--exact", TEST, "--nocapture"]);
+        for key in [
+            "https_proxy",
+            "HTTPS_PROXY",
+            "all_proxy",
+            "ALL_PROXY",
+            "http_proxy",
+            "HTTP_PROXY",
+        ] {
+            command.env_remove(key);
+        }
+        let configured = match mode {
+            "manual" | "invalid" => "file://test:synthetic@localhost/private".to_owned(),
+            "dead" => {
+                let dead = TcpListener::bind("127.0.0.1:0").await.unwrap();
+                format!("http://{}", dead.local_addr().unwrap())
+            }
+            "wrong" => proxy.url.replace("synthetic@", "wrong@"),
+            _ => proxy.url.clone(),
+        };
+        let result = command
+            .env("HTTPS_PROXY", configured)
+            .env("NO_PROXY", "*")
+            .env("VIDEODOCK_AUTO_PROXY_CHILD", mode)
+            .env(
+                "VIDEODOCK_AUTO_SOURCE",
+                source.replace("127.0.0.1", "fixture.invalid"),
+            )
+            .env("VIDEODOCK_AUTO_SELECTED", &proxy.url)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "auto route child failed mode={mode} socks={socks}: {} {}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let expected = if matches!(mode, "auto" | "manual") {
+            2
+        } else {
+            0
+        };
+        assert_eq!(
+            reads.load(Ordering::SeqCst) - before,
+            expected,
+            "configured proxy route changed"
+        );
+        if expected > 0 {
+            assert_eq!(proxy.accepted.load(Ordering::SeqCst), expected);
+        }
     }
     server.abort();
 }
