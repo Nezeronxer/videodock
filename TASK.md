@@ -254,9 +254,11 @@ Windows после удаления повреждённого кэша паке
 - [x] Восстановить последнюю рабочую сессию и сохранить незавершённые изменения.
 - [x] Windows: GUI subsystem 2 подтверждён на настоящем PE; production installer в пользовательской сессии завершён и создал ярлык, собственное окно видно на снимке; финальный smoke новой копии проверяется отдельно.
 - [x] Workspace165/0/42ignored, Clippy,3Qt harness, actionlint, Linux release PASS; диагностики сохранены вне репозитория;330 Windows source files побайтово совпали.
-- [ ] Отправить изменения на GitHub, проверить native jobs и доступность исходников.
-- [ ] Обновить фактические блокеры stable по результатам.
+- [x] Код602f03a и отчётb382f15 отправлены в main; remote SHA совпал, публичный raw-отчёт без авторизации побайтово совпал. Native run41843213464 выполняет release-сборки после прошедших тестов Linux/macOS.
+- [x] Обновлён docs/first-stable-release.md: stable не выпускается, YouTube/остаток сервисов/полный GUI/macOS runtime/updater остаются открытыми.
 
 Свежий локальный прогон возобновления: workspace 165/0/42ignored, Clippy PASS; Qt appearance с настоящим Engine PASS. Gitleaks history:0. В export исходников детектор отметил 4 публичные строки RustyPipe fixtures (continuation tokens), классификация выполняется отдельно. Повтор полного длинного YouTube напрямую снова завершился ошибкой; stable остаётся заблокирован.
 
 Независимое ревью diff019b160..602f03a:critical/important нет, обе lease-регрессии повторены. Источник Gitleaks export-предупреждений проверен:2 публичных continuation-token assert и2animationActivationEntityKey fixture, учётных данных нет. Generic повторён полным файлом52.208с/4368946B и полностью декодирован FFmpeg. Новая попытка длинного YouTube напрямую и через SOCKS не прошла metadata. Linux/macOS native CI прошёл тестовые шаги и выполняет release-сборки; Windows job ещё в работе.
+
+Windows после возобновления: свежий повтор162passed/0failed/42ignored,34suites,exit0. Production installer в пользовательской сессии PASS с ярлыком; freshQA app PATH толькоWindows/System32: ffmpeg/ffprobePASS, PEsubsystem2, idle/Responding/window=true, ScheduledTaskResult0. Снимок собственного onboarding подтверждает живое окно. Это startup smoke, не полный Windows user-flow.
