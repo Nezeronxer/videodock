@@ -8,7 +8,7 @@
 
 Детерминированная регрессия с `File::try_clone` воспроизвела отказ до исправления и прошла после него. Свежая независимая проверка отдельно подтвердила поведение std::fs, исключение второго владельца при живом клоне и сохранение блокировки нового владельца после закрытия старого дубликата. Это проверка эквивалентного дублирования дескриптора, а не реального fork/exec. Предыдущий упавший cookie/restart-тест также повторён успешно.
 
-Windows-only предупреждения в platform.rs устранены условной компиляцией Unix импортов/помощников. При настоящей Windows-упаковке обнаружен недостающий Qt6ShaderTools.dll: модуль qtshadertools добавлен в CI, установка в QA-госте выполняется отдельно. Добавлен workflow нативных проверок для Linux, Windows и macOS, с read-only разрешениями и закреплённым commit checkout. Workflow не создаёт теги и релизы; статическая проверка actionlint пройдена. Результат облачного исполнения учитывается отдельно. Push ветки release/first-stable дважды отклонён GitHub: Internal Server Error и fatal error in commit_refs; облачные задания пока не запускались.
+Windows-only предупреждения в platform.rs устранены условной компиляцией Unix импортов/помощников. При настоящей Windows-упаковке обнаружен недостающий Qt6ShaderTools.dll: модуль qtshadertools добавлен в CI, установка в QA-госте завершилась успешно, DLL присутствует. Добавлен workflow нативных проверок для Linux, Windows и macOS, с read-only разрешениями и закреплённым commit checkout. Workflow не создаёт теги и релизы; статическая проверка actionlint пройдена. Результат облачного исполнения учитывается отдельно. Push ветки release/first-stable дважды отклонён GitHub: Internal Server Error и fatal error in commit_refs; облачные задания пока не запускались.
 
 | Проверка текущего кода | Результат |
 |---|---|
@@ -17,7 +17,7 @@ Windows-only предупреждения в platform.rs устранены ус
 | Qt с настоящим Engine | PASS: темы, restart, валидация, локальная загрузка/ffprobe/history, безопасное удаление, пять settings tabs, десять dialogs |
 | Qt browser proxy / native cookie callback | PASS |
 | Cargo audit | 0 vulnerabilities; предупреждение unmaintained fxhash остаётся |
-| Gitleaks Git history | 7 commits, 0 leaks |
+| Gitleaks Git history | 0 leaks; повторено после инженерных коммитов |
 | Linux release build | PASS после исправления блокировки; настоящий release-бинарь перезапущен с сохранёнными light и complete-загрузкой |
 
 ## Пользовательский проход
