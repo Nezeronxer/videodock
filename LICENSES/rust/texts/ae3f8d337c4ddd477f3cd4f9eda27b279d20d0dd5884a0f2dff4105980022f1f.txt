@@ -1,0 +1,44 @@
+Source copyright/license comments reproduced from aes@0.8.4.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/armv8.rs
+//! AES block cipher implementation using the ARMv8 Cryptography Extensions.
+//!
+//! Based on this C intrinsics implementation:
+//! <https://github.com/noloader/AES-Intrinsics/blob/master/aes-arm.c>
+//!
+//! Original C written and placed in public domain by Jeffrey Walton.
+//! Based on code from ARM, and by Johannes Schneiders, Skip Hovsmith and
+//! Barry O'Rourke for the mbedTLS project.
+
+Files: src/soft/fixslice32.rs
+//! Fixsliced implementations of AES-128, AES-192 and AES-256 (32-bit)
+//! adapted from the C implementation
+//!
+//! All implementations are fully bitsliced and do not rely on any
+//! Look-Up Table (LUT).
+//!
+//! See the paper at <https://eprint.iacr.org/2020/1123.pdf> for more details.
+//!
+//! # Author (original C code)
+//!
+//! Alexandre Adomnicai, Nanyang Technological University, Singapore
+//! <alexandre.adomnicai@ntu.edu.sg>
+//!
+//! Originally licensed MIT. Relicensed as Apache 2.0+MIT with permission.
+
+Files: src/soft/fixslice64.rs
+//! Fixsliced implementations of AES-128, AES-192 and AES-256 (64-bit)
+//! adapted from the C implementation.
+//!
+//! All implementations are fully bitsliced and do not rely on any
+//! Look-Up Table (LUT).
+//!
+//! See the paper at <https://eprint.iacr.org/2020/1123.pdf> for more details.
+//!
+//! # Author (original C code)
+//!
+//! Alexandre Adomnicai, Nanyang Technological University, Singapore
+//! <alexandre.adomnicai@ntu.edu.sg>
+//!
+//! Originally licensed MIT. Relicensed as Apache 2.0+MIT with permission.

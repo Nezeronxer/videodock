@@ -1,0 +1,24 @@
+Source copyright/license comments reproduced from icu_locale_fallback@2.4.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/algorithms.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/provider.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// Provider structs must be stable
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Tools for locale fallback, enabling arbitrary input locales to be mapped into the nearest
+//! locale with data.
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations

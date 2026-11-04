@@ -1,0 +1,28 @@
+Source copyright/license comments reproduced from tinystr@0.8.5.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: benches/overview.rs, benches/read.rs, benches/serde.rs, src/ascii.rs, src/asciibyte.rs, src/databake.rs, src/error.rs, src/int_ops.rs, src/macros.rs, src/serde.rs, src/ule.rs, src/unvalidated.rs, tests/serde.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: benches/construct.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// This file was adapted from https://github.com/zbraniecki/tinystr
+
+Files: benches/common/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// This file was adapted from parts of https://github.com/zbraniecki/tinystr
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations

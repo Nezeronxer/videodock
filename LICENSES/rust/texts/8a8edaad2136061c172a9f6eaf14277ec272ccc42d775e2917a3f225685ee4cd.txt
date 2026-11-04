@@ -1,0 +1,22 @@
+Source copyright/license comments reproduced from zerofrom@0.1.8.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/zero_from.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/macro_impls.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// In this case consistency between impls is more important
+// than using pointer casts
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations

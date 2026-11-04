@@ -1,0 +1,14 @@
+Source copyright/license comments reproduced from potential_utf@0.1.6.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/uchar.rs, src/ustr.rs, src/writeable.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations

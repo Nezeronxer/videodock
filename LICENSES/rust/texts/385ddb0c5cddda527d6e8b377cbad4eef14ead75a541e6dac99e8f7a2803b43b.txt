@@ -1,0 +1,23 @@
+Source copyright/license comments reproduced from zerofrom-derive@0.1.8.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: examples/zf_derive.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations
+// #![cfg_attr(not(any(test, doc)), no_std)]
+
+Files: src/visitor.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Visitor for determining whether a type has type and non-static lifetime parameters
+//! (duplicated in yoke/derive/src/visitor.rs)

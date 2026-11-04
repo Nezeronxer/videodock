@@ -1,0 +1,337 @@
+Source copyright/license comments reproduced from zerovec@0.11.9.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: benches/vzv.rs, benches/zeromap.rs, benches/zerovec.rs, benches/zerovec_iai.rs, benches/zerovec_serde.rs, src/cow.rs, src/hashmap/algorithms.rs, src/hashmap/mod.rs, src/hashmap/serde.rs, src/map/borrowed.rs, src/map/databake.rs, src/map/kv.rs, src/map/map.rs, src/map/serde.rs, src/map/vecs.rs, src/map2d/borrowed.rs, src/map2d/cursor.rs, src/map2d/databake.rs, src/map2d/map.rs, src/map2d/serde.rs, src/schemars.rs, src/ule/chars.rs, src/ule/encode.rs, src/ule/mod.rs, src/ule/multi.rs, src/ule/niche.rs, src/ule/option.rs, src/ule/plain.rs, src/ule/slices.rs, src/varzerovec/components.rs, src/varzerovec/databake.rs, src/varzerovec/error.rs, src/varzerovec/lengthless.rs, src/varzerovec/serde.rs, src/varzerovec/slice.rs, src/varzerovec/vec.rs, src/zerofrom_impls.rs, src/zerovec/databake.rs, src/zerovec/mod.rs, src/zerovec/serde.rs, src/zerovec/slice.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/map/serde_helpers.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// @@@@@@@@@@@@@@@@
+// THIS FILE IS SHARED BETWEEN LITEMAP AND ZEROVEC. PLEASE KEEP IT IN SYNC FOR ALL EDITS
+// @@@@@@@@@@@@@@@@
+
+Files: src/varzerovec/owned.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// The mutation operations in this file should panic to prevent undefined behavior
+
+Files: examples/zv_serde.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// This example demonstrates zero-copy, zero-allocation deserialization of a u32 vector
+// stored in a Bincode buffer.
+
+Files: src/yoke_impls.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// This way we can copy-paste Yokeable impls
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations
+
+Files: src/ule/custom.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Documentation on implementing custom VarULE types.
+//!
+//! This module contains documentation for defining custom VarULE types,
+//! especially those using complex custom dynamically sized types.
+//!
+//! In *most cases* you should be able to create custom VarULE types using
+//! [`#[make_varule]`](crate::make_ule).
+//!
+//! # Example
+//!
+//! For example, if your regular stack type is:
+//!
+//! ```rust
+//! use zerofrom::ZeroFrom;
+//! use zerovec::ule::*;
+//! use zerovec::ZeroVec;
+//!
+//! #[derive(serde::Serialize, serde::Deserialize)]
+//! struct Foo<'a> {
+//!     field1: char,
+//!     field2: u32,
+//!     #[serde(borrow)]
+//!     field3: ZeroVec<'a, u32>,
+//! }
+//! ```
+//!
+//! then the ULE type will be implemented as follows. Ideally, you should have
+//! `EncodeAsVarULE` and `ZeroFrom` implementations on `Foo` pertaining to `FooULE`,
+//! as well as a `Serialize` impl on `FooULE` and a `Deserialize` impl on `Box<FooULE>`
+//! to enable human-readable serialization and deserialization.
+//!
+//! ```rust
+//! use zerovec::{ZeroVec, VarZeroVec, ZeroSlice};
+//! use zerovec::ule::*;
+//! use zerofrom::ZeroFrom;
+//! use core::mem;
+//!
+//! # #[derive(serde::Serialize, serde::Deserialize)]
+//! # struct Foo<'a> {
+//! #    field1: char,
+//! #    field2: u32,
+//! #    #[serde(borrow)]
+//! #    field3: ZeroVec<'a, u32>   
+//! # }
+//!
+//! // Must be repr(C, packed) for safety of VarULE!
+//! // Must also only contain ULE types
+//! #[repr(C, packed)]
+//! struct FooULE {
+//!     field1: <char as AsULE>::ULE,   
+//!     field2: <u32 as AsULE>::ULE,
+//!     field3: ZeroSlice<u32>,
+//! }
+//!
+//! // Safety (based on the safety checklist on the VarULE trait):
+//! //  1. FooULE does not include any uninitialized or padding bytes. (achieved by `#[repr(C, packed)]` on
+//! //     a struct with only ULE fields)
+//! //  2. FooULE is aligned to 1 byte. (achieved by `#[repr(C, packed)]` on
+//! //     a struct with only ULE fields)
+//! //  3. The impl of `validate_bytes()` returns an error if any byte is not valid.
+//! //  4. The impl of `validate_bytes()` returns an error if the slice cannot be used in its entirety
+//! //  5. The impl of `from_bytes_unchecked()` returns a reference to the same data.
+//! //  6. The other VarULE methods use the default impl.
+//! //  7. FooULE byte equality is semantic equality
+//! unsafe impl VarULE for FooULE {
+//!     fn validate_bytes(bytes: &[u8]) -> Result<(), UleError> {
+//!         // validate each field
+//!         <char as AsULE>::ULE::validate_bytes(&bytes[0..3]).map_err(|_| UleError::parse::<Self>())?;
+//!         <u32 as AsULE>::ULE::validate_bytes(&bytes[3..7]).map_err(|_| UleError::parse::<Self>())?;
+//!         let _ = ZeroVec::<u32>::parse_bytes(&bytes[7..]).map_err(|_| UleError::parse::<Self>())?;
+//!         Ok(())
+//!     }
+//!     unsafe fn from_bytes_unchecked(bytes: &[u8]) -> &Self {
+//!         let ptr = bytes.as_ptr();
+//!         let len = bytes.len();
+//!         // subtract the length of the char and u32 to get the length of the array
+//!         let len_new = (len - 7) / 4;
+//!         // it's hard constructing custom DSTs, we fake a pointer/length construction
+//!         // eventually we can use the Pointer::Metadata APIs when they stabilize
+//!         let fake_slice = core::ptr::slice_from_raw_parts(ptr as *const <u32 as AsULE>::ULE, len_new);
+//!         &*(fake_slice as *const Self)
+//!     }
+//! }
+//!
+//! unsafe impl EncodeAsVarULE<FooULE> for Foo<'_> {
+//!    fn encode_var_ule_as_slices<R>(&self, cb: impl FnOnce(&[&[u8]]) -> R) -> R {
+//!        // take each field, convert to ULE byte slices, and pass them through
+//!        cb(&[<char as AsULE>::ULE::slice_as_bytes(&[self.field1.to_unaligned()]),
+//!             <u32 as AsULE>::ULE::slice_as_bytes(&[self.field2.to_unaligned()]),
+//!             // the ZeroVec is already in the correct slice format
+//!             self.field3.as_bytes()])
+//!    }
+//! }
+//!
+//! impl<'a> ZeroFrom<'a, FooULE> for Foo<'a> {
+//!     fn zero_from(other: &'a FooULE) -> Self {
+//!         Self {
+//!             field1: AsULE::from_unaligned(other.field1),
+//!             field2: AsULE::from_unaligned(other.field2),
+//!             field3: ZeroFrom::zero_from(&other.field3),
+//!         }
+//!     }
+//! }
+//!
+//!
+//! impl serde::Serialize for FooULE
+//! {
+//!     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//!     where
+//!         S: serde::Serializer,
+//!     {
+//!         Foo::zero_from(self).serialize(serializer)
+//!     }
+//! }
+//!
+//! impl<'de> serde::Deserialize<'de> for Box<FooULE>
+//! {
+//!     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//!     where
+//!         D: serde::Deserializer<'de>,
+//!     {
+//!         let deserialized = Foo::deserialize(deserializer)?;
+//!         Ok(encode_varule_to_box(&deserialized))
+//!     }
+//! }
+//!
+//! fn main() {
+//!     let mut foos = [Foo {field1: 'u', field2: 983, field3: ZeroVec::alloc_from_slice(&[1212,2309,500,7000])},
+//!                     Foo {field1: 'l', field2: 1010, field3: ZeroVec::alloc_from_slice(&[1932, 0, 8888, 91237])}];
+//!
+//!     let vzv = VarZeroVec::<_>::from(&foos);
+//!
+//!     assert_eq!(char::from_unaligned(vzv.get(0).unwrap().field1), 'u');
+//!     assert_eq!(u32::from_unaligned(vzv.get(0).unwrap().field2), 983);
+//!     assert_eq!(&vzv.get(0).unwrap().field3, &[1212,2309,500,7000][..]);
+//!
+//!     assert_eq!(char::from_unaligned(vzv.get(1).unwrap().field1), 'l');
+//!     assert_eq!(u32::from_unaligned(vzv.get(1).unwrap().field2), 1010);
+//!     assert_eq!(&vzv.get(1).unwrap().field3, &[1932, 0, 8888, 91237][..]);
+//! }
+//! ```
+
+Files: src/samples.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Example data useful for testing [`ZeroVec`].
+
+// This module is included directly in tests and can trigger the dead_code
+// warning since not all samples are used in each test
+
+Files: src/varzerovec/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! See [`VarZeroVec`](crate::VarZeroVec) for details
+
+Files: src/map2d/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! See [`ZeroMap2d`](crate::ZeroMap2d) for details.
+
+Files: src/map/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! See [`ZeroMap`](crate::ZeroMap) for details.
+
+Files: src/ule/vartuple.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Types to help compose fixed-size [`ULE`] and variable-size [`VarULE`] primitives.
+//!
+//! This module exports [`VarTuple`] and [`VarTupleULE`], which allow a single sized type and
+//! a single unsized type to be stored together as a [`VarULE`].
+//!
+//! # Examples
+//!
+//! ```
+//! use zerovec::ule::vartuple::{VarTuple, VarTupleULE};
+//! use zerovec::VarZeroVec;
+//!
+//! struct Employee<'a> {
+//!     id: u32,
+//!     name: &'a str,
+//! };
+//!
+//! let employees = [
+//!     Employee {
+//!         id: 12345,
+//!         name: "Jane Doe",
+//!     },
+//!     Employee {
+//!         id: 67890,
+//!         name: "John Doe",
+//!     },
+//! ];
+//!
+//! let employees_as_var_tuples = employees
+//!     .into_iter()
+//!     .map(|x| VarTuple {
+//!         sized: x.id,
+//!         variable: x.name,
+//!     })
+//!     .collect::<Vec<_>>();
+//!
+//! let employees_vzv: VarZeroVec<VarTupleULE<u32, str>> =
+//!     employees_as_var_tuples.as_slice().into();
+//!
+//! assert_eq!(employees_vzv.len(), 2);
+//!
+//! assert_eq!(employees_vzv.get(0).unwrap().sized.as_unsigned_int(), 12345);
+//! assert_eq!(&employees_vzv.get(0).unwrap().variable, "Jane Doe");
+//!
+//! assert_eq!(employees_vzv.get(1).unwrap().sized.as_unsigned_int(), 67890);
+//! assert_eq!(&employees_vzv.get(1).unwrap().variable, "John Doe");
+//! ```
+
+Files: src/ule/tuple.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! ULE impls for tuples.
+//!
+//! Rust does not guarantee the layout of tuples, so [`ZeroVec`](crate::ZeroVec) defines its own tuple ULE types.
+//!
+//! Impls are defined for tuples of up to 6 elements. For longer tuples, use a custom struct
+//! with [`#[make_ule]`](crate::make_ule).
+//!
+//! # Examples
+//!
+//! ```
+//! use zerovec::ZeroVec;
+//!
+//! // ZeroVec of tuples!
+//! let zerovec: ZeroVec<(u32, char)> = [(1, 'a'), (1234901, '啊'), (100, 'अ')]
+//!     .iter()
+//!     .copied()
+//!     .collect();
+//!
+//! assert_eq!(zerovec.get(1), Some((1234901, '啊')));
+//! ```
+
+Files: src/ule/tuplevar.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! [`VarULE`] impls for tuples.
+//!
+//! This module exports [`Tuple2VarULE`], [`Tuple3VarULE`], ..., the corresponding [`VarULE`] types
+//! of tuples containing purely [`VarULE`] types.
+//!
+//! This can be paired with [`VarTupleULE`] to make arbitrary combinations of [`ULE`] and [`VarULE`] types.
+//!
+//! [`VarTupleULE`]: crate::ule::vartuple::VarTupleULE
+
+Files: src/ule/macros.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+/// Given `Self` (`$aligned`), `Self::ULE` (`$unaligned`), and a conversion function (`$single` or
+/// `Self::from_aligned`), implement `from_array` for arrays of `$aligned` to `$unaligned`.
+///
+/// The `$default` argument is due to current compiler limitations.
+/// Pass any (cheap to construct) value.
+
+Files: src/ule/test_utils.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+/// Take a `VarULE` type and serialize it both in human and machine readable contexts,
+/// and ensure it roundtrips correctly
+///
+/// Note that the concrete type may need to be explicitly specified to prevent issues with
+/// <https://github.com/rust-lang/rust/issues/130180>

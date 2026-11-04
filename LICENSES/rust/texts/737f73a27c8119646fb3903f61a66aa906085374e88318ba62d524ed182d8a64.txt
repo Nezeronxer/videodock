@@ -1,0 +1,55 @@
+Source copyright/license comments reproduced from clang-sys@1.9.1.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: build/common.rs, build/dynamic.rs, build/macros.rs, build/static.rs
+// SPDX-License-Identifier: Apache-2.0
+
+Files: build.rs
+// SPDX-License-Identifier: Apache-2.0
+
+//! Finds `libclang` static or shared libraries and links to them.
+//!
+//! # Environment Variables
+//!
+//! This build script can make use of several environment variables to help it
+//! find the required static or shared libraries.
+//!
+//! * `LLVM_CONFIG_PATH` - provides a path to an `llvm-config` executable
+//! * `LIBCLANG_PATH` - provides a path to a directory containing a `libclang`
+//!    shared library or a path to a specific `libclang` shared library
+//! * `LIBCLANG_STATIC_PATH` - provides a path to a directory containing LLVM
+//!    and Clang static libraries
+
+Files: src/support.rs
+// SPDX-License-Identifier: Apache-2.0
+
+//! Provides helper functionality.
+
+Files: src/lib.rs
+// SPDX-License-Identifier: Apache-2.0
+
+//! Rust bindings for `libclang`.
+//!
+//! ## [Documentation](https://docs.rs/clang-sys)
+//!
+//! Note that the documentation on https://docs.rs for this crate assumes usage
+//! of the `runtime` Cargo feature as well as the Cargo feature for the latest
+//! supported version of `libclang` (e.g., `clang_11_0`), neither of which are
+//! enabled by default.
+//!
+//! Due to the usage of the `runtime` Cargo feature, this documentation will
+//! contain some additional types and functions to manage a dynamically loaded
+//! `libclang` instance at runtime.
+//!
+//! Due to the usage of the Cargo feature for the latest supported version of
+//! `libclang`, this documentation will contain constants and functions that are
+//! not available in the oldest supported version of `libclang` (3.5). All of
+//! these types and functions have a documentation comment which specifies the
+//! minimum `libclang` version required to use the item.
+
+Files: src/link.rs
+// SPDX-License-Identifier: Apache-2.0
+
+//================================================
+// Macros
+//================================================

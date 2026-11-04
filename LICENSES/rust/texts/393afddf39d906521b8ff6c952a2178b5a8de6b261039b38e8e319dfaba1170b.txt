@@ -1,0 +1,8 @@
+Source copyright/license comments reproduced from rustypipe@0.11.4.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/deobfuscate/solver.rs
+//! YouTube player challenge solver (Rust port of yt-dlp/ejs).
+//!
+//! Uses [oxc_parser](https://docs.rs/oxc_parser) for AST analysis and rquickjs to
+//! execute the generated solver code. Based on [yt-dlp/ejs](https://github.com/yt-dlp/ejs) (Unlicense).

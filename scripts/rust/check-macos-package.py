@@ -20,8 +20,10 @@ with tempfile.TemporaryDirectory() as directory:
         'cargo': '#!/bin/sh\nprintf "fresh binary" > "$CARGO_TARGET_DIR/release/videodock-desktop"\n',
         'ffmpeg': '#!/bin/sh\necho bundled-ffmpeg\n',
         'ffprobe': '#!/bin/sh\necho bundled-ffprobe\n',
-        'macdeployqt': '#!/bin/sh\nprintf "%s\\n" "$@" > "$PACKAGE_CALLS"\n',
+        'macdeployqt': '#!/bin/sh\nmkdir -p "$1/Contents/Frameworks"\n: > "$1/Contents/Frameworks/libdependency.dylib"\nprintf "%s\\n" "$@" > "$PACKAGE_CALLS"\n',
         'plutil': '#!/bin/sh\nexit 0\n',
+        'codesign': '#!/bin/sh\nexit 0\n',
+        'install_name_tool': '#!/bin/sh\nexit 0\n',
         'otool': '#!/bin/sh\nprintf "%s:\\n\\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\\n" "$2"\n',
     }
     for name, code in scripts.items():
@@ -38,6 +40,13 @@ with tempfile.TemporaryDirectory() as directory:
         assert '-executable=' + str(app / 'Contents/MacOS' / name) in (root / 'calls').read_text()
     with (app / 'Contents/Info.plist').open('rb') as source:
         assert plistlib.load(source)['CFBundleExecutable'] == 'VideoDock'
+    for name in ('GPL-3.0.txt', 'Qt-LGPL-3.0.txt', 'BgUtils-MIT.txt', 'googlevideo-MIT.txt', 'sabr-rs-MIT.txt', 'ffmpeg-license.txt', 'ffmpeg-buildconf.txt'):
+        assert (app / 'Contents/Resources/licenses' / name).is_file(), f'Missing license: {name}'
+    assert (app / 'Contents/Resources/THIRD-PARTY-NOTICES.md').is_file()
+    (tools / 'ffmpeg').write_text('#!/bin/sh\ncase "$1" in -L|-buildconf) exit 0;; *) exit 134;; esac\n')
+    result = subprocess.run(['sh', str(project / 'scripts/rust/install.sh')], env=env, capture_output=True)
+    assert result.returncode != 0, 'Installer accepted a bundled media executable that cannot start'
+    (tools / 'ffmpeg').write_text(scripts['ffmpeg'])
     (tools / 'otool').write_text('#!/bin/sh\nprintf "%s:\\n\\t/opt/homebrew/lib/unbundled.dylib (compatibility version 1.0.0)\\n" "$2"\n')
     result = subprocess.run(['sh', str(project / 'scripts/rust/install.sh')], env=env, capture_output=True)
     assert result.returncode != 0 and b'Unbundled library dependency' in result.stderr, 'External library dependency was accepted'

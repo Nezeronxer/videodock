@@ -1,0 +1,24 @@
+Source copyright/license comments reproduced from zerovec-derive@0.11.7.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: examples/derives.rs, examples/make.rs, examples/make_var.rs, src/make_ule.rs, src/make_varule.rs, src/ule.rs, src/utils.rs, src/varule.rs, tests/derive_ule_test.rs, tests/make_varule_miri_test.rs, tests/sparse_enum_test.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations
+// #![cfg_attr(not(any(test, doc)), no_std)]
+// #![cfg_attr(
+//     not(test),
+//     deny(
+//         clippy::indexing_slicing,
+//         clippy::unwrap_used,
+//         clippy::expect_used,
+//         clippy::panic,
+//     )
+// )]

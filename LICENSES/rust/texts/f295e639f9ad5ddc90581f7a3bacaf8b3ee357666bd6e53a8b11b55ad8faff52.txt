@@ -1,0 +1,12 @@
+Source copyright/license comments reproduced from cxx-qt-macro@0.10.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/lib.rs
+// SPDX-FileCopyrightText: 2021 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+// SPDX-FileContributor: Gerhard de Clercq <gerhard.declercq@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+// We explicitly allow missing docs for the macros in this crate, as they should be documented in
+// cxx-qt itself.

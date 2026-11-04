@@ -1,0 +1,5 @@
+Source copyright/license comments reproduced from windows@0.54.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/Windows/Win32/Media/DirectShow/impl.rs, src/Windows/Win32/Media/MediaPlayer/impl.rs
+Copyright: Copyright::<Identity, Impl, OFFSET>,

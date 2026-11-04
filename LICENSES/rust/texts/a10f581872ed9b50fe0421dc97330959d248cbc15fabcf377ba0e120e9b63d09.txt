@@ -1,0 +1,7 @@
+Source copyright/license comments reproduced from cssparser@0.35.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/color.rs, src/cow_rc_str.rs, src/from_bytes.rs, src/lib.rs, src/macros.rs, src/nth.rs, src/parser.rs, src/rules_and_declarations.rs, src/serializer.rs, src/size_of_tests.rs, src/tests.rs, src/tokenizer.rs, src/unicode_range.rs
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */

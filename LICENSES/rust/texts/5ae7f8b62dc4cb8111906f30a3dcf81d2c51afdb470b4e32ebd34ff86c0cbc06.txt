@@ -1,0 +1,11 @@
+Source copyright/license comments reproduced from security-framework@3.7.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/authorization.rs
+//! Authorization Services support.
+
+/// # Potential improvements
+///
+/// * When generic specialization stabilizes prevent copying from `CString` arguments.
+/// * `AuthorizationCopyRightsAsync`
+/// * Provide constants for well known item names

@@ -1,0 +1,359 @@
+Source copyright/license comments reproduced from cxx-qt-lib@0.10.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/core/qpoint.rs, src/core/qrectf.rs
+// SPDX-FileCopyrightText: 2021 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qpointf.rs, src/core/qsizef.rs, src/core/qstring.rs, src/core/qvariant/mod.rs, src/gui/qcolor.rs, src/lib.rs
+// SPDX-FileCopyrightText: 2021 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+// SPDX-FileContributor: Gerhard de Clercq <gerhard.declercq@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: build.rs, src/core/mod.rs, src/core/qbytearray.rs, src/core/qdate.rs, src/core/qdatetime.rs, src/core/qhash/mod.rs, src/core/qlist/mod.rs, src/core/qlist/qlist_bool.rs, src/core/qlist/qlist_f32.rs, src/core/qlist/qlist_f64.rs, src/core/qlist/qlist_i16.rs, src/core/qlist/qlist_i32.rs, src/core/qlist/qlist_i64.rs, src/core/qlist/qlist_i8.rs, src/core/qlist/qlist_qbytearray.rs, src/core/qlist/qlist_qcolor.rs, src/core/qlist/qlist_qdate.rs, src/core/qlist/qlist_qdatetime.rs, src/core/qlist/qlist_qline.rs, src/core/qlist/qlist_qlinef.rs, src/core/qlist/qlist_qmargins.rs, src/core/qlist/qlist_qmarginsf.rs, src/core/qlist/qlist_qobjectmutptr.rs, src/core/qlist/qlist_qpersistentmodelindex.rs, src/core/qlist/qlist_qpoint.rs, src/core/qlist/qlist_qpointf.rs, src/core/qlist/qlist_qrect.rs, src/core/qlist/qlist_qrectf.rs, src/core/qlist/qlist_qsize.rs, src/core/qlist/qlist_qsizef.rs, src/core/qlist/qlist_qstring.rs, src/core/qlist/qlist_qtime.rs, src/core/qlist/qlist_qurl.rs, src/core/qlist/qlist_quuid.rs, src/core/qlist/qlist_qvariant.rs, src/core/qlist/qlist_u16.rs, src/core/qlist/qlist_u32.rs, src/core/qlist/qlist_u64.rs, src/core/qlist/qlist_u8.rs, src/core/qmap/mod.rs, src/core/qmodelindex.rs, src/core/qpersistentmodelindex.rs, src/core/qrect.rs, src/core/qset/mod.rs, src/core/qset/qset_bool.rs, src/core/qset/qset_f32.rs, src/core/qset/qset_f64.rs, src/core/qset/qset_i16.rs, src/core/qset/qset_i32.rs, src/core/qset/qset_i64.rs, src/core/qset/qset_i8.rs, src/core/qset/qset_qbytearray.rs, src/core/qset/qset_qdate.rs, src/core/qset/qset_qdatetime.rs, src/core/qset/qset_qpersistentmodelindex.rs, src/core/qset/qset_qstring.rs, src/core/qset/qset_qtime.rs, src/core/qset/qset_qurl.rs, src/core/qset/qset_quuid.rs, src/core/qset/qset_u16.rs, src/core/qset/qset_u32.rs, src/core/qset/qset_u64.rs, src/core/qset/qset_u8.rs, src/core/qsize.rs, src/core/qtime.rs, src/core/qurl.rs, src/core/qvariant/qvariant_bool.rs, src/core/qvariant/qvariant_f32.rs, src/core/qvariant/qvariant_f64.rs, src/core/qvariant/qvariant_i16.rs, src/core/qvariant/qvariant_i32.rs, src/core/qvariant/qvariant_i64.rs, src/core/qvariant/qvariant_i8.rs, src/core/qvariant/qvariant_qbytearray.rs, src/core/qvariant/qvariant_qcolor.rs, src/core/qvariant/qvariant_qdate.rs, src/core/qvariant/qvariant_qdatetime.rs, src/core/qvariant/qvariant_qfont.rs, src/core/qvariant/qvariant_qimage.rs, src/core/qvariant/qvariant_qjsonarray.rs, src/core/qvariant/qvariant_qjsonobject.rs, src/core/qvariant/qvariant_qjsonvalue.rs, src/core/qvariant/qvariant_qline.rs, src/core/qvariant/qvariant_qlinef.rs, src/core/qvariant/qvariant_qmodelindex.rs, src/core/qvariant/qvariant_qobjectmutptr.rs, src/core/qvariant/qvariant_qpen.rs, src/core/qvariant/qvariant_qpersistentmodelindex.rs, src/core/qvariant/qvariant_qpoint.rs, src/core/qvariant/qvariant_qpointf.rs, src/core/qvariant/qvariant_qpolygon.rs, src/core/qvariant/qvariant_qpolygonf.rs, src/core/qvariant/qvariant_qquaternion.rs, src/core/qvariant/qvariant_qrect.rs, src/core/qvariant/qvariant_qrectf.rs, src/core/qvariant/qvariant_qregion.rs, src/core/qvariant/qvariant_qsize.rs, src/core/qvariant/qvariant_qsizef.rs, src/core/qvariant/qvariant_qstring.rs, src/core/qvariant/qvariant_qstringlist.rs, src/core/qvariant/qvariant_qtime.rs, src/core/qvariant/qvariant_qurl.rs, src/core/qvariant/qvariant_quuid.rs, src/core/qvariant/qvariant_qvarianthash.rs, src/core/qvariant/qvariant_qvariantlist.rs, src/core/qvariant/qvariant_qvariantmap.rs, src/core/qvariant/qvariant_qvector2d.rs, src/core/qvariant/qvariant_qvector3d.rs, src/core/qvariant/qvariant_qvector4d.rs, src/core/qvariant/qvariant_u16.rs, src/core/qvariant/qvariant_u32.rs, src/core/qvariant/qvariant_u64.rs, src/core/qvariant/qvariant_u8.rs, src/core/qvector/mod.rs, src/gui/mod.rs
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qhash/qhash_i32_qbytearray.rs, src/core/qhash/qhash_qstring_qvariant.rs, src/core/qmap/qmap_qstring_qvariant.rs
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! This is an auto-generated file. Do not edit.
+//! Edit instead: cxx-qt-lib/src/core/qlist/generate.sh
+
+Files: src/core/qvector/qvector_bool.rs, src/core/qvector/qvector_f32.rs, src/core/qvector/qvector_f64.rs, src/core/qvector/qvector_i16.rs, src/core/qvector/qvector_i32.rs, src/core/qvector/qvector_i64.rs, src/core/qvector/qvector_i8.rs, src/core/qvector/qvector_u16.rs, src/core/qvector/qvector_u32.rs, src/core/qvector/qvector_u64.rs, src/core/qvector/qvector_u8.rs
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//
+//! This is an auto-generated file. Do not edit.
+//! Edit instead: generate.sh
+
+Files: src/core/qvector/qvector_qbytearray.rs, src/core/qvector/qvector_qcolor.rs, src/core/qvector/qvector_qdate.rs, src/core/qvector/qvector_qdatetime.rs, src/core/qvector/qvector_qline.rs, src/core/qvector/qvector_qlinef.rs, src/core/qvector/qvector_qmargins.rs, src/core/qvector/qvector_qmarginsf.rs, src/core/qvector/qvector_qpersistentmodelindex.rs, src/core/qvector/qvector_qpoint.rs, src/core/qvector/qvector_qpointf.rs, src/core/qvector/qvector_qrect.rs, src/core/qvector/qvector_qrectf.rs, src/core/qvector/qvector_qsize.rs, src/core/qvector/qvector_qsizef.rs, src/core/qvector/qvector_qstring.rs, src/core/qvector/qvector_qtime.rs, src/core/qvector/qvector_qurl.rs, src/core/qvector/qvector_quuid.rs, src/core/qvector/qvector_qvariant.rs
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//
+//!This is an auto-generated file. Do not edit. Edit instead: generate.sh
+
+Files: src/core/qmargins.rs, src/core/qmarginsf.rs, src/core/qstringlist.rs, src/core/qt.rs, src/core/qtimezone.rs, src/gui/qvector2d.rs, src/gui/qvector3d.rs, src/gui/qvector4d.rs, src/qml/mod.rs, src/qml/qqmlapplicationengine.rs, src/qml/qqmlengine.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qcoreapplication.rs, src/gui/qguiapplication.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qline.rs, src/core/qlinef.rs, src/gui/qpainter.rs, src/gui/qpen.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Laurent Montel <laurent.montel@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/gui/qimage.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qtypes.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/quuid.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Joshua Booth <joshua.n.booth@gmail.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qanystringview.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Joshua Goins <josh@redstrate.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/quickcontrols/mod.rs, src/quickcontrols/qquickstyle.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Joshua Goins <joshua.goins@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/gui/qfont.rs, src/gui/qpainterpath.rs, src/gui/qpolygon.rs, src/gui/qpolygonf.rs, src/gui/qregion.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Laurent Montel <laurent.montel@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qobject.rs
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Ben Ford <ben.ford@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qflags/mod.rs, src/core/qflags/qflag.rs, src/core/qflags/repr.rs, src/core/qflags/util.rs, src/core/qmetatype/mod.rs, src/core/qmetatype/qmetatypetype_v5.rs, src/core/qmetatype/qmetatypetype_v6.rs, src/gui/qgenericmatrix.rs, src/gui/qquaternion.rs, src/serde_impl.rs
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Joshua Booth <joshua.n.booth@gmail.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qtlogging.rs
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Joshua Goins <joshua.goins@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/util.rs
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Joshua Goins <joshua.goins@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+/// Asserts that a boolean expression is true at compile time.
+///
+/// See [`core::assert!`] for more information.
+///
+/// ```compile_fail
+/// const_assert!(5 == 4);
+/// ```
+
+Files: src/qml/qqmlimageproviderbase.rs
+// SPDX-FileCopyrightText: 2026 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Darshan Phaldesai <dev.darshanphaldesai@gmail.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qjsonarray.rs, src/core/qjsonobject.rs, src/core/qjsonvalue.rs, src/core/qobjectmutptr.rs, src/core/qvariant/qvariant_qlist_bool.rs, src/core/qvariant/qvariant_qlist_f32.rs, src/core/qvariant/qvariant_qlist_f64.rs, src/core/qvariant/qvariant_qlist_i16.rs, src/core/qvariant/qvariant_qlist_i32.rs, src/core/qvariant/qvariant_qlist_i64.rs, src/core/qvariant/qvariant_qlist_i8.rs, src/core/qvariant/qvariant_qlist_qobjectmutptr.rs, src/core/qvariant/qvariant_qlist_qstring.rs, src/core/qvariant/qvariant_qlist_u16.rs, src/core/qvariant/qvariant_qlist_u32.rs, src/core/qvariant/qvariant_qlist_u64.rs, src/core/qvariant/qvariant_qlist_u8.rs
+// SPDX-FileCopyrightText: 2026 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Yuri Knigavko <yuri.knigavko@qt.io>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/common.h, include/core/qbytearray.h, include/core/qhash/qhash_private.h, include/core/qlist/qlist.h, include/core/qlist/qlist_private.h, include/core/qlist_qvector.h, include/core/qmap/qmap_private.h, include/core/qmodelindex.h, include/core/qpersistentmodelindex.h, include/core/qset/qset.h, include/core/qset/qset_private.h, include/core/qvector/qvector_private.h, src/core/qbytearray.cpp, src/core/qhash/qhash.cpp, src/core/qlist/qlist.cpp, src/core/qmap/qmap.cpp, src/core/qmodelindex.cpp, src/core/qpersistentmodelindex.cpp, src/core/qset/qset.cpp, src/core/qvector/qvector.cpp, src/qt_types.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/core/qhash/qhash_QString_QVariant.h, include/core/qhash/qhash_i32_QByteArray.h
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! This is an auto-generated file. Do not edit.
+//! Edit instead: cxx-qt-lib/src/core/qhash/generate.sh
+
+Files: include/core/qlist/qlist_QByteArray.h, include/core/qlist/qlist_QColor.h, include/core/qlist/qlist_QDate.h, include/core/qlist/qlist_QDateTime.h, include/core/qlist/qlist_QLine.h, include/core/qlist/qlist_QLineF.h, include/core/qlist/qlist_QMargins.h, include/core/qlist/qlist_QMarginsF.h, include/core/qlist/qlist_QObjectMutPtr.h, include/core/qlist/qlist_QPersistentModelIndex.h, include/core/qlist/qlist_QPoint.h, include/core/qlist/qlist_QPointF.h, include/core/qlist/qlist_QRect.h, include/core/qlist/qlist_QRectF.h, include/core/qlist/qlist_QSize.h, include/core/qlist/qlist_QSizeF.h, include/core/qlist/qlist_QString.h, include/core/qlist/qlist_QTime.h, include/core/qlist/qlist_QUrl.h, include/core/qlist/qlist_QUuid.h, include/core/qlist/qlist_QVariant.h, include/core/qlist/qlist_bool.h, include/core/qlist/qlist_f32.h, include/core/qlist/qlist_f64.h, include/core/qlist/qlist_i16.h, include/core/qlist/qlist_i32.h, include/core/qlist/qlist_i64.h, include/core/qlist/qlist_i8.h, include/core/qlist/qlist_u16.h, include/core/qlist/qlist_u32.h, include/core/qlist/qlist_u64.h, include/core/qlist/qlist_u8.h
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! This is an auto-generated file. Do not edit.
+//! Edit instead: cxx-qt-lib/src/core/qlist/generate.sh
+
+Files: include/core/qmap/qmap_QString_QVariant.h
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! This is an auto-generated file. Do not edit.
+//! Edit instead: cxx-qt-lib/src/core/qmap/generate.sh
+
+Files: include/core/qset/qset_QByteArray.h, include/core/qset/qset_QDate.h, include/core/qset/qset_QDateTime.h, include/core/qset/qset_QPersistentModelIndex.h, include/core/qset/qset_QString.h, include/core/qset/qset_QTime.h, include/core/qset/qset_QUrl.h, include/core/qset/qset_QUuid.h, include/core/qset/qset_bool.h, include/core/qset/qset_f32.h, include/core/qset/qset_f64.h, include/core/qset/qset_i16.h, include/core/qset/qset_i32.h, include/core/qset/qset_i64.h, include/core/qset/qset_i8.h, include/core/qset/qset_u16.h, include/core/qset/qset_u32.h, include/core/qset/qset_u64.h, include/core/qset/qset_u8.h
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! This is an auto-generated file. Do not edit.
+//! Edit instead: cxx-qt-lib/src/core/qset/generate.sh
+
+Files: include/core/qvector/qvector_QByteArray.h, include/core/qvector/qvector_QColor.h, include/core/qvector/qvector_QDate.h, include/core/qvector/qvector_QDateTime.h, include/core/qvector/qvector_QLine.h, include/core/qvector/qvector_QLineF.h, include/core/qvector/qvector_QMargins.h, include/core/qvector/qvector_QMarginsF.h, include/core/qvector/qvector_QPersistentModelIndex.h, include/core/qvector/qvector_QPoint.h, include/core/qvector/qvector_QPointF.h, include/core/qvector/qvector_QRect.h, include/core/qvector/qvector_QRectF.h, include/core/qvector/qvector_QSize.h, include/core/qvector/qvector_QSizeF.h, include/core/qvector/qvector_QString.h, include/core/qvector/qvector_QTime.h, include/core/qvector/qvector_QUrl.h, include/core/qvector/qvector_QUuid.h, include/core/qvector/qvector_QVariant.h, include/core/qvector/qvector_bool.h, include/core/qvector/qvector_f32.h, include/core/qvector/qvector_f64.h, include/core/qvector/qvector_i16.h, include/core/qvector/qvector_i32.h, include/core/qvector/qvector_i64.h, include/core/qvector/qvector_i8.h, include/core/qvector/qvector_u16.h, include/core/qvector/qvector_u32.h, include/core/qvector/qvector_u64.h, include/core/qvector/qvector_u8.h
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! This is an auto-generated file. Do not edit.
+//! Edit instead: cxx-qt-lib/src/core/qvector/generate.sh
+
+Files: include/core/qvector/qvector.h
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//
+//
+
+Files: include/core/qdate.h, include/core/qdatetime.h, include/core/qpoint.h, include/core/qpointf.h, include/core/qrect.h, include/core/qrectf.h, include/core/qsize.h, include/core/qsizef.h, include/core/qstring.h, include/core/qtime.h, include/core/qurl.h, include/core/qvariant.h, include/gui/qcolor.h, src/core/qdate.cpp, src/core/qdatetime.cpp, src/core/qpoint.cpp, src/core/qpointf.cpp, src/core/qrect.cpp, src/core/qrectf.cpp, src/core/qsize.cpp, src/core/qsizef.cpp, src/core/qstring.cpp, src/core/qtime.cpp, src/core/qurl.cpp, src/core/qvariant/qvariant.cpp, src/gui/qcolor.cpp, src/gui/qpainterpath.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/assertion_utils.h
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+// SPDX-FileContributor: Matt Aber <matt.aber@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/core/quuid.h, src/core/quuid.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Joshua Booth <joshua.n.booth@gmail.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/core/qcoreapplication.h, include/core/qmargins.h, include/core/qmarginsf.h, include/core/qmetaobjectconnection.h, include/core/qstringlist.h, include/core/qt.h, include/core/qtimezone.h, include/gui/qguiapplication.h, include/gui/qvector2d.h, include/gui/qvector3d.h, include/gui/qvector4d.h, include/qml/qqmlapplicationengine.h, include/qml/qqmlengine.h, src/core/qmargins.cpp, src/core/qmarginsf.cpp, src/core/qstringlist.cpp, src/core/qtimezone.cpp, src/gui/qvector2d.cpp, src/gui/qvector3d.cpp, src/gui/qvector4d.cpp, src/qml/qqmlapplicationengine.cpp, src/qml/qqmlengine.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/core/qcoreapplication.cpp, src/gui/qguiapplication.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/core/qline.h, include/core/qlinef.h, include/gui/qpainter.h, include/gui/qpen.h, src/core/qline.cpp, src/core/qlinef.cpp, src/gui/qpainter.cpp, src/gui/qpen.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Laurent Montel <laurent.montel@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/gui/qimage.h, src/gui/qimage.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/core/qtypes.h, src/core/init.cpp, src/core/qtypes.cpp, src/gui/init.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/core/qanystringview.h, include/quickcontrols/qquickstyle.h, src/core/qanystringview.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Joshua Goins <joshua.goins@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/gui/qfont.h, include/gui/qpainterpath.h, include/gui/qpolygon.h, include/gui/qpolygonf.h, include/gui/qregion.h, src/gui/qfont.cpp, src/gui/qpolygon.cpp, src/gui/qpolygonf.cpp, src/gui/qregion.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Laurent Montel <laurent.montel@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/core/qobject.h
+// clang-format off
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Ben Ford <ben.ford@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/core/qhash/qhash.h, include/core/qmap/qmap.h, include/core/qmetatype.h, include/gui/qgenericmatrix.h, include/gui/qquaternion.h, include/qgenericmatrix.h, include/qmetatype.h, include/qquaternion.h, src/gui/qquaternion.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Joshua Booth <joshua.n.booth@gmail.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/core/qtlogging.h, src/core/qtlogging.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Joshua Goins <joshua.goins@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/qanystringview.h, include/qbytearray.h, include/qcolor.h, include/qcoreapplication.h, include/qdate.h, include/qdatetime.h, include/qfont.h, include/qguiapplication.h, include/qhash.h, include/qhash_QString_QVariant.h, include/qhash_i32_QByteArray.h, include/qhash_private.h, include/qimage.h, include/qline.h, include/qlinef.h, include/qlist.h, include/qmap.h, include/qmargins.h, include/qmarginsf.h, include/qmetaobjectconnection.h, include/qmodelindex.h, include/qobject.h, include/qpainter.h, include/qpainterpath.h, include/qpen.h, include/qpersistentmodelindex.h, include/qpoint.h, include/qpointf.h, include/qpolygon.h, include/qpolygonf.h, include/qqmlapplicationengine.h, include/qqmlengine.h, include/qquickstyle.h, include/qrect.h, include/qrectf.h, include/qregion.h, include/qset.h, include/qsize.h, include/qsizef.h, include/qstring.h, include/qstringlist.h, include/qt.h, include/qtime.h, include/qtimezone.h, include/qtlogging.h, include/qtypes.h, include/qurl.h, include/quuid.h, include/qvariant.h, include/qvector.h, include/qvector2d.h, include/qvector3d.h, include/qvector4d.h
+// clang-format off
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/qml/qqmlimageproviderbase.h, include/qqmlimageproviderbase.h, src/qml/qqmlimageproviderbase.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2026 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Darshan Phaldesai <dev.darshanphaldesai@gmail.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/gui/qgenericmatrix.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2026 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Joshua Booth <joshua.n.booth@gmail.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/core/qjsonarray.h, include/core/qjsonobject.h, include/core/qjsonvalue.h, include/core/qobjectmutptr.h, include/qjsonarray.h, include/qjsonobject.h, include/qjsonvalue.h, include/qobjectmutptr.h, src/core/qjsonarray.cpp, src/core/qjsonobject.cpp, src/core/qjsonvalue.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2026 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Yuri Knigavko <yuri.knigavko@qt.io>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0

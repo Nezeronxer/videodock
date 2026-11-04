@@ -1,0 +1,5 @@
+Source copyright/license comments reproduced from brotli-decompressor@6.2.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/context.rs
+// Copyright 2013 Google Inc. All Rights Reserved.

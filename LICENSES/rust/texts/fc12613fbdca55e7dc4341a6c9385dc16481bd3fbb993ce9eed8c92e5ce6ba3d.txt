@@ -1,0 +1,5 @@
+Source copyright/license comments reproduced from oxc_diagnostics@0.133.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/service.rs
+// Copyright (c) 2023 Eyal Kalderon

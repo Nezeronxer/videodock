@@ -1,0 +1,20 @@
+Source copyright/license comments reproduced from pin-project-lite@0.2.17.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/lib.rs, tests/auxiliary/mod.rs, tests/compiletest.rs, tests/expand/default/enum.rs, tests/expand/default/struct.rs, tests/expand/multifields/enum.rs, tests/expand/multifields/struct.rs, tests/expand/naming/enum-all.rs, tests/expand/naming/enum-mut.rs, tests/expand/naming/enum-none.rs, tests/expand/naming/enum-ref.rs, tests/expand/naming/struct-all.rs, tests/expand/naming/struct-mut.rs, tests/expand/naming/struct-none.rs, tests/expand/naming/struct-ref.rs, tests/expand/not_unpin/enum.rs, tests/expand/not_unpin/struct.rs, tests/expand/pinned_drop/enum.rs, tests/expand/pinned_drop/struct.rs, tests/expand/pub/enum.rs, tests/expand/pub/struct.rs, tests/expandtest.rs, tests/proper_unpin.rs, tests/test.rs, tests/ui/not_unpin/conflict-unpin.rs, tests/ui/pin_project/conflict-drop.rs, tests/ui/pin_project/conflict-unpin.rs, tests/ui/pin_project/invalid-bounds.rs, tests/ui/pin_project/invalid.rs, tests/ui/pin_project/overlapping_lifetime_names.rs, tests/ui/pin_project/overlapping_unpin_struct.rs, tests/ui/pin_project/packed.rs, tests/ui/pin_project/unpin_sneaky.rs, tests/ui/pin_project/unsupported.rs, tests/ui/pinned_drop/call-drop-inner.rs, tests/ui/pinned_drop/conditional-drop-impl.rs
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+Files: tests/drop_order.rs
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+// Refs: https://doc.rust-lang.org/reference/destructors.html
+
+Files: tests/include/basic.rs
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+// default pin_project! is completely safe.
+
+Files: tests/ui/not_unpin/negative_impls_stable.rs, tests/ui/pin_project/negative_impls_stable.rs
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+// https://github.com/taiki-e/pin-project/issues/340#issuecomment-2428002670

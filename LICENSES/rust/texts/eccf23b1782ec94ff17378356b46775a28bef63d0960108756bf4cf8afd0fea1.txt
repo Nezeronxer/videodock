@@ -1,0 +1,56 @@
+Source copyright/license comments reproduced from icu_normalizer@2.4.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: benches/bench.rs, benches/canonical_composition.rs, benches/canonical_decomposition.rs, benches/composing_normalizer_nfc.rs, benches/composing_normalizer_nfkc.rs, benches/decomposing_normalizer_nfd.rs, benches/decomposing_normalizer_nfkd.rs, benches/utf16_throughput.rs, src/harfbuzz.rs, tests/tests.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations
+
+Files: src/properties.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Access to the Unicode properties or property-based operations that
+//! are required for NFC and NFD.
+//!
+//! Applications should generally use the full normalizers that are
+//! provided at the top level of this crate. However, the APIs in this
+//! module are provided for callers such as HarfBuzz that specifically
+//! want access to the raw canonical composition operation e.g. for use in a
+//! glyph-availability-guided custom normalizer.
+
+Files: src/uts46.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Bundles the part of UTS 46 that makes sense to implement as a
+//! normalization.
+//!
+//! This is meant to be used as a building block of an UTS 46
+//! implementation, such as the `idna` crate.
+
+Files: src/provider.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! 🚧 \[Unstable\] Data provider struct definitions for this ICU4X component.
+//!
+//! <div class="stab unstable">
+//! 🚧 This code is considered unstable; it may change at any time, in breaking or non-breaking ways,
+//! including in SemVer minor releases. While the serde representation of data structs is guaranteed
+//! to be stable, their Rust representation might not be. Use with caution.
+//! </div>
+//!
+//! Read more about data providers: [`icu_provider`]
+
+// Provider structs must be stable

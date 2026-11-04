@@ -1,0 +1,82 @@
+Source copyright/license comments reproduced from cxx-qt@0.10.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/connection.rs, src/connectionguard.rs, src/threading.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/signalhandler.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/lib.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: build.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/casting.rs
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Ben Ford <ben.ford@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/qobject.rs
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Ben Ford <ben.ford@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! QObject module
+
+Files: include/thread.h, src/init.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/threading.h, include/type.h, src/connection.cpp
+// clang-format off
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/signalhandler.h
+// clang-format off
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/connection.h
+// clang-format off
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: include/casting.h
+// clang-format off
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// clang-format on
+// SPDX-FileContributor: Ben Ford <ben.ford@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0

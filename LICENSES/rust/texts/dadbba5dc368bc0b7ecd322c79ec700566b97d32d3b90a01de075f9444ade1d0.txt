@@ -1,0 +1,139 @@
+Source copyright/license comments reproduced from cxx-qt-gen@0.10.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/parser/trait_impl.rs
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+
+Files: src/lib.rs
+// SPDX-FileCopyrightText: 2021 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+// SPDX-FileContributor: Gerhard de Clercq <gerhard.declercq@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/generator/cpp/fragment.rs, src/generator/cpp/method.rs, src/generator/cpp/mod.rs, src/generator/cpp/property/getter.rs, src/generator/cpp/property/meta.rs, src/generator/cpp/property/mod.rs, src/generator/cpp/property/setter.rs, src/generator/cpp/property/signal.rs, src/generator/cpp/qobject.rs, src/generator/cpp/signal.rs, src/generator/mod.rs, src/generator/naming/mod.rs, src/generator/naming/namespace.rs, src/generator/naming/property.rs, src/generator/naming/qobject.rs, src/generator/naming/signals.rs, src/generator/rust/fragment.rs, src/generator/rust/method.rs, src/generator/rust/mod.rs, src/generator/rust/property/getter.rs, src/generator/rust/property/mod.rs, src/generator/rust/property/setter.rs, src/generator/rust/property/signal.rs, src/generator/rust/qobject.rs, src/generator/rust/signals.rs, src/naming/cpp.rs, src/naming/rust.rs, src/parser/cxxqtdata.rs, src/parser/method.rs, src/parser/mod.rs, src/parser/parameter.rs, src/parser/property.rs, src/parser/qobject.rs, src/parser/signals.rs, src/syntax/attribute.rs, src/syntax/foreignmod.rs, src/syntax/mod.rs, src/syntax/path.rs, src/syntax/qtfile.rs, src/syntax/qtitem.rs, src/writer/cpp/header.rs, src/writer/cpp/mod.rs, src/writer/cpp/source.rs, src/writer/mod.rs, src/writer/rust/mod.rs
+// SPDX-FileCopyrightText: 2022 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/generator/cpp/cxxqttype.rs, src/generator/cpp/externcxxqt.rs, src/generator/cpp/threading.rs, src/generator/rust/cxxqttype.rs, src/generator/rust/externcxxqt.rs, src/generator/rust/threading.rs, src/parser/externcxxqt.rs, src/syntax/expr.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/naming/mod.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! This module provides utils for working with syn, CXX, and C++.
+//!
+//! Such as converting a [syn::Type] into a C++ string, or determining
+//! if a type is unsafe in a CXX bridge.
+//!
+//! The idea of this module is that it should be independent as
+//! these methods could be split out into a cxx-utils crate later on.
+
+Files: src/generator/rust/inherit.rs, src/syntax/types.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/generator/cpp/constructor.rs, src/generator/cpp/qenum.rs, src/generator/cpp/qnamespace.rs, src/generator/rust/constructor.rs, src/generator/rust/qenum.rs, src/parser/constructor.rs, src/parser/inherit.rs, src/parser/qenum.rs, src/parser/qnamespace.rs, src/syntax/lifetimes.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/generator/cpp/inherit.rs
+// SPDX-FileCopyrightText: 2023 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/parser/trait_impl.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+
+Files: src/parser/externqobject.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Ben Ford <ben.ford@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/generator/structuring/qobject.rs, src/naming/name.rs, src/naming/type_names.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/generator/cpp/utils.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+/// A trait to allow indenting multi-line string
+/// This is specifically useful when using formatdoc! with a multi-line string argument.
+/// As the formatdoc! formatting doesn't support indenting multi-line arguments, we can indent
+/// those ourselves.
+
+Files: src/generator/structuring/mod.rs
+// SPDX-FileCopyrightText: 2024 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Leon Matthes <leon.matthes@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+/// This module contains the "structuring" phase of C++ generation.
+///
+/// As proposed in [#937](https://github.com/KDAB/cxx-qt/issues/937), we aim to refactor
+/// cxx-qt-gen, especially to simplify parsing.
+/// This module is responsible for structuring the parsed data into a form that is easier to work
+/// with when generating C++ code.
+/// This mostly means grouping QObjects with their QEnums, QSignals, etc...
+///
+/// All resulting structures are listed in the `Structures` struct.
+
+Files: src/parser/externrustqt.rs
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Ben Ford <ben.ford@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/shorthand/mod.rs
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Ben Ford <ben.ford@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+// TODO! Add our other shorthands into this module?
+
+Files: src/shorthand/self_inlining.rs
+// SPDX-FileCopyrightText: 2025 Klarälvdalens Datakonsult AB, a KDAB Group company <info@kdab.com>
+// SPDX-FileContributor: Ben Ford <ben.ford@kdab.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! This module contains functions which can inline a Self type to the appropriate `QObject`.
+//!
+//! If ***exactly one*** `QObject` exists in a particular extern block, the self shorthand can be used,
+//! and this modules functions will replace this `Self` type with the appropriate name.
+//! `qualify_self_types` is called at the highest level, on an already built parser
+
+Files: src/generator/cfg.rs
+// SPDX-FileCopyrightText: CXX Authors
+// SPDX-FileContributor: Andrew Hayzen <andrew.hayzen@kdab.com>
+// SPDX-FileContributor: David Tolnay <dtolnay@gmail.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+Files: src/syntax/cfg.rs
+// SPDX-FileCopyrightText: CXX Authors
+// SPDX-FileContributor: David Tolnay <dtolnay@gmail.com>
+//
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//
+// Originally found in the CXX repository
+// https://github.com/dtolnay/cxx/blob/e26474acf4284235895d526c5ed12575cd9c0cce/syntax/cfg.rs

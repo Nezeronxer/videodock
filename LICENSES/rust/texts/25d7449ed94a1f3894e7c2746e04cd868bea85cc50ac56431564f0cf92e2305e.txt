@@ -1,0 +1,69 @@
+Source copyright/license comments reproduced from yoke@0.8.4.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/kinda_sorta_dangling.rs, src/utils.rs, src/yoke.rs, src/yokeable.rs, src/zero_from.rs, tests/miri.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/macro_impls.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// In this case consistency between impls is more important
+// than using pointer casts
+
+Files: tests/bincode.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// This test is a duplicate of one of the doctests, but is written separately
+// since `cargo miri test` doesn't work on doctests yet
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations
+
+Files: src/erased.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! This module contains helper types for erasing Cart types.
+//!
+//! See the docs of [`Yoke::erase_rc_cart()`](crate::Yoke::erase_rc_cart)
+//! and [`Yoke::erase_box_cart()`](crate::Yoke::erase_box_cart) for more info.
+//!
+//! ✨ *Enabled with the `alloc` Cargo feature.*
+
+Files: src/cartable_ptr.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Types for optional pointers with niche optimization.
+//!
+//! The main type is [`CartableOptionPointer`], which is like `Option<Rc>` but
+//! with a niche so that the resulting `Yoke` has a niche. The following four
+//! types can be stored in the `CartableOptionPointer`:
+//!
+//! 1. `&T`
+//! 2. `Box<T>`
+//! 3. `Rc<T>`
+//! 4. `Arc<T>`
+//!
+//! These four types implement the sealed unsafe trait [`CartablePointerLike`].
+//! In addition, all except `Box<T>` impl [`CloneableCartablePointerLike`],
+//! which allows [`CartableOptionPointer`] to implement `Clone`.
+
+Files: src/either.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Types to enable polymorphic carts.

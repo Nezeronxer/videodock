@@ -24,4 +24,4 @@
 
 Поддержка отдельных сайтов и различие online/fixture-only описаны в [каталоге](../crates/media/tests/catalog/SUPPORT.md). Неподтверждённые Facebook/NaverTV/Likee, неполные коллекции Twitch/Rumble и отсутствующие dedicated handlers остаются работой по этой задаче. Закрытые код и ресурсы оригинала не включаются в продукт; собственное открытое приложение не использует его активацию.
 
-Свежая матрица полного скачивания и ограничений 04.11: [stability-2026-11-04.md](stability-2026-11-04.md). Успешный одиночный Tumblr sample не закрывает blog pagination; длинные YouTube samples пока HTTP403.
+Матрица полного скачивания и ограничений до исправления YouTube: [stability-2026-11-04.md](stability-2026-11-04.md). Успешный одиночный Tumblr sample не закрывает blog pagination. После добавления анонимного proof/SABR длинные YouTube samples 720p60 и 1080p60 прошли полное декодирование; текущие результаты и оставшиеся native gates - в [проверке YouTube](youtube-delivery-2026-11-04.md).

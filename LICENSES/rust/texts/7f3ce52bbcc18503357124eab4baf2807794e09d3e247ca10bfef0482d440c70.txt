@@ -1,0 +1,5 @@
+Source copyright/license comments reproduced from libbz2-rs-sys@0.2.6.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: include/bzlib.h
+Copyright (C) 1996-2010 Julian Seward <jseward@acm.org>

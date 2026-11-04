@@ -1,0 +1,52 @@
+Source copyright/license comments reproduced from core-foundation-sys@0.8.7.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/attributed_string.rs
+// Copyright 2013 The Servo Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+Files: src/array.rs, src/base.rs, src/bundle.rs, src/data.rs, src/date.rs, src/dictionary.rs, src/filedescriptor.rs, src/lib.rs, src/messageport.rs, src/number.rs, src/propertylist.rs, src/runloop.rs, src/set.rs, src/string.rs, src/timezone.rs, src/url.rs, src/uuid.rs
+// Copyright 2013-2015 The Servo Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+Files: src/error.rs
+// Copyright 2016 The Servo Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+Files: src/characterset.rs
+// Copyright 2019 The Servo Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+Files: src/bag.rs, src/binary_heap.rs, src/bit_vector.rs, src/calendar.rs, src/date_formatter.rs, src/file_security.rs, src/locale.rs, src/mach_port.rs, src/notification_center.rs, src/number_formatter.rs, src/plugin.rs, src/preferences.rs, src/socket.rs, src/stream.rs, src/string_tokenizer.rs, src/tree.rs, src/url_enumerator.rs, src/user_notification.rs, src/xml_node.rs, src/xml_parser.rs
+// Copyright 2023 The Servo Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.

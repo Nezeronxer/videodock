@@ -1,0 +1,21 @@
+Source copyright/license comments reproduced from writeable@0.6.4.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: benches/writeable.rs, src/cmp.rs, src/concat.rs, src/either.rs, src/impls.rs, src/ops.rs, src/parts_write_adapter.rs, src/replace.rs, src/testing.rs, src/to_string_or_borrow.rs, src/try_writeable.rs, tests/data/data.rs, tests/writeable.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: examples/writeable_message.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// This example illustrates a very simple type implementing Writeable.
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations

@@ -2,6 +2,12 @@ name: Native build verification
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to verify
+        type: choice
+        default: all
+        options: [all, linux, macos, windows]
   push:
     branches: [release/first-stable]
 
@@ -18,6 +24,7 @@ env:
 
 jobs:
   linux:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'linux'
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     timeout-minutes: 90
@@ -34,9 +41,15 @@ jobs:
       - run: sh crates/desktop/tests/check-appearance.sh
       - run: sh crates/desktop/tests/check-browser-proxy.sh
       - run: sh crates/desktop/tests/check-cookie-bridge.sh
+      - run: sh crates/desktop/tests/check-proof-boundaries.sh
+      # Valid proofs require Chromium sandboxing; this root container checks IPC only.
+      # Native Windows/macOS jobs also exercise the packaged WebEngine worker.
+      - run: python3 crates/desktop/tests/proof_worker.py "$HOME/.cache/videodock-rust-target/release/videodock-desktop"
 
   macos:
-    runs-on: macos-15
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'macos'
+    # Use the standard Intel pool while the arm64 pool has capacity failures.
+    runs-on: macos-15-intel
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -50,7 +63,7 @@ jobs:
           echo "LIBCLANG_PATH=$(xcrun --find clang | sed 's,/bin/clang$,/lib,')" >> "$GITHUB_ENV"
           rustup toolchain install 1.99.1 --profile minimal
           rustup override set 1.99.1
-      - run: cargo test -p videodock-core -p videodock-media --locked
+      - run: cargo test --workspace --locked
       - name: Build and verify application bundle
         env:
           VIDEODOCK_MAC_APP: ${{ runner.temp }}/VideoDock.app
@@ -58,8 +71,16 @@ jobs:
           sh scripts/rust/install.sh
           "$VIDEODOCK_MAC_APP/Contents/MacOS/ffmpeg" -version
           "$VIDEODOCK_MAC_APP/Contents/MacOS/ffprobe" -version
+          PATH=/usr/bin:/bin:/usr/sbin:/sbin /usr/bin/python3 crates/desktop/tests/proof_worker.py "$VIDEODOCK_MAC_APP/Contents/MacOS/VideoDock" --proxy --startup
+          ditto -c -k --sequesterRsrc --keepParent "$VIDEODOCK_MAC_APP" "$RUNNER_TEMP/VideoDock-macos-x64.zip"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: VideoDock-macos-x64
+          path: ${{ runner.temp }}/VideoDock-macos-x64.zip
+          if-no-files-found: error
 
   windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'windows'
     runs-on: windows-2022
     timeout-minutes: 120
     env:
@@ -73,7 +94,12 @@ jobs:
       - name: Install build tools
         shell: pwsh
         run: |
-          choco install nasm llvm ffmpeg --yes --no-progress
+          choco install nasm llvm --yes --no-progress
+          $ffmpegArchive = "$env:RUNNER_TEMP/ffmpeg-9.0.2-essentials_build.zip"
+          Invoke-WebRequest 'https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip' -OutFile $ffmpegArchive
+          if ((Get-FileHash $ffmpegArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba') { throw 'FFmpeg archive checksum mismatch' }
+          Expand-Archive $ffmpegArchive "$env:RUNNER_TEMP/FFmpeg"
+          "$env:RUNNER_TEMP/FFmpeg/ffmpeg-9.0.2-essentials_build/bin" >> $env:GITHUB_PATH
           python -m pip install aqtinstall==3.3.0 libclang==18.1.1
           python -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -O "$env:RUNNER_TEMP/Qt" -m qtwebengine qt5compat qtpositioning qtwebchannel qtshadertools qtserialport
           "$env:RUNNER_TEMP/Qt/6.8.3/msvc2022_64/bin" >> $env:GITHUB_PATH
@@ -87,6 +113,19 @@ jobs:
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b 1
-          cargo test -p videodock-core -p videodock-media --locked
+          cargo test --workspace --locked
           if errorlevel 1 exit /b 1
           powershell -NoProfile -File scripts/rust/build-windows.ps1
+      - name: Verify installed worker with clean PATH
+        shell: pwsh
+        run: |
+          $python = (Get-Command python).Source
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          & $python crates/desktop/tests/proof_worker.py "$env:LOCALAPPDATA/VideoDock/app/VideoDock.exe" --proxy --startup
+          if ($LASTEXITCODE -ne 0) { throw 'Installed proof worker failed' }
+          Compress-Archive -Path "$env:LOCALAPPDATA/VideoDock/app/*" -DestinationPath "$env:RUNNER_TEMP/VideoDock-windows-x64.zip"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: VideoDock-windows-x64
+          path: ${{ runner.temp }}/VideoDock-windows-x64.zip
+          if-no-files-found: error

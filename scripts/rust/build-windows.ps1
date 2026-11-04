@@ -17,6 +17,31 @@ try {
     Copy-Item (Get-Command ffprobe -ErrorAction Stop).Source (Join-Path $destination 'ffprobe.exe') -Force
     & windeployqt --release --qmldir (Join-Path $project 'crates\desktop\qml') (Join-Path $destination 'VideoDock.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed' }
+    $licenses = Join-Path $destination 'licenses'
+    New-Item -ItemType Directory -Force $licenses | Out-Null
+    Copy-Item (Join-Path $project 'LICENSES/*') $licenses -Recurse -Force
+    Copy-Item (Join-Path $project 'THIRD-PARTY-NOTICES.md') $destination -Force
+    Copy-Item (Join-Path $project 'crates/desktop/attestation/bgutils/LICENSE') (Join-Path $licenses 'BgUtils-MIT.txt') -Force
+    Copy-Item (Join-Path $project 'crates/core/src/sabr/LICENSE.googlevideo') (Join-Path $licenses 'googlevideo-MIT.txt') -Force
+    Copy-Item (Join-Path $project 'crates/core/src/sabr/LICENSE.sabr-rs') (Join-Path $licenses 'sabr-rs-MIT.txt') -Force
+    $ffmpegRoot = Split-Path (Split-Path (Get-Command ffmpeg).Source)
+    foreach ($name in @('LICENSE', 'README.txt')) {
+        $notice = Join-Path $ffmpegRoot $name
+        if (Test-Path $notice -PathType Leaf) {
+            Copy-Item $notice (Join-Path $licenses "ffmpeg-upstream-$name") -Force
+        }
+    }
+    # Windows PowerShell 5 treats FFmpeg's normal stderr banner as an ErrorRecord.
+    $ErrorActionPreference = 'Continue'
+    try {
+        & ffmpeg -L 2>&1 | Out-File (Join-Path $licenses 'ffmpeg-license.txt') -Encoding utf8 -ErrorAction Stop
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot record FFmpeg license' }
+        & ffmpeg -buildconf 2>&1 | Out-File (Join-Path $licenses 'ffmpeg-buildconf.txt') -Encoding utf8 -ErrorAction Stop
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot record FFmpeg configuration' }
+    } finally { $ErrorActionPreference = 'Stop' }
+    $qtBin = Split-Path (Get-Command windeployqt).Source
+    & (Join-Path $qtBin 'qmake.exe') -query QT_VERSION | Out-File (Join-Path $licenses 'qt-version.txt') -Encoding utf8
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot record Qt version' }
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Programs')) 'VideoDock.lnk'))
     $shortcut.TargetPath = Join-Path $destination 'VideoDock.exe'

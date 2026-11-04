@@ -1,0 +1,849 @@
+Source copyright/license comments reproduced from icu_locale_core@2.4.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: benches/fixtures/mod.rs, benches/helpers/macros.rs, benches/helpers/mod.rs, benches/iai_langid.rs, benches/langid.rs, benches/locale.rs, benches/subtags.rs, src/data.rs, src/databake.rs, src/extensions/private/other.rs, src/extensions/transform/fields.rs, src/extensions/transform/key.rs, src/extensions/transform/value.rs, src/extensions/unicode/attribute.rs, src/extensions/unicode/attributes.rs, src/extensions/unicode/key.rs, src/extensions/unicode/keywords.rs, src/extensions/unicode/subdivision.rs, src/extensions/unicode/value.rs, src/helpers.rs, src/langid.rs, src/locale.rs, src/parser/errors.rs, src/parser/langid.rs, src/parser/locale.rs, src/parser/mod.rs, src/preferences/extensions/unicode/keywords/calendar.rs, src/preferences/extensions/unicode/keywords/collation.rs, src/preferences/extensions/unicode/keywords/currency.rs, src/preferences/extensions/unicode/keywords/currency_format.rs, src/preferences/extensions/unicode/keywords/dictionary_break.rs, src/preferences/extensions/unicode/keywords/emoji.rs, src/preferences/extensions/unicode/keywords/first_day.rs, src/preferences/extensions/unicode/keywords/hour_cycle.rs, src/preferences/extensions/unicode/keywords/line_break.rs, src/preferences/extensions/unicode/keywords/line_break_word.rs, src/preferences/extensions/unicode/keywords/measurement_system.rs, src/preferences/extensions/unicode/keywords/measurement_unit_override.rs, src/preferences/extensions/unicode/keywords/numbering_system.rs, src/preferences/extensions/unicode/keywords/region_override.rs, src/preferences/extensions/unicode/keywords/regional_subdivision.rs, src/preferences/extensions/unicode/keywords/sentence_supression.rs, src/preferences/extensions/unicode/keywords/timezone.rs, src/preferences/extensions/unicode/keywords/variant.rs, src/preferences/extensions/unicode/macros/mod.rs, src/preferences/locale.rs, src/serde.rs, src/shortvec/litemap.rs, src/subtags/language.rs, src/subtags/region.rs, src/subtags/script.rs, src/subtags/variant.rs, src/subtags/variants.rs, tests/fixtures/mod.rs, tests/langid.rs, tests/locale.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations
+
+Files: src/preferences/extensions/unicode/keywords/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! A list of Preferences derived from Locale unicode extension keywords.
+
+Files: src/preferences/extensions/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! A set of extensions which correspond to preferences.
+//!
+//! The module provides structures that represent known values for each keyword
+//! in Locale [`extensions`](crate::extensions) with semantic meaning.
+//!
+//! # Syntactic vs Semantic Extension Handling
+//!
+//! This module ensures that only valid, recognized values are used, providing semantic validation.
+//! It would reject invalid values such as `-u-hc-BB` because `BB` is not a known hour cycle. This
+//! is ideal for applications that require strict adherence to standardized values and need to
+//! prevent invalid or unrecognized data.
+//!
+//! If you need to construct syntactically valid Locale extensions without semantic validation,
+//! allowing any valid key-value pair regardless of recognition, consider using the
+//! [`crate::extensions`] module.
+//!
+//! [`Locale`]: crate::Locale
+
+Files: src/preferences/extensions/unicode/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! A set of unicode extensions which correspond to preferences.
+//!
+//! The module contains a set structs corresponding to Locale [`unicode`](crate::extensions::unicode)
+//! extensions for which ICU4X provides implementations of preferences.
+//!
+//! The macros in this module provide wrappers for creating preferences based on enums and structs.
+//!
+//! [`Locale`]: crate::Locale
+
+Files: src/zerovec.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Documentation on zero-copy deserialization of locale types.
+//!
+//! [`Locale`] and [`LanguageIdentifier`] are highly structured types that cannot be directly
+//! stored in a zero-copy data structure, such as those provided by the [`zerovec`](crate::zerovec) module.
+//! This page explains how to indirectly store these types in a [`zerovec`](crate::zerovec).
+//!
+//! There are two main use cases, which have different solutions:
+//!
+//! 1. **Lookup:** You need to locate a locale in a zero-copy vector, such as when querying a map.
+//! 2. **Obtain:** You have a locale stored in a zero-copy vector, and you need to obtain a proper
+//!    [`Locale`] or [`LanguageIdentifier`] for use elsewhere in your program.
+//!
+//! # Lookup
+//!
+//! To perform lookup, store the stringified locale in a canonical BCP-47 form as a byte array,
+//! and then use [`Locale::strict_cmp()`] to perform an efficient, zero-allocation lookup.
+//!
+//! To produce more human-readable serialized output, you can use `PotentialUtf8`.
+//!
+//! ```
+//! use icu::locale::Locale;
+//! use potential_utf::PotentialUtf8;
+//! use zerovec::ZeroMap;
+//!
+//! // ZeroMap from locales to integers
+//! let data: &[(&PotentialUtf8, u32)] = &[
+//!     ("de-DE-u-hc-h12".into(), 5),
+//!     ("en-US-u-ca-buddhist".into(), 10),
+//!     ("my-MM".into(), 15),
+//!     ("sr-Cyrl-ME".into(), 20),
+//!     ("zh-TW".into(), 25),
+//! ];
+//! let zm: ZeroMap<PotentialUtf8, u32> = data.iter().copied().collect();
+//!
+//! // Get the value associated with a locale
+//! let loc: Locale = "en-US-u-ca-buddhist".parse().unwrap();
+//! let value = zm.get_copied_by(|uvstr| loc.strict_cmp(uvstr).reverse());
+//! assert_eq!(value, Some(10));
+//! ```
+//!
+//! # Obtain
+//!
+//! Obtaining a [`Locale`] or [`LanguageIdentifier`] is not generally a zero-copy operation, since
+//! both of these types may require memory allocation. If possible, architect your code such that
+//! you do not need to obtain a structured type.
+//!
+//! If you need the structured type, such as if you need to manipulate it in some way, there are two
+//! options: storing subtags, and storing a string for parsing.
+//!
+//! ## Storing Subtags
+//!
+//! If the data being stored only contains a limited number of subtags, you can store them as a
+//! tuple, and then construct the [`LanguageIdentifier`] externally.
+//!
+//! ```
+//! use icu::locale::LanguageIdentifier;
+//! use icu::locale::subtags::{Language, Region, Script};
+//! use icu::locale::{
+//!     langid,
+//!     subtags::{language, region, script},
+//! };
+//! use zerovec::ZeroMap;
+//!
+//! // ZeroMap from integer to LSR (language-script-region)
+//! let zm: ZeroMap<u32, (Language, Option<Script>, Option<Region>)> = [
+//!     (5, (language!("de"), None, Some(region!("DE")))),
+//!     (10, (language!("en"), None, Some(region!("US")))),
+//!     (15, (language!("my"), None, Some(region!("MM")))),
+//!     (
+//!         20,
+//!         (language!("sr"), Some(script!("Cyrl")), Some(region!("ME"))),
+//!     ),
+//!     (25, (language!("zh"), None, Some(region!("TW")))),
+//! ]
+//! .into_iter()
+//! .collect();
+//!
+//! // Construct a LanguageIdentifier from a tuple entry
+//! let lid: LanguageIdentifier =
+//!     zm.get_copied(&25).expect("element is present").into();
+//!
+//! assert_eq!(lid, langid!("zh-TW"));
+//! ```
+//!
+//! ## Storing Strings
+//!
+//! If it is necessary to store and obtain an arbitrary locale, it is currently recommended to
+//! store a BCP-47 string and parse it when needed.
+//!
+//! Since the string is stored in an unparsed state, it is not safe to `unwrap` the result from
+//! `Locale::try_from_utf8()`. See [icu4x#831](https://github.com/unicode-org/icu4x/issues/831)
+//! for a discussion on potential data models that could ensure that the locale is valid during
+//! deserialization.
+//!
+//! As above, to produce more human-readable serialized output, you can use `PotentialUtf8`.
+//!
+//! ```
+//! use icu::locale::Locale;
+//! use icu::locale::locale;
+//! use potential_utf::PotentialUtf8;
+//! use zerovec::ZeroMap;
+//!
+//! // ZeroMap from integer to locale string
+//! let data: &[(u32, &PotentialUtf8)] = &[
+//!     (5, "de-DE-u-hc-h12".into()),
+//!     (10, "en-US-u-ca-buddhist".into()),
+//!     (15, "my-MM".into()),
+//!     (20, "sr-Cyrl-ME".into()),
+//!     (25, "zh-TW".into()),
+//!     (30, "INVALID".into()),
+//! ];
+//! let zm: ZeroMap<u32, PotentialUtf8> = data.iter().copied().collect();
+//!
+//! // Construct a Locale by parsing the string.
+//! let value = zm.get(&25).expect("element is present");
+//! let loc = Locale::try_from_utf8(value);
+//! assert_eq!(loc, Ok(locale!("zh-TW")));
+//!
+//! // Invalid entries are fallible
+//! let err_value = zm.get(&30).expect("element is present");
+//! let err_loc = Locale::try_from_utf8(err_value);
+//! assert!(err_loc.is_err());
+//! ```
+//!
+//! [`Locale`]: crate::Locale
+//! [`Locale::strict_cmp()`]: crate::Locale::strict_cmp()
+//! [`LanguageIdentifier`]: crate::LanguageIdentifier
+
+Files: src/preferences/extensions/unicode/errors.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Errors related to parsing of Preferences.
+
+/// Error returned by parsers of unicode extensions as preferences.
+
+Files: src/subtags/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Language Identifier and Locale contains a set of subtags
+//! which represent different fields of the structure.
+//!
+//! * [`Language`] is the only mandatory field, which when empty,
+//!   takes the value `und`.
+//! * [`Script`] is an optional field representing the written script used by the locale.
+//! * [`Region`] is the region used by the locale.
+//! * [`Variants`] is a list of optional [`Variant`] subtags containing information about the
+//!   variant adjustments used by the locale.
+//!
+//! Subtags can be used in isolation, and all basic operations such as parsing, syntax normalization
+//! and serialization are supported on each individual subtag, but most commonly
+//! they are used to construct a [`LanguageIdentifier`] instance.
+//!
+//! [`Variants`] is a special structure which contains a list of [`Variant`] subtags.
+//! It is wrapped around to allow for sorting and deduplication of variants, which
+//! is one of the required steps of language identifier and locale syntax normalization.
+//!
+//! # Examples
+//!
+//! ```
+//! use icu::locale::subtags::{Language, Region, Script, Variant};
+//!
+//! let language: Language =
+//!     "en".parse().expect("Failed to parse a language subtag.");
+//! let script: Script =
+//!     "arab".parse().expect("Failed to parse a script subtag.");
+//! let region: Region =
+//!     "cn".parse().expect("Failed to parse a region subtag.");
+//! let variant: Variant =
+//!     "MacOS".parse().expect("Failed to parse a variant subtag.");
+//!
+//! assert_eq!(language.as_str(), "en");
+//! assert_eq!(script.as_str(), "Arab");
+//! assert_eq!(region.as_str(), "CN");
+//! assert_eq!(variant.as_str(), "macos");
+//! ```
+//!
+//! `Notice`: The subtags are normalized on parsing. That means
+//! that all operations work on a normalized version of the subtag
+//! and serialization is very cheap.
+//!
+//! [`LanguageIdentifier`]: super::LanguageIdentifier
+
+Files: src/extensions/other/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Other Use Extensions is a list of extensions other than unicode,
+//! transform or private.
+//!
+//! Those extensions are treated as a pass-through, and no Unicode related
+//! behavior depends on them.
+//!
+//! The main struct for this extension is [`Other`] which is a list of [`Subtag`]s.
+//!
+//! # Examples
+//!
+//! ```
+//! use icu::locale::Locale;
+//! use icu::locale::extensions::other::Other;
+//!
+//! let mut loc: Locale = "en-US-a-foo-faa".parse().expect("Parsing failed.");
+//! ```
+
+Files: src/extensions/private/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Private Use Extensions is a list of extensions intended for
+//! private use.
+//!
+//! Those extensions are treated as a pass-through, and no Unicode related
+//! behavior depends on them.
+//!
+//! The main struct for this extension is [`Private`] which is a list of [`Subtag`]s.
+//!
+//! # Examples
+//!
+//! ```
+//! use icu::locale::extensions::private::subtag;
+//! use icu::locale::{Locale, locale};
+//!
+//! let mut loc: Locale = "en-US-x-foo-faa".parse().expect("Parsing failed.");
+//!
+//! assert!(loc.extensions.private.contains(&subtag!("foo")));
+//! assert_eq!(loc.extensions.private.iter().next(), Some(&subtag!("foo")));
+//!
+//! loc.extensions.private.clear();
+//!
+//! assert!(loc.extensions.private.is_empty());
+//! assert_eq!(loc, locale!("en-US"));
+//! ```
+
+Files: src/preferences/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! This API provides necessary functionality for building user preferences structs.
+//!
+//! It includes the ability to merge information between the struct and a [`Locale`],
+//! facilitating the resolution of attributes against default values.
+//!
+//! Preferences struct serve as a composable argument to `ICU4X` constructors, allowing
+//! for ergonomic merging between information encoded in multiple sets of user inputs:
+//! Locale, application preferences and operating system preferences.
+//!
+//! The crate is intended primarily to be used by components constructors to normalize the format
+//! of ingesting preferences across all of `ICU4X`.
+//!
+//! # Preferences vs Options
+//!
+//! ICU4X introduces a separation between two classes of parameters that are used
+//! to adjust the behavior of a component.
+//!
+//! `Preferences` represent the user-driven preferences on how the given user wants the internationalization
+//! to behave. Those are items like language, script, calendar and numbering systems etc.
+//!
+//! `Options` represent the developer-driven adjustments that affect how given information is presented
+//! based on the requirements of the application like available space or intended tone.
+//!
+//! # Options Division
+//!
+//! The `Options` themselves are also divided into options that are affecting data slicing, and ones that don't.
+//! This is necessary to allow for DCE and FFI to produce minimal outputs avoiding loading unnecessary data that
+//! is never to be used by a given component.
+//! The result is that some option keys affect specialized constructors such as `try_new_short`, `try_new_long`, which
+//! result in data provider loading only data necessary to format short or long values respectively.
+//! For options that are not affecting data slicing, an `Options` struct is provided that the developer
+//! can fill with selected key values, or use the defaults.
+//!
+//! # Preferences Merging
+//!
+//! In traditional internationalization APIs, the argument passed to constructors is a locale.
+//! ICU4X changes this paradigm by accepting a `Preferences`, which can be extracted from a [`Locale`] and combined with
+//! other `Preferences`s provided by the environment.
+//!
+//! This approach makes it easy for developers to write code that takes just a locale, as in other systems,
+//! as well as handle more sophisticated cases where the application may receive, for example, a locale,
+//! a set of internationalization preferences specified within the application,
+//! and a third set extracted from the operating system's preferences.
+//!
+//! # ECMA-402 vs ICU4X
+//!
+//! The result of the two paradigm shifts presented above is that the way constructors work is different.
+//!
+//! ## ECMA-402
+//! ```ignore
+//! let locale = new Locale("en-US-u-hc-h12");
+//! let options = {
+//!   hourCycle: "h24", // user preference
+//!   timeStyle: "long", // developer option
+//! };
+//!
+//! let dtf = new DateTimeFormat(locale, options);
+//! ```
+//!
+//! ## ICU4X
+//! ```ignore
+//! let loc = locale!("en-US-u-hc-h12");
+//! let prefs = DateTimeFormatterPreferences {
+//!     hour_cycle: HourCycle::H23,
+//! };
+//! let options = DateTimeFormatterOptions {
+//!     time_style: TimeStyle::Long,
+//! };
+//!
+//! let mut combined_prefs = DateTimeFormatterPreferences::from(loc);
+//! combined_prefs.extend(prefs);
+//!
+//! let dtf = DateTimeFormatter::try_new(combined_prefs, options);
+//! ```
+//!
+//! This architecture allows for flexible composition of user and developer settings
+//! sourced from different locations in custom ways based on the needs of each deployment.
+//!
+//! Below are some examples of how the `Preferences` model can be used in different setups.
+//!
+//! # Examples
+//!
+//! ```
+//! use icu::locale::preferences::{
+//!   define_preferences,
+//!   extensions::unicode::keywords::HourCycle,
+//! };
+//! use icu::locale::locale;
+//!
+//! # fn get_data_locale_from_prefs(input: ExampleComponentPreferences) -> icu::locale::DataLocale { icu::locale::DataLocale::default() }
+//! # fn load_data(locale: icu::locale::DataLocale) -> MyData { MyData {} }
+//! # struct MyData {}
+//! define_preferences!(
+//!     /// Name of the preferences struct
+//!     [Copy]
+//!     ExampleComponentPreferences,
+//!     {
+//!         /// A preference relevant to the component
+//!         hour_cycle: HourCycle
+//!     }
+//! );
+//!
+//! pub struct ExampleComponent {
+//!     data: MyData,
+//! }
+//!
+//! impl ExampleComponent {
+//!     pub fn new(prefs: ExampleComponentPreferences) -> Self {
+//!         let locale = get_data_locale_from_prefs(prefs);
+//!         let data = load_data(locale);
+//!
+//!         Self { data }
+//!     }
+//! }
+//! ```
+//!
+//! Now we can use that component in multiple different ways,
+//!
+//! ## Scenario 1: Use Locale as the only input
+//! ```
+//! # use icu::locale::preferences::{
+//! #   define_preferences,
+//! #   extensions::unicode::keywords::HourCycle,
+//! # };
+//! # use icu::locale::locale;
+//! # struct DataLocale;
+//! # fn get_data_locale_from_prefs(input: ExampleComponentPreferences) -> DataLocale { DataLocale }
+//! # fn load_data(locale: DataLocale) -> MyData { MyData {} }
+//! # struct MyData {}
+//! # define_preferences!(
+//! #     /// Name of the preferences struct
+//! #     [Copy]
+//! #     ExampleComponentPreferences,
+//! #     {
+//! #         /// A preference relevant to the component
+//! #         hour_cycle: HourCycle
+//! #     }
+//! # );
+//! #
+//! # pub struct ExampleComponent {
+//! #     data: MyData,
+//! # }
+//! # impl ExampleComponent {
+//! #     pub fn new(prefs: ExampleComponentPreferences) -> Self {
+//! #         let locale = get_data_locale_from_prefs(prefs);
+//! #         let data = load_data(locale);
+//! #
+//! #         Self { data }
+//! #     }
+//! # }
+//! let loc = locale!("en-US-u-hc-h23");
+//! let tf = ExampleComponent::new(loc.into());
+//! ```
+//!
+//! ## Scenario 2: Compose Preferences and Locale
+//! ```
+//! # use icu::locale::preferences::{
+//! #   define_preferences,
+//! #   extensions::unicode::keywords::HourCycle,
+//! # };
+//! # use icu::locale::locale;
+//! # struct DataLocale;
+//! # fn get_data_locale_from_prefs(input: ExampleComponentPreferences) -> DataLocale { DataLocale }
+//! # fn load_data(locale: DataLocale) -> MyData { MyData {} }
+//! # struct MyData {}
+//! # define_preferences!(
+//! #     /// Name of the preferences struct
+//! #     [Copy]
+//! #     ExampleComponentPreferences,
+//! #     {
+//! #         /// A preference relevant to the component
+//! #         hour_cycle: HourCycle
+//! #     }
+//! # );
+//! #
+//! # pub struct ExampleComponent {
+//! #     data: MyData,
+//! # }
+//! # impl ExampleComponent {
+//! #     pub fn new(prefs: ExampleComponentPreferences) -> Self {
+//! #         let locale = get_data_locale_from_prefs(prefs);
+//! #         let data = load_data(locale);
+//! #
+//! #         Self { data }
+//! #     }
+//! # }
+//! let loc = locale!("en-US-u-hc-h23");
+//! let app_prefs = ExampleComponentPreferences {
+//!     hour_cycle: Some(HourCycle::H12),
+//!     ..Default::default()
+//! };
+//!
+//! let mut combined_prefs = ExampleComponentPreferences::from(loc);
+//! combined_prefs.extend(app_prefs);
+//!
+//! // HourCycle is set from the prefs bag and override the value from the locale
+//! assert_eq!(combined_prefs.hour_cycle, Some(HourCycle::H12));
+//!
+//! let tf = ExampleComponent::new(combined_prefs);
+//! ```
+//!
+//! ## Scenario 3: Merge Preferences from Locale, OS, and Application
+//! ```
+//! # use icu::locale::preferences::{
+//! #   define_preferences,
+//! #   extensions::unicode::keywords::HourCycle,
+//! # };
+//! # use icu::locale::locale;
+//! # struct DataLocale;
+//! # fn get_data_locale_from_prefs(input: ExampleComponentPreferences) -> DataLocale { DataLocale }
+//! # fn load_data(locale: DataLocale) -> MyData { MyData {} }
+//! # struct MyData {}
+//! # define_preferences!(
+//! #     /// Name of the preferences struct
+//! #     [Copy]
+//! #     ExampleComponentPreferences,
+//! #     {
+//! #         /// A preference relevant to the component
+//! #         hour_cycle: HourCycle
+//! #     }
+//! # );
+//! #
+//! # pub struct ExampleComponent {
+//! #     data: MyData,
+//! # }
+//! # impl ExampleComponent {
+//! #     pub fn new(prefs: ExampleComponentPreferences) -> Self {
+//! #         let locale = get_data_locale_from_prefs(prefs);
+//! #         let data = load_data(locale);
+//! #
+//! #         Self { data }
+//! #     }
+//! # }
+//! let loc = locale!("en-US");
+//!
+//! // Simulate OS preferences
+//! let os_prefs = ExampleComponentPreferences {
+//!     hour_cycle: Some(HourCycle::H23),
+//!     ..Default::default()
+//! };
+//!
+//! // Application does not specify hour_cycle
+//! let app_prefs = ExampleComponentPreferences {
+//!     hour_cycle: None,
+//!     ..Default::default()
+//! };
+//!
+//! let mut combined_prefs = ExampleComponentPreferences::from(loc);
+//! combined_prefs.extend(os_prefs);
+//! combined_prefs.extend(app_prefs);
+//!
+//! // HourCycle is set from the OS preferences since the application didn't specify it
+//! assert_eq!(combined_prefs.hour_cycle, Some(HourCycle::H23));
+//!
+//! let tf = ExampleComponent::new(combined_prefs);
+//! ```
+//!
+//! ## Scenario 4: Neither Application nor OS specify the preference
+//! ```
+//! # use icu::locale::preferences::{
+//! #   define_preferences,
+//! #   extensions::unicode::keywords::HourCycle,
+//! # };
+//! # use icu::locale::locale;
+//! # struct DataLocale;
+//! # fn get_data_locale_from_prefs(input: ExampleComponentPreferences) -> DataLocale { DataLocale }
+//! # fn load_data(locale: DataLocale) -> MyData { MyData {} }
+//! # struct MyData {}
+//! # define_preferences!(
+//! #     /// Name of the preferences struct
+//! #     [Copy]
+//! #     ExampleComponentPreferences,
+//! #     {
+//! #         /// A preference relevant to the component
+//! #         hour_cycle: HourCycle
+//! #     }
+//! # );
+//! #
+//! # pub struct ExampleComponent {
+//! #     data: MyData,
+//! # }
+//! # impl ExampleComponent {
+//! #     pub fn new(prefs: ExampleComponentPreferences) -> Self {
+//! #         let locale = get_data_locale_from_prefs(prefs);
+//! #         let data = load_data(locale);
+//! #
+//! #         Self { data }
+//! #     }
+//! # }
+//! let loc = locale!("en-US-u-hc-h23");
+//!
+//! // Simulate OS preferences
+//! let os_prefs = ExampleComponentPreferences::default(); // OS does not specify hour_cycle
+//! let app_prefs = ExampleComponentPreferences::default(); // Application does not specify hour_cycle
+//!
+//! let mut combined_prefs = ExampleComponentPreferences::from(loc);
+//! combined_prefs.extend(os_prefs);
+//! combined_prefs.extend(app_prefs);
+//!
+//! // HourCycle is taken from the locale
+//! assert_eq!(combined_prefs.hour_cycle, Some(HourCycle::H23));
+//!
+//! let tf = ExampleComponent::new(combined_prefs);
+//! ```
+//!
+//! [`ICU4X`]: ../icu/index.html
+//! [`Locale`]: crate::Locale
+
+Files: src/shortvec/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! This module includes variable-length data types that are const-constructible for single
+//! values and overflow to the heap.
+//!
+//! # Why?
+//!
+//! This module is far from the first stack-or-heap vector in the Rust ecosystem. It was created
+//! with the following value proposition:
+//!
+//! 1. Enable safe const construction of stack collections.
+//! 2. Avoid stack size penalties common with stack-or-heap collections.
+//!
+//! As of this writing, `heapless` and `tinyvec` don't support const construction except
+//! for empty vectors, and `smallvec` supports it on unstable.
+//!
+//! Additionally, [`ShortBoxSlice`] has a smaller stack size than any of these:
+//!
+//! ```ignore
+//! // NonZeroU64 has a niche that this module utilizes
+//! use core::num::NonZeroU64;
+//!
+//! // ShortBoxSlice is the same size as `Box<[]>` for small or nichey values
+//! assert_eq!(16, size_of::<shortvec::ShortBoxSlice::<NonZeroU64>>());
+//!
+//! // Note: SmallVec supports pushing and therefore has a capacity field
+//! assert_eq!(24, size_of::<smallvec::SmallVec::<[NonZeroU64; 1]>>());
+//!
+//! // Note: heapless doesn't support spilling to the heap
+//! assert_eq!(16, size_of::<heapless::Vec::<NonZeroU64, 1>>());
+//!
+//! // Note: TinyVec only supports types that implement `Default`
+//! assert_eq!(24, size_of::<tinyvec::TinyVec::<[u64; 1]>>());
+//! ```
+//!
+//! The module is `no_std` with `alloc`.
+
+Files: src/extensions/transform/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Transform Extensions provide information on content transformations in a given locale.
+//!
+//! The main struct for this extension is [`Transform`] which contains [`Fields`] and an
+//! optional [`LanguageIdentifier`].
+//!
+//! [`LanguageIdentifier`]: super::super::LanguageIdentifier
+//!
+//! # Examples
+//!
+//! ```
+//! use icu::locale::extensions::transform::{Fields, Key, Transform, Value};
+//! use icu::locale::{LanguageIdentifier, Locale};
+//!
+//! let mut loc: Locale =
+//!     "en-US-t-es-ar-h0-hybrid".parse().expect("Parsing failed.");
+//!
+//! let lang: LanguageIdentifier =
+//!     "es-AR".parse().expect("Parsing LanguageIdentifier failed.");
+//!
+//! let key: Key = "h0".parse().expect("Parsing key failed.");
+//! let value: Value = "hybrid".parse().expect("Parsing value failed.");
+//!
+//! assert_eq!(loc.extensions.transform.lang, Some(lang));
+//! assert!(loc.extensions.transform.fields.contains_key(&key));
+//! assert_eq!(loc.extensions.transform.fields.get(&key), Some(&value));
+//!
+//! assert_eq!(&loc.extensions.transform.to_string(), "t-es-ar-h0-hybrid");
+//! ```
+
+Files: src/extensions/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Unicode Extensions provide a mechanism to extend the [`LanguageIdentifier`] with
+//! additional bits of information - a combination of a [`LanguageIdentifier`] and [`Extensions`]
+//! is called [`Locale`].
+//!
+//! There are four types of extensions:
+//!
+//!  * [`Unicode Extensions`] - marked as `u`.
+//!  * [`Transform Extensions`] - marked as `t`.
+//!  * [`Private Use Extensions`] - marked as `x`.
+//!  * [`Other Extensions`] - marked as any `a-z` or `0-9` except `u`, `t`, and `x`.
+//!
+//! One can think of extensions as a bag of extra information on top of basic 4 [`subtags`].
+//!
+//! Notice: `Other` extension type is currently not supported.
+//!
+//! # Examples
+//!
+//! ```
+//! use icu::locale::Locale;
+//! use icu::locale::extensions::unicode::{Key, Value};
+//!
+//! let loc: Locale = "en-US-u-ca-buddhist-t-en-us-h0-hybrid-x-foo"
+//!     .parse()
+//!     .expect("Failed to parse.");
+//!
+//! assert_eq!(loc.id.language, "en".parse().unwrap());
+//! assert_eq!(loc.id.script, None);
+//! assert_eq!(loc.id.region, Some("US".parse().unwrap()));
+//! assert_eq!(loc.id.variants.len(), 0);
+//!
+//! let key: Key = "ca".parse().expect("Parsing key failed.");
+//! let value: Value = "buddhist".parse().expect("Parsing value failed.");
+//! assert_eq!(loc.extensions.unicode.keywords.get(&key), Some(&value));
+//! ```
+//!
+//! # Syntactic vs Semantic Extension Handling
+//!
+//! This module is useful when you need to work with Locale extensions at a syntactic level,
+//! perhaps for parsing or generating locale identifiers that include any syntactically valid
+//! extensions.
+//! For handling and validating known CLDR values with semantic meaning, see the
+//! [`crate::preferences::extensions`] module.
+//!
+//! [`LanguageIdentifier`]: super::LanguageIdentifier
+//! [`Locale`]: super::Locale
+//! [`subtags`]: super::subtags
+//! [`Other Extensions`]: other
+//! [`Private Use Extensions`]: private
+//! [`Transform Extensions`]: transform
+//! [`Unicode Extensions`]: unicode
+
+Files: src/extensions/unicode/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Unicode Extensions provide information about user preferences in a given locale.
+//!
+//! The main struct for this extension is [`Unicode`] which contains [`Keywords`] and
+//! [`Attributes`].
+//!
+//!
+//! # Examples
+//!
+//! ```
+//! use icu::locale::Locale;
+//! use icu::locale::extensions::unicode::{Unicode, attribute, key, value};
+//!
+//! let loc: Locale = "en-US-u-foobar-hc-h12".parse().expect("Parsing failed.");
+//!
+//! assert_eq!(
+//!     loc.extensions.unicode.keywords.get(&key!("hc")),
+//!     Some(&value!("h12"))
+//! );
+//! assert!(
+//!     loc.extensions
+//!         .unicode
+//!         .attributes
+//!         .contains(&attribute!("foobar"))
+//! );
+//! ```
+
+Files: src/macros.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+/// A macro allowing for compile-time construction of valid [`LanguageIdentifier`]s.
+///
+/// The macro will perform syntax normalization of the tag.
+///
+/// # Examples
+///
+/// ```
+/// use icu::locale::{LanguageIdentifier, langid};
+///
+/// const DE_AT: LanguageIdentifier = langid!("de-at");
+///
+/// let de_at: LanguageIdentifier = "de-at".parse().unwrap();
+///
+/// assert_eq!(DE_AT, de_at);
+/// ```
+///
+/// *Note*: The macro cannot produce language identifiers with more than one variants due to const
+/// limitations (see [`Heap Allocations in Constants`]):
+///
+/// ```compile_fail,E0080
+/// icu::locale::langid!("und-variant1-variant2");
+/// ```
+///
+/// Use runtime parsing instead:
+/// ```
+/// "und-variant1-variant2"
+///     .parse::<icu::locale::LanguageIdentifier>()
+///     .unwrap();
+/// ```
+///
+/// [`LanguageIdentifier`]: crate::LanguageIdentifier
+/// [`Heap Allocations in Constants`]: https://github.com/rust-lang/const-eval/issues/20
+
+Files: src/preferences/extensions/unicode/macros/enum_keyword.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+/// Internal macro used by `enum_keyword` for nesting.
+
+Files: src/preferences/extensions/unicode/macros/struct_keyword.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+/// Macro used to generate a preference keyword as a struct.
+///
+/// # Examples
+///
+/// ```
+/// use icu::locale::{
+///     extensions::unicode::{Key, Value},
+///     preferences::extensions::unicode::struct_keyword,
+/// };
+///
+/// struct_keyword!(
+///     CurrencyType,
+///     "cu",
+///     String,
+///     |input: &Value| { Ok(Self(input.to_string())) },
+///     |input: &CurrencyType| {
+///         icu::locale::extensions::unicode::Value::try_from_str(
+///             input.0.as_str(),
+///         )
+///         .unwrap()
+///     }
+/// );
+/// ```

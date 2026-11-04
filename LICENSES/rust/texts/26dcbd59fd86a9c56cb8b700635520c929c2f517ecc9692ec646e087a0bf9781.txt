@@ -1,0 +1,94 @@
+Source copyright/license comments reproduced from rustix@1.1.6.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/backend/linux_raw/vdso.rs
+//! Parse the Linux vDSO.
+//!
+//! The following code is transliterated from
+//! tools/testing/selftests/vDSO/parse_vdso.c in Linux 6.13, which is licensed
+//! with Creative Commons Zero License, version 1.0,
+//! available at <https://creativecommons.org/publicdomain/zero/1.0/legalcode>
+//!
+//! It also incorporates the patch at:
+//! <https://git.kernel.org/pub/scm/linux/kernel/git/shuah/linux-kselftest.git/commit/tools/testing/selftests/vDSO?h=next&id=01587d80b04f29747b6fd6d766c3bfa632f14eb0>,
+//! with changes to fix the pointer arithmetic on s390x.
+//!
+//! # Safety
+//!
+//! Parsing the vDSO involves a lot of raw pointer manipulation. This
+//! implementation follows Linux's reference implementation, and adds several
+//! additional safety checks.
+
+Files: src/maybe_polyfill/no_std/mod.rs
+//! Polyfill of parts of the standard library for `no_std` builds.
+//!
+//! All code in this subtree is derived from the standard library and licensed
+//! MIT or Apache 2.0 at your option.
+//!
+//! This implementation is used when `std` is not available and polyfills the
+//! necessary items from `std`. When the `std` feature is specified (so the
+//! standard library is available), the file `src/polyfill/std` is used
+//! instead, which just imports the respective items from `std`.
+
+Files: src/maybe_polyfill/no_std/os/fd/mod.rs
+//! The following is derived from Rust's
+//! library/std/src/os/fd/mod.rs at revision
+//! fa68e73e9947be8ffc5b3b46d899e4953a44e7e9.
+//!
+//! All code in this file is licensed MIT or Apache 2.0 at your option.
+//!
+//! Owned and borrowed Unix-like file descriptors.
+//!
+//! This module is supported on Unix platforms and WASI, which both use a
+//! similar file descriptor system for referencing OS resources.
+
+Files: src/maybe_polyfill/no_std/os/fd/owned.rs
+//! The following is derived from Rust's
+//! library/std/src/os/fd/owned.rs at revision
+//! 334a54cd83191f38ad8046ed94c45de735c86c65.
+//!
+//! All code in this file is licensed MIT or Apache 2.0 at your option.
+//!
+//! Owned and borrowed Unix-like file descriptors.
+
+Files: src/maybe_polyfill/no_std/os/fd/raw.rs
+//! The following is derived from Rust's
+//! library/std/src/os/fd/raw.rs at revision
+//! 334a54cd83191f38ad8046ed94c45de735c86c65.
+//!
+//! All code in this file is licensed MIT or Apache 2.0 at your option.
+//!
+//! Raw Unix-like file descriptors.
+
+Files: src/maybe_polyfill/no_std/os/windows/io/raw.rs
+//! The following is derived from Rust's
+//! library/std/src/os/windows/io/raw.rs
+//! at revision
+//! 4f9b394c8a24803e57ba892fa00e539742ebafc0.
+//!
+//! All code in this file is licensed MIT or Apache 2.0 at your option.
+
+Files: src/maybe_polyfill/no_std/os/windows/io/socket.rs
+//! The following is derived from Rust's
+//! library/std/src/os/windows/io/socket.rs
+//! at revision
+//! 4f9b394c8a24803e57ba892fa00e539742ebafc0.
+//!
+//! All code in this file is licensed MIT or Apache 2.0 at your option.
+
+Files: src/maybe_polyfill/no_std/os/windows/mod.rs
+//! The following is derived from Rust's
+//! library/std/src/os/windows/raw.rs,
+//! library/std/src/os/windows/io/raw.rs and
+//! library/std/src/os/windows/io/socket.rs
+//! at revision
+//! 4f9b394c8a24803e57ba892fa00e539742ebafc0.
+//!
+//! All code in this file is licensed MIT or Apache 2.0 at your option.
+
+Files: src/maybe_polyfill/no_std/io/mod.rs
+//! The following is derived from Rust's
+//! library/std/src/sys/unix/io.rs
+//! dca3f1b786efd27be3b325ed1e01e247aa589c3b.
+//!
+//! All code in this file is licensed MIT or Apache 2.0 at your option.

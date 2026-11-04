@@ -1,0 +1,8 @@
+Source copyright/license comments reproduced from quinn-proto@0.11.19.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/congestion/bbr/min_max.rs
+/*
+ * Based on Google code released under BSD license here:
+ * https://groups.google.com/forum/#!topic/bbr-dev/3RTgkzi5ZD8
+ */

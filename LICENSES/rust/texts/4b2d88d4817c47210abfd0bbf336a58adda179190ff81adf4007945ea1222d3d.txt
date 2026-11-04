@@ -1,0 +1,8 @@
+Source copyright/license comments reproduced from wreq@0.16.3.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/client/ws/message.rs
+// Copyright (c) 2016 Jason Housley
+
+Files: src/client/ws/message.rs
+// Copyright (c) 2017 Alexey Galakhov

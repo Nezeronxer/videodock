@@ -1,0 +1,83 @@
+Source copyright/license comments reproduced from litemap@0.8.3.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: benches/litemap.rs, src/databake.rs, src/map.rs, src/serde.rs, src/store/slice_impl.rs, src/store/vec_impl.rs, tests/rkyv.rs, tests/serde.rs, tests/store.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/serde_helpers.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// @@@@@@@@@@@@@@@@
+// THIS FILE IS SHARED BETWEEN LITEMAP AND ZEROVEC. PLEASE KEEP IT IN SYNC FOR ALL EDITS
+// @@@@@@@@@@@@@@@@
+
+Files: examples/litemap_bincode.rs, examples/litemap_postcard.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// LiteMap is intended as a small and low-memory drop-in replacement for
+// HashMap. This example demonstrates how it works with Serde.
+
+Files: examples/language_names_lite_map.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// LiteMap is intended as a small and low-memory drop-in replacement for HashMap.
+//
+// The reader may compare this LiteMap example with the HashMap example to see analogous
+// operations between LiteMap and HashMap.
+
+Files: examples/language_names_hash_map.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// LiteMap is intended as a small and low-memory drop-in replacement for HashMap.
+//
+// This example does not use LiteMap. The reader may compare this HashMap example to the
+// LiteMap example to showcase analogous operations between HashMap and LiteMap.
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+// https://github.com/unicode-org/icu4x/blob/main/documents/process/boilerplate.md#library-annotations
+
+Files: src/testing.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Test utilities, primarily targeted to custom [`LiteMap`] stores.
+
+Files: src/store/mod.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Traits for pluggable [`LiteMap`] backends.
+//!
+//! By default, [`LiteMap`] is backed by a `Vec`. However, in some environments, it may be desirable
+//! to use a different data store while still using [`LiteMap`] to manage proper ordering of items.
+//!
+//! The general guidelines for a performant data store are:
+//!
+//! 1. Must support efficient random access for binary search
+//! 2. Should support efficient append operations for deserialization
+//!
+//! To plug a custom data store into [`LiteMap`], implement:
+//!
+//! - [`Store`] for most of the methods
+//! - [`StoreIterable`] for methods that return iterators
+//! - [`StoreFromIterator`] to enable `FromIterator` for [`LiteMap`]
+//!
+//! To test your implementation, enable the `"testing"` Cargo feature and use [`check_store()`].
+//!
+//! [`check_store()`]: crate::testing::check_store

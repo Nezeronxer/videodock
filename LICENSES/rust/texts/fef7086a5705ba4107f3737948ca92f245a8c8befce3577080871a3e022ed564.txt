@@ -1,0 +1,175 @@
+Source copyright/license comments reproduced from chrono@0.4.45.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/offset/local/unix.rs, src/offset/local/windows.rs
+// Copyright 2012-2014 The Rust Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution and at
+// http://rust-lang.org/COPYRIGHT.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+Files: src/time_delta.rs
+// Copyright 2012-2014 The Rust Project Developers. See the COPYRIGHT
+// file at the top-level directory of this distribution and at
+// http://rust-lang.org/COPYRIGHT.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! Temporal quantification
+
+Files: src/format/parse.rs
+// This is a part of Chrono.
+// Portions copyright (c) 2015, John Nagle.
+// See README.md and LICENSE.txt for details.
+
+//! Date and time parsing routines.
+
+Files: src/format/scan.rs, src/format/strftime.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+Files: src/format/parsed.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! A collection of parsed date and time items.
+//! They can be constructed incrementally while being checked for consistency.
+
+Files: src/format/formatting.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! Date and time formatting routines.
+
+Files: src/format/mod.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! Formatting (and parsing) utilities for date and time.
+//!
+//! This module provides the common types and routines to implement,
+//! for example, [`DateTime::format`](../struct.DateTime.html#method.format) or
+//! [`DateTime::parse_from_str`](../struct.DateTime.html#method.parse_from_str) methods.
+//! For most cases you should use these high-level interfaces.
+//!
+//! Internally the formatting and parsing shares the same abstract **formatting items**,
+//! which are just an [`Iterator`](https://doc.rust-lang.org/std/iter/trait.Iterator.html) of
+//! the [`Item`](./enum.Item.html) type.
+//! They are generated from more readable **format strings**;
+//! currently Chrono supports a built-in syntax closely resembling
+//! C's `strftime` format. The available options can be found [here](./strftime/index.html).
+//!
+//! # Example
+//! ```
+//! # #[cfg(feature = "alloc")] {
+//! use chrono::{NaiveDateTime, TimeZone, Utc};
+//!
+//! let date_time = Utc.with_ymd_and_hms(2020, 11, 10, 0, 1, 32).unwrap();
+//!
+//! let formatted = format!("{}", date_time.format("%Y-%m-%d %H:%M:%S"));
+//! assert_eq!(formatted, "2020-11-10 00:01:32");
+//!
+//! let parsed = NaiveDateTime::parse_from_str(&formatted, "%Y-%m-%d %H:%M:%S")?.and_utc();
+//! assert_eq!(parsed, date_time);
+//! # }
+//! # Ok::<(), chrono::ParseError>(())
+//! ```
+
+Files: src/round.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! Functionality for rounding or truncating a `DateTime` by a `TimeDelta`.
+
+Files: src/date.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! ISO 8601 calendar date with time zone.
+
+Files: src/naive/date/mod.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! ISO 8601 calendar date without timezone.
+//!
+//! The implementation is optimized for determining year, month, day and day of week.
+//!
+//! Format of `NaiveDate`:
+//! `YYYY_YYYY_YYYY_YYYY_YYYO_OOOO_OOOO_LWWW`
+//! `Y`: Year
+//! `O`: Ordinal
+//! `L`: leap year flag (1 = common year, 0 is leap year)
+//! `W`: weekday before the first day of the year
+//! `LWWW`: will also be referred to as the year flags (`F`)
+
+Files: src/datetime/mod.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! ISO 8601 date and time with time zone.
+
+Files: src/naive/datetime/mod.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! ISO 8601 date and time without timezone.
+
+Files: src/naive/time/mod.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! ISO 8601 time without timezone.
+
+Files: src/naive/isoweek.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! ISO 8601 week.
+
+Files: src/offset/utc.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! The UTC (Coordinated Universal Time) time zone.
+
+Files: src/offset/local/mod.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! The local (system) time zone.
+
+Files: src/offset/fixed.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! The time zone which has a fixed offset from UTC.
+
+Files: src/offset/mod.rs
+// This is a part of Chrono.
+// See README.md and LICENSE.txt for details.
+
+//! The time zone, which calculates offsets from the local time to UTC.
+//!
+//! There are four operations provided by the `TimeZone` trait:
+//!
+//! 1. Converting the local `NaiveDateTime` to `DateTime<Tz>`
+//! 2. Converting the UTC `NaiveDateTime` to `DateTime<Tz>`
+//! 3. Converting `DateTime<Tz>` to the local `NaiveDateTime`
+//! 4. Constructing `DateTime<Tz>` objects from various offsets
+//!
+//! 1 is used for constructors. 2 is used for the `with_timezone` method of date and time types.
+//! 3 is used for other methods, e.g. `year()` or `format()`, and provided by an associated type
+//! which implements `Offset` (which then passed to `TimeZone` for actual implementations).
+//! Technically speaking `TimeZone` has a total knowledge about given timescale,
+//! but `Offset` is used as a cache to avoid the repeated conversion
+//! and provides implementations for 1 and 3.
+//! An `TimeZone` instance can be reconstructed from the corresponding `Offset` instance.

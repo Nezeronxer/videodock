@@ -1,0 +1,9 @@
+Source copyright/license comments reproduced from brotli@9.1.1.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/enc/entropy_encode.rs
+/* Copyright 2010 Google Inc. All Rights Reserved.
+
+   Distributed under MIT license.
+   See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
+*/

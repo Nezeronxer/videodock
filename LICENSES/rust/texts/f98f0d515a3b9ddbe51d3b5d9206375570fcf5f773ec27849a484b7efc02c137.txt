@@ -1,0 +1,58 @@
+Source copyright/license comments reproduced from tendril@0.4.3.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/bench.rs, src/lib.rs, src/tendril.rs, src/utf8_decode.rs, src/util.rs
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+Files: examples/fuzz.rs
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! A simple fuzz tester for the library.
+
+Files: src/fmt.rs
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! Marker types for formats.
+//!
+//! This module defines the types and traits used to mark a `Tendril`
+//! with the format of data it contains. It includes those formats
+//! for which `Tendril` supports at least some operations without
+//! conversion.
+//!
+//! To convert a string tendril to/from a byte tendril in an arbitrary
+//! character encoding, see the `encode` and `decode` methods on
+//! `Tendril`.
+//!
+//! `Tendril` operations may become memory-unsafe if data invalid for
+//! the format sneaks in. For that reason, these traits require
+//! `unsafe impl`.
+
+Files: src/buf32.rs
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! Provides an unsafe owned buffer type, used in implementing `Tendril`.
+
+Files: src/stream.rs
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! Streams of tendrils.

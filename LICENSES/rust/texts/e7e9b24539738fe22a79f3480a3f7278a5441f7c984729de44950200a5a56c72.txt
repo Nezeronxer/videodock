@@ -1,0 +1,9 @@
+Source copyright/license comments reproduced from chacha20@0.10.2.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/backends/neon.rs
+//! NEON-optimized implementation for aarch64 CPUs.
+//!
+//! Adapted from the Crypto++ `chacha_simd` implementation by Jack Lloyd and
+//! Jeffrey Walton (public domain), but uses **8-block** outer batches for
+//! bulk paths (see `ChaCha20_512_neon` in OpenSSL).

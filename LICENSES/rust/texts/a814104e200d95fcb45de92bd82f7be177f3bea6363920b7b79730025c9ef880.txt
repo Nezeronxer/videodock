@@ -1,0 +1,95 @@
+Source copyright/license comments reproduced from markup5ever@0.35.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: lib.rs
+// Copyright 2014-2017 The html5ever Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+Files: util/buffer_queue.rs
+// Copyright 2014-2017 The html5ever Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! The `BufferQueue` struct and helper types.
+//!
+//! This type is designed for the efficient parsing of string data, especially where many
+//! significant characters are from the ascii range 0-63. This includes, for example, important
+//! characters in xml/html parsing.
+//!
+//! Good and predictable performance is achieved by avoiding allocation where possible (a.k.a. zero
+//! copy).
+//!
+//! [`BufferQueue`]: struct.BufferQueue.html
+
+Files: util/smallcharset.rs
+// Copyright 2014-2017 The html5ever Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! This module contains a single struct [`SmallCharSet`]. See its documentation for details.
+//!
+//! [`SmallCharSet`]: struct.SmallCharSet.html
+
+/// Represents a set of "small characters", those with Unicode scalar
+/// values less than 64.
+///
+/// This is stored as a bitmap, with 1 bit for each value.
+
+Files: interface/tree_builder.rs
+// Copyright 2014-2017 The html5ever Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+//! This module contains functionality for managing the DOM, including adding/removing nodes.
+//!
+//! It can be used by a parser to create the DOM graph structure in memory.
+
+Files: serialize.rs
+// Copyright 2014-2017 The html5ever Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+//! Traits for serializing elements.
+//!
+//! The serializer expects the data to be xml-like (with a name,
+//! and optional children, attrs, text, comments, doctypes, and [processing instructions]). It uses
+//! the visitor pattern, where the serializer and the serializable objects are decoupled and
+//! implement their own traits.
+//!
+//! [processing instructions]: https://en.wikipedia.org/wiki/Processing_Instruction
+
+Files: interface/mod.rs
+// Copyright 2014-2017 The html5ever Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+//! Types for tag and attribute names, and tree-builder functionality.

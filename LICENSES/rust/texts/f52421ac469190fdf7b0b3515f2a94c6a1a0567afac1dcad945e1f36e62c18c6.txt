@@ -1,0 +1,6 @@
+Source copyright/license comments reproduced from tower-http@0.6.11.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/compression/pin_project_cfg.rs
+// Full credit to @tesaguri who posted this gist under CC0 1.0 Universal licence
+// https://gist.github.com/tesaguri/2a1c0790a48bbda3dd7f71c26d02a793

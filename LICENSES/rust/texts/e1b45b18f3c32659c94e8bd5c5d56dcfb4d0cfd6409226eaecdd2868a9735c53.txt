@@ -1,0 +1,8 @@
+Source copyright/license comments reproduced from rquickjs-core@0.12.2.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/runtime/schedular/atomic_waker.rs
+//! The atomic waker from the futures crate pulled into its own file.
+//! This is done to avoid having to pull in the entire futures crate just for a single struct.
+//!
+//! All copyright of this file belongs to the futures authors.

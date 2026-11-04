@@ -1,0 +1,13 @@
+Source copyright/license comments reproduced from adler2@2.0.1.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/lib.rs
+//! Adler-32 checksum implementation.
+//!
+//! This implementation features:
+//!
+//! - Permissively licensed (0BSD) clean-room implementation.
+//! - Zero dependencies.
+//! - Zero `unsafe`.
+//! - Decent performance (3-4 GB/s).
+//! - `#![no_std]` support (with `default-features = false`).

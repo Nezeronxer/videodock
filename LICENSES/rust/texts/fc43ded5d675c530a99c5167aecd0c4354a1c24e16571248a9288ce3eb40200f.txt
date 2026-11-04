@@ -1,0 +1,33 @@
+Source copyright/license comments reproduced from serde_with@3.24.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: src/content/de.rs
+//! Buffer for deserializing data.
+//!
+//! This is a copy and improvement of the `serde` private type:
+//! <https://github.com/serde-rs/serde/blob/f85c4f2fa99c7f3b103e6e2580e75eb9313b00d0/serde/src/private/de.rs#L195>
+//! The code is very stable in the `serde` crate, so no maintainability problem is expected.
+//!
+//! Since the type is private we copy the type here.
+//! `serde` is licensed as MIT+Apache2, the same as this crate.
+//!
+//! This version carries improvements compared to `serde`'s version.
+//! The types support 128-bit integers, which is supported for all targets in Rust 1.40+.
+//! A value for `is_human_readable` is passed through all types, to preserve the information.
+//!
+//! In the future this can hopefully be replaced by a public type in `serde` itself.
+//! <https://github.com/serde-rs/serde/pull/2348>
+
+Files: src/content/ser.rs
+//! Buffer for serializing data.
+//!
+//! This is a copy and improvement of the `serde` private type:
+//! <https://github.com/serde-rs/serde/blob/55a7cedd737278a9d75a2efd038c6f38b8c38bd6/serde/src/private/ser.rs#L338-L997>
+//! The code is very stable in the `serde` crate, so no maintainability problem is expected.
+//!
+//! Since the type is private we copy the type here.
+//! `serde` is licensed as MIT+Apache2, the same as this crate.
+//!
+//! This version carries improvements compared to `serde`'s version.
+//! The types support 128-bit integers, which is supported for all targets in Rust 1.40+.
+//! The [`ContentSerializer`] can also be configured to human readable or compact representation.

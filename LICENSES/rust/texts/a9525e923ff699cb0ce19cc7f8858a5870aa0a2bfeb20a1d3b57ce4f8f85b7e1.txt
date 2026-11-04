@@ -1,0 +1,101 @@
+Source copyright/license comments reproduced from cexpr@0.6.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: tests/clang.rs
+// (C) Copyright 2016 Jethro G. Beekman
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+Files: src/lib.rs
+// (C) Copyright 2016 Jethro G. Beekman
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+//! A C expression parser and evaluator.
+//!
+//! This crate provides methods for parsing and evaluating simple C expressions. In general, the
+//! crate can handle most arithmetic expressions that would appear in macros or the definition of
+//! constants, as well as string and character constants.
+//!
+//! The main entry point for is [`token::parse`], which parses a byte string and returns its
+//! evaluated value.
+
+Files: src/expr.rs
+// (C) Copyright 2016 Jethro G. Beekman
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+//! Evaluating C expressions from tokens.
+//!
+//! Numerical operators are supported. All numerical values are treated as
+//! `i64` or `f64`. Type casting is not supported. `i64` are converted to
+//! `f64` when used in conjunction with a `f64`. Right shifts are always
+//! arithmetic shifts.
+//!
+//! The `sizeof` operator is not supported.
+//!
+//! String concatenation is supported, but width prefixes are ignored; all
+//! strings are treated as narrow strings.
+//!
+//! Use the `IdentifierParser` to substitute identifiers found in expressions.
+
+Files: src/literal.rs
+// (C) Copyright 2016 Jethro G. Beekman
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+//! Parsing C literals from byte slices.
+//!
+//! This will parse a representation of a C literal into a Rust type.
+//!
+//! # characters
+//! Character literals are stored into the `CChar` type, which can hold values
+//! that are not valid Unicode code points. ASCII characters are represented as
+//! `char`, literal bytes with the high byte set are converted into the raw
+//! representation. Escape sequences are supported. If hex and octal escapes
+//! map to an ASCII character, that is used, otherwise, the raw encoding is
+//! used, including for values over 255. Unicode escapes are checked for
+//! validity and mapped to `char`. Character sequences are not supported. Width
+//! prefixes are ignored.
+//!
+//! # strings
+//! Strings are interpreted as byte vectors. Escape sequences are supported. If
+//! hex and octal escapes map onto multi-byte characters, they are truncated to
+//! one 8-bit character. Unicode escapes are converted into their UTF-8
+//! encoding. Width prefixes are ignored.
+//!
+//! # integers
+//! Integers are read into `i64`. Binary, octal, decimal and hexadecimal are
+//! all supported. If the literal value is between `i64::MAX` and `u64::MAX`,
+//! it is bit-cast to `i64`. Values over `u64::MAX` cannot be parsed. Width and
+//! sign suffixes are ignored. Sign prefixes are not supported.
+//!
+//! # real numbers
+//! Reals are read into `f64`. Width suffixes are ignored. Sign prefixes are
+//! not supported in the significand. Hexadecimal floating points are not
+//! supported.
+
+Files: src/token.rs
+// (C) Copyright 2016 Jethro G. Beekman
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+//! Representation of a C token
+//!
+//! This is designed to map onto a libclang CXToken.

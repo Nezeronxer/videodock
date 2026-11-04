@@ -1,0 +1,17 @@
+Source copyright/license comments reproduced from icu_normalizer_data@2.4.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: build.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+Files: src/lib.rs
+// This file is part of ICU4X. For terms of use, please see the file
+// called LICENSE at the top level of the ICU4X source tree
+// (online at: https://github.com/unicode-org/icu4x/blob/main/LICENSE ).
+
+//! Data for the `icu_normalizer` crate
+//!
+//! This data was generated with CLDR version 49.0.0, Unicode version 18.0.0, and
+//! LSTM segmenter version v0.1.0.

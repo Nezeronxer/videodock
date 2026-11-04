@@ -1,0 +1,7 @@
+Source copyright/license comments reproduced from selectors@0.31.0.
+This is a conservative inventory of published package sources, including build/test/native code.
+
+Files: attr.rs, bloom.rs, build.rs, builder.rs, context.rs, kleene_value.rs, lib.rs, matching.rs, nth_index_cache.rs, parser.rs, relative_selector/cache.rs, relative_selector/filter.rs, relative_selector/mod.rs, sink.rs, tree.rs, visitor.rs
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
