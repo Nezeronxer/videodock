@@ -40,7 +40,11 @@ EOF
 <plist version="1.0"><dict><key>CFBundleName</key><string>VideoDock</string><key>CFBundleIdentifier</key><string>com.nezeronxer.videodock</string><key>CFBundleExecutable</key><string>VideoDock</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>0.2.0</string><key>CFBundleVersion</key><string>0.2.0</string><key>NSHighResolutionCapable</key><true/></dict></plist>
 EOF
     command -v macdeployqt >/dev/null
-    macdeployqt "$app" -qmldir="$project/crates/desktop/qml" -executable="$app/Contents/MacOS/ffmpeg" -executable="$app/Contents/MacOS/ffprobe" -always-overwrite
+    set -- "$app" -qmldir="$project/crates/desktop/qml" -executable="$app/Contents/MacOS/ffmpeg" -executable="$app/Contents/MacOS/ffprobe" -always-overwrite
+    for qtlib in /opt/homebrew/opt/qt[0-9a-z]*/lib /usr/local/opt/qt[0-9a-z]*/lib; do
+        if [ -d "$qtlib" ]; then set -- "$@" "-libpath=$qtlib"; fi
+    done
+    macdeployqt "$@"
     plutil -lint "$app/Contents/Info.plist"
     for tool in VideoDock ffmpeg ffprobe; do
         dependencies=$(otool -L "$app/Contents/MacOS/$tool")
@@ -49,6 +53,18 @@ EOF
             exit 1
         fi
     done
+    for library in "$app/Contents/Frameworks/"*.dylib; do
+        [ -f "$library" ] || continue
+        # Homebrew dylibs retain ../lib rpaths after Qt flattens them into Frameworks.
+        if ! otool -l "$library" | awk '$1 == "path" && $2 == "@loader_path" {found=1} END {exit !found}'; then
+            install_name_tool -add_rpath '@loader_path' "$library"
+        fi
+        codesign --force --sign - "$library"
+    done
+    codesign --force --sign - "$app"
+    codesign --verify --deep --strict "$app"
+    "$app/Contents/MacOS/ffmpeg" -version >/dev/null
+    "$app/Contents/MacOS/ffprobe" -version >/dev/null
     ;;
   *) echo 'Use build-windows.ps1 on Windows' >&2; exit 1 ;;
 esac

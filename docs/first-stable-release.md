@@ -50,3 +50,11 @@ Gitleaks истории: 0. Полный export tracked исходников д�
 Windows: настоящий EXE имеет GUI subsystem 2; 330 файлов исходников core/media/desktop/vendor побайтово совпали с текущим деревом. Пакет с Qt DLL собран, bundled ffmpeg/ffprobe запускаются при PATH только из Windows/System32. Собственное окно onboarding видно на screenshot QA-гостя. Production installer успешно выполнен в обычной пользовательской сессии и создал Start Menu shortcut; новая копия прошла startup smoke (отзывчивое окно, PE subsystem 2, оба bundled media tools при очищенном PATH; task result 0). Свежий повтор Windows core/media: 162 passed, 0 failed, 42 ignored, 34 suites, exit0. SYSTEM-запуск установщика не создаёт пользовательский ярлык, поскольку у SYSTEM нет Programs directory; системные execution policies не менялись.
 
 Linux release build текущего кода: exit0, 1м55с. Полный ручной GUI-проход и macOS runtime этим не подтверждены.
+
+## Итог первого облачного прогона и macOS-кандидат
+
+Run 41843213464 завершён: Linux SUCCESS (165 passed, release, все три Qt harness), Windows SUCCESS (162 passed, release и production installer). macOS tests/release прошли, bundle FAIL: ffmpeg abort134, отсутствуют transitive rpath-разрешения flat dylibs, invalid signature libjxl_cms; несколько split Qt frameworks не найдены упаковщиком.
+
+Кандидат исправления Darwin installer передаёт пути Homebrew split Qt modules, добавляет @loader_path к flat dylibs, заново подписывает изменённые dylibs/outer app, строго проверяет подписи и реально запускает bundled ffmpeg/ffprobe. Локальный contract red/green подтвердил: прежний installer принимал broken media executable, исправленный отклоняет его. Это не нативная проверка исправленного пакета. Для нового нативного прогона workflow_dispatch позволяет выбрать только macOS; обычные push по-прежнему проверяют все ОС.
+
+Дополнительный полный YouTube 720p через уже существующий SSH SOCKS: метаданные получены за 0.980 с, выбраны video/audio (160,783,792 advertised bytes), pipeline завершился HTTP403. Переключение между тремя доступными маршрутами не устранило media-CDN отказ. Stable остаётся заблокирован.
