@@ -218,3 +218,5 @@ CUA для сверки UI работает в отдельном Xvfb :99 че�
 - [ ] Закрыть публичные загрузки: direct YouTube 0/6, SOCKS 2/5, длинные BBB всё ещё HTTP403.
 - [ ] Windows: прежний build возобновлён jobs=1; текущий архив 69a479bb6725581e6df2abf0fef8c12d8699acbc0dd5508107da66a9a918ae4e передан в отдельный QA-домен.
 - [ ] Источник подписанных обновлений, стабильный YouTube и остаток сервисов, macOS runtime, финальная упаковка/лицензии и полный пользовательский проход - блокеры stable. Релиз и тег не создавать до их закрытия.
+
+Linux release после lock fix пересобран: exit0, 2м13с. Через Sky выполнен реальный restart release-бинаря: light и complete-запись восстановлены, штатное закрытие проверено. Windows предыдущего архива: release build exit0 за 15м49с; текущий архив обрабатывает guest-exec PID7316. Push release/first-stable дважды отвергнут удалённым GitHub (Internal Server Error; fatal error in commit_refs); native workflow пока не запускался.
