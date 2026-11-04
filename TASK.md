@@ -242,3 +242,7 @@ Qt ShaderTools в Windows QA установлен: aqt exit0, Qt6ShaderTools.dll
 - [ ] Завершить остаток матрицы/пользовательского прохода и выполнить стабильный релиз после всех gates.
 
 Первый реальный cloud macOS-прогон 41812660820: библиотечные тесты прошли, audio_track_pipeline 6/7; OGG multi-track упал на Unknown encoder libvorbis. Первопричина подтверждена официальными Homebrew Formula: обычный ffmpeg не включает libvorbis, ffmpeg-full включает и установлен keg-only. Native workflow исправлен на ffmpeg-full с его bin в PATH; тест остаётся обязательным.
+
+Cloud Linux первого прогона: workspace и release build завершились, Qt appearance остановился при запуске Chromium от root в одноразовом контейнере (Running as root without --no-sandbox is not supported). Только Linux CI job получил QTWEBENGINE_DISABLE_SANDBOX=1 для localhost fixtures; production launcher и приложение не менялись.
+
+Windows после удаления повреждённого кэша пакета и возобновления: 162 passed / 0 failed / 42 ignored, 34 suites; актуальный release build exit0 за 6м09с, windeployqt дошёл до translations. Итоговый код упаковки и native runtime проверяются отдельно.
