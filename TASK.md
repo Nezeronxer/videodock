@@ -228,3 +228,17 @@ Qt ShaderTools в Windows QA установлен: aqt exit0, Qt6ShaderTools.dll
 Текущий Windows source archive завершился ошибкой линковки PDB LNK1318 FILE_SYSTEM. Причина окружения подтверждена Get-PSDrive: 52,441,088 B свободно на QA C:. Запущен cargo clean --profile dev только в C:\VideoDockQA\target; исходники, release package и профиль не удаляются. Последний Linux release повторно exit0 за 2м13с.
 
 Причина Windows PDB подтверждена и устранена: cargo clean --profile dev освободил 22.5 GiB, свободно 22,497,370,112 B. Для повторной проверки отключены только dev/test debug symbols (также в Windows CI). Новый архив source-final.zip: SHA256 5057cfe0ad3341b83e1e9464df77c60956f42c32d927217f6c836b72b6d6b466; script diagnostics/videodock-windows-final.ps1, это текущий повтор, а не успешный результат.
+
+## Возобновление первого stable после перезагрузки хоста
+
+Результат: закрывать блокеры stable, без prerelease. Объём: текущая ветка release/first-stable, прежний изолированный Windows QA-диск, доступные cloud native jobs, отдельная диагностика YouTube. Проверка: реальный результат Windows build/package, GitHub jobs и remote SHA, полные длинные загрузки с ffprobe, затем targeted regressions для подтверждённых исправлений.
+
+- [x] Восстановить TASK, отчёт и git; host boot 04.11 13:09 остановил QA-домен.
+- [x] GitHub снова принял ветку; native workflow run 41812660820 поставлен в очередь.
+- [x] Запустить сохранённый videodock-platform-qa без создания новых образов.
+- [ ] Получить сохранённый результат предыдущей сборки и завершить Windows package/runtime.
+- [ ] Проверить cloud native jobs, исправить подтверждённые отказы.
+- [ ] Диагностировать актуальную выдачу YouTube отдельно от CDN; исправления принимать только после полного файла.
+- [ ] Завершить остаток матрицы/пользовательского прохода и выполнить стабильный релиз после всех gates.
+
+Первый реальный cloud macOS-прогон 41812660820: библиотечные тесты прошли, audio_track_pipeline 6/7; OGG multi-track упал на Unknown encoder libvorbis. Первопричина подтверждена официальными Homebrew Formula: обычный ffmpeg не включает libvorbis, ffmpeg-full включает и установлен keg-only. Native workflow исправлен на ffmpeg-full с его bin в PATH; тест остаётся обязательным.

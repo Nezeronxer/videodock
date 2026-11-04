@@ -12,6 +12,8 @@
 
 Нужны Rust 1.99+, Git, Qt 6 с Qt Quick, WebEngine, Widgets и Tools, CMake, Ninja, C/C++ compiler, libclang, FFmpeg и ffprobe. Git нужен сборке нативного TLS; на Windows x64 этой сборке также нужен NASM. В runtime эти инструменты не используются. На macOS/Windows нужны собственные сборка и проверка на соответствующей ОС.
 
+На macOS нужен Homebrew `ffmpeg-full`: обычный `ffmpeg` не содержит используемый для OGG энкодер `libvorbis`. После `brew install ffmpeg-full` добавьте `$(brew --prefix ffmpeg-full)/bin` в начало `PATH` перед тестами и упаковкой приложения.
+
 ```sh
 export CARGO_BUILD_JOBS=2
 export CARGO_TARGET_DIR="$HOME/.cache/videodock-rust-target"

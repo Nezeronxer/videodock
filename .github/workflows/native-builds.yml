@@ -37,8 +37,9 @@ jobs:
           persist-credentials: false
       - name: Install build tools
         run: |
-          brew install qt ffmpeg cmake ninja pkgconf
+          brew install qt ffmpeg-full cmake ninja pkgconf
           echo "$(brew --prefix qt)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
           echo "LIBCLANG_PATH=$(xcrun --find clang | sed 's,/bin/clang$,/lib,')" >> "$GITHUB_ENV"
           rustup toolchain install 1.99.1 --profile minimal
           rustup override set 1.99.1
