@@ -1,12 +1,9 @@
 use anyhow::{Context, Result, bail, ensure};
 use reqwest::Client;
 use serde_json::Value;
+use std::path::{Path, PathBuf};
 #[cfg(unix)]
-use std::process::Child;
-use std::{
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-};
+use std::process::{Child, Command, Stdio};
 
 pub fn media_tool(name: &str) -> PathBuf {
     #[cfg(any(windows, target_os = "macos"))]
