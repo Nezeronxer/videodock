@@ -1,12 +1,22 @@
 use super::*;
-use std::{fs::OpenOptions, io::Write, path::Path};
+use std::{
+    borrow::Cow,
+    fs::OpenOptions,
+    io::{Read, Write},
+    path::Path,
+};
 
 fn preferences(spec: &Value) -> Result<Value> {
     let selected: Selection = serde_json::from_value(spec["selection"].clone())?;
     let audio = json!({"codec":if selected.audio_codec=="any"{"Any"}else{&selected.audio_codec},"bitrate":if selected.audio_bitrate==0{-1}else{i64::from(selected.audio_bitrate)*1000}});
     let mut format = json!({"container":selected.container.to_ascii_uppercase(),"audio":audio});
     if selected.media_type == "video" {
-        format["video"] = json!({"codec":if selected.video_codec=="any"{"Any"}else{&selected.video_codec},"resolution":if selected.quality==0{"Original".into()}else{format!("{}p",selected.quality)},"fps":if selected.fps==0{"maximum fps".into()}else{format!("{}fps",selected.fps)},"dimension":if selected.vr{"360"}else{"2D"}});
+        let dimension = match selected.vr_mode {
+            videodock_media::VideoVrMode::Any if selected.vr => json!("VR"),
+            videodock_media::VideoVrMode::Flat => json!("2D"),
+            mode => json!(mode),
+        };
+        format["video"] = json!({"codec":if selected.video_codec=="any"{"Any"}else{&selected.video_codec},"resolution":if selected.quality==0{"Original".into()}else{format!("{}p",selected.quality)},"fps":if selected.fps==0{"maximum fps".into()}else{format!("{}fps",selected.fps)},"dimension":dimension});
     }
     let subtitles = selected
         .subtitles
@@ -164,11 +174,15 @@ fn imported_selection(item: &Value, settings: &Value, use_file: bool) -> Result<
             ensure!(selected.fps <= 240, "Слишком большая частота кадров");
         }
         if let Some(value) = video.get("dimension") {
-            ensure!(
-                ["Any", "2D", "360", "VR"].contains(&settings::text(value)?),
-                "Неизвестный вид проекции видео"
-            );
-            selected.vr = matches!(settings::text(value)?, "360" | "VR");
+            let normalized = settings::normalize("videoVR", value)?;
+            selected.vr = normalized == true;
+            selected.vr_mode = if normalized == false {
+                videodock_media::VideoVrMode::Flat
+            } else if normalized.is_boolean() {
+                videodock_media::VideoVrMode::Any
+            } else {
+                serde_json::from_value(normalized)?
+            };
         }
     } else {
         selected.media_type = "audio".into();
@@ -213,14 +227,229 @@ fn imported_selection(item: &Value, settings: &Value, use_file: bool) -> Result<
     }
     Ok(selected)
 }
+// Legacy DownloadsSerializer Version 1 profile, reconstructed from the official
+// Linux 26.3.5 ELF (SHA256 fbadf3d2b97fcd3fa8b8a422181780505544697b22861ad9e0199ce716c47c7c).
+// Header constructor 0x50ba40; csvDeserialize 0x71a810; delimiter detector
+// 0x18f4c00; row decoder 0x18f5230. These are data-format facts, not copied code.
+// Other old subscription layouts are deliberately not inferred from extensions.
+fn legacy_text(bytes: &[u8]) -> Result<Cow<'_, str>> {
+    // FileSystem::readLines uses QTextStream with UTF-8 and its default Unicode
+    // BOM detection. Check UTF-32 before UTF-16 because the LE BOMs overlap.
+    for (bom, little_endian) in [(&b"\xff\xfe\0\0"[..], true), (&b"\0\0\xfe\xff"[..], false)] {
+        if let Some(bytes) = bytes.strip_prefix(bom) {
+            ensure!(bytes.len() % 4 == 0, "Неполный символ UTF-32");
+            let text = bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|&bytes| {
+                    let value = if little_endian {
+                        u32::from_le_bytes(bytes)
+                    } else {
+                        u32::from_be_bytes(bytes)
+                    };
+                    char::from_u32(value).context("Некорректный символ UTF-32")
+                })
+                .collect::<Result<String>>()?;
+            return Ok(Cow::Owned(text));
+        }
+    }
+    for (bom, little_endian) in [(&b"\xff\xfe"[..], true), (&b"\xfe\xff"[..], false)] {
+        if let Some(bytes) = bytes.strip_prefix(bom) {
+            ensure!(bytes.len() % 2 == 0, "Неполный символ UTF-16");
+            let units = bytes
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|&bytes| {
+                    if little_endian {
+                        u16::from_le_bytes(bytes)
+                    } else {
+                        u16::from_be_bytes(bytes)
+                    }
+                })
+                .collect::<Vec<_>>();
+            return Ok(Cow::Owned(
+                String::from_utf16(&units).context("Некорректный UTF-16")?,
+            ));
+        }
+    }
+    Ok(Cow::Borrowed(
+        std::str::from_utf8(bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes))
+            .context("Некорректный UTF-8")?,
+    ))
+}
+
+fn legacy_document(bytes: &[u8]) -> Result<Value> {
+    const VIDEO: &str = "URL,Title,Type,Format,AudioBitrate,VideoResolution,FrameRate,Subtitles,OutputDir,Version 1";
+    const AUDIO: &str = "URL,Title,Type,Format,AudioBitrate,OutputDir,Version 1";
+    let text = legacy_text(bytes)?;
+    let mut lines = text
+        .split_terminator('\n')
+        .map(|line| line.strip_suffix('\r').unwrap_or(line));
+    let header = lines.next().context("Пустой файл импорта")?;
+    // Original detectDelimeter tests comma first, then semicolon, in the header.
+    let delimiter = if header.contains(',') { ',' } else { ';' };
+    let columns = header.split(delimiter).collect::<Vec<_>>();
+    let video_profile = columns == VIDEO.split(',').collect::<Vec<_>>();
+    ensure!(
+        video_profile || columns == AUDIO.split(',').collect::<Vec<_>>(),
+        "Неизвестный legacy-формат: нужен заголовок Downloads Version 1 (CSV)"
+    );
+    let mut items = Vec::new();
+    for (index, line) in lines.enumerate() {
+        ensure!(items.len() < 10000, "Слишком много элементов импорта");
+        let fields = legacy_csv_row(line, delimiter)
+            .with_context(|| format!("Некорректная CSV-строка {}", index + 2))?;
+        ensure!(
+            fields.len() == columns.len(),
+            "Неверное число колонок в CSV-строке {}",
+            index + 2
+        );
+        let is_video = match fields[2].as_str() {
+            "Video" => true,
+            "Audio" => false,
+            _ => anyhow::bail!("Неизвестный Type в CSV-строке {}", index + 2),
+        };
+        let container = fields[3].to_ascii_uppercase();
+        ensure!(
+            ["MP4", "MKV", "FLV", "3GP", "M4A", "MP3", "OGG", "Any"]
+                .iter()
+                .any(|value| value.eq_ignore_ascii_case(&container)),
+            "Неизвестный Format в CSV-строке {}",
+            index + 2
+        );
+        // QString::toInt(base 10) returns the decoder's Any (-1) fallback on
+        // malformed text or int32 overflow; video rows always use Any bitrate.
+        let bitrate = if is_video {
+            -1
+        } else {
+            fields[4].trim().parse::<i32>().unwrap_or(-1)
+        };
+        let mut format = json!({"container":container,"audio":{"codec":"Any","bitrate":bitrate}});
+        if is_video {
+            let resolution = if video_profile {
+                fields[5].as_str()
+            } else {
+                ""
+            };
+            let resolution = match resolution.to_ascii_lowercase().as_str() {
+                "" | "any" | "original" => "Original",
+                "qcif" => "144p",
+                "240p" => "240p",
+                "360p" => "360p",
+                "480p" => "480p",
+                "720p" => "720p",
+                "1080p" => "1080p",
+                "2k" => "1440p",
+                "4k" => "4K",
+                "8k" => "8K",
+                _ => anyhow::bail!(
+                    "Неподдерживаемый VideoResolution в CSV-строке {}",
+                    index + 2
+                ),
+            };
+            let fps = if video_profile {
+                fields[6].to_ascii_lowercase()
+            } else {
+                String::new()
+            };
+            let fps = match fps.as_str() {
+                "" | "any" | "max" | "maximum fps" => "maximum fps",
+                "25" | "25fps" => "25fps",
+                "30" | "30fps" => "30fps",
+                "50" | "50fps" => "50fps",
+                "60" | "60fps" => "60fps",
+                "120" | "120fps" => "120fps",
+                "240" | "240fps" => "240fps",
+                _ => anyhow::bail!("Неизвестный FrameRate в CSV-строке {}", index + 2),
+            };
+            // csvDeserialize constructs VideoInfo with dimension enum 3,
+            // confirmed as 2D by dimension::string (0x146c950).
+            format["video"] =
+                json!({"codec":"Any","resolution":resolution,"fps":fps,"dimension":"2D"});
+        }
+        let subtitles = if video_profile {
+            // csvDeserialize 0x71b4b2: split on '-' before SubtitlesOption set.
+            fields[7]
+                .split('-')
+                .filter(|lang| !lang.is_empty())
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .map(|lang| json!({"lang":lang}))
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        let output = &fields[if video_profile { 8 } else { 5 }];
+        let url = videodock_media::validate_url(&fields[0])?;
+        items.push(json!({"urlDesc":{"serviceName":service(&url),"type":"","url":url.as_str()},"isSubscription":false,"playlistTitle":fields[1],"downloadPreferences":{"format":format,"subtitles":subtitles,"outputDir":output}}));
+    }
+    Ok(json!({"json_schema_version":"1.0.0","items":items}))
+}
+
+fn legacy_csv_row(line: &str, delimiter: char) -> Result<Vec<String>> {
+    let mut chars = line.chars().peekable();
+    let mut fields = Vec::new();
+    loop {
+        ensure!(fields.len() < 10, "Слишком много колонок CSV");
+        let mut field = String::new();
+        if chars.peek() == Some(&'"') {
+            chars.next();
+            loop {
+                match chars.next() {
+                    Some('"') if chars.peek() == Some(&'"') => {
+                        chars.next();
+                        field.push('"');
+                    }
+                    Some('"') => break,
+                    Some(ch) => field.push(ch),
+                    None => anyhow::bail!("Незакрытая кавычка CSV"),
+                }
+            }
+            ensure!(
+                chars.peek().is_none() || chars.peek() == Some(&delimiter),
+                "Лишний текст после кавычки CSV"
+            );
+        } else {
+            while let Some(&ch) = chars.peek() {
+                if ch == delimiter {
+                    break;
+                }
+                ensure!(ch != '"', "Кавычка внутри неэкранированной CSV-колонки");
+                field.push(ch);
+                chars.next();
+            }
+        }
+        fields.push(field);
+        if chars.next().is_none() {
+            break;
+        }
+    }
+    Ok(fields)
+}
+
 pub(super) fn import(inner: &Inner, action: &Value) -> Result<()> {
     let path = PathBuf::from(settings::text(&action["path"])?);
     ensure!(path.is_absolute(), "Нужен абсолютный путь импорта");
+    const LIMIT: u64 = 16 * 1024 * 1024;
+    let file = std::fs::File::open(&path)?;
     ensure!(
-        std::fs::metadata(&path)?.len() <= 16 * 1024 * 1024,
+        file.metadata()?.len() <= LIMIT,
         "Файл импорта превышает 16 MiB"
     );
-    let document: Value = serde_json::from_slice(&std::fs::read(path)?)?;
+    // Enforce the allocation bound even if the file grows after metadata().
+    let mut bytes = Vec::new();
+    file.take(LIMIT + 1).read_to_end(&mut bytes)?;
+    ensure!(bytes.len() as u64 <= LIMIT, "Файл импорта превышает 16 MiB");
+    let document: Value = if path
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+    {
+        serde_json::from_slice(&bytes)?
+    } else {
+        legacy_document(&bytes)?
+    };
     ensure!(
         document["json_schema_version"] == "1.0.0",
         "Поддерживается JSON schema 1.0.0"

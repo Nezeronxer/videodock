@@ -89,6 +89,11 @@ fn runtime() -> Result<&'static Runtime> {
 }
 
 impl Engine {
+    /// Native browser integration only; never include this credential-bearing value in snapshots.
+    pub fn network_proxy(&self) -> Result<Option<String>> {
+        secrets::proxy(&self.inner)
+    }
+
     pub fn new(directory: PathBuf) -> Result<Self> {
         ensure!(
             directory.is_absolute() && directory.file_name().is_some(),
@@ -223,6 +228,7 @@ impl Engine {
                 Ok(json!({}))
             }
             "parse" => queue::parse(&self.inner, &action),
+            "preview_output" => queue::preview_output(&self.inner, &action),
             "download" => queue::download(&self.inner, &action),
             "manual_pause" | "manual_resume" => queue::parsing_control(&self.inner, &action),
             "jobs" => queue::jobs(&self.inner, &action),

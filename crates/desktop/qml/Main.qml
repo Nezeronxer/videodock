@@ -2,14 +2,23 @@ pragma ComponentBehavior: Bound
 import Qt.labs.platform as Platform
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import VideoDock
+import Qt5Compat.GraphicalEffects
 
 ApplicationWindow {
     id: window
 
-    property color green: "#5CB400"
+    readonly property alias theme: colors
+    readonly property color green: colors.accent
+    property bool searchVisible: false
+
+    UiTheme {
+        id: colors
+        mode: window.settings.theme || "dark"
+    }
     property var state: ({
             "settings": {},
             "jobs": [],
@@ -23,11 +32,13 @@ ApplicationWindow {
     property string sortKey: "date"
     property bool descending: true
     property bool browserVisible: false
+    readonly property bool hasMedia: (state.jobs || []).length + (state.subscriptions || []).length + (state.processing || []).length > 0
     property string localNotice: ""
     property string lastNotification: ""
     property bool quitConfirmed: false
     property bool explicitQuit: false
     property bool introConsidered: false
+    property bool geometryRestored: false
     property var selectedIds: []
     property var focusedJob: null
     property bool manualDismissed: false
@@ -65,8 +76,15 @@ ApplicationWindow {
             return "Any";
         if (key === "videoVR" && value === false)
             return "2D";
-        if (key === "speedLimit" && value === 0)
-            return "Unlimited";
+        if (key === "speedLimit" && typeof value === "number") {
+            if (value === 0)
+                return "Unlimited";
+            if (value % 125000 === 0)
+                return (value / 125000) + " Mbps";
+            if (value % 125 === 0)
+                return (value / 125) + " kbps";
+            return value + " B/s";
+        }
         if (key === "subscriptionUpdatePeriod" && typeof value === "number")
             return ({
                     300: "5 min",
@@ -79,6 +97,22 @@ ApplicationWindow {
                     86400: "1 day"
                 })[value] || String(value);
         return String(value === undefined ? "" : value);
+    }
+    function asset(name, fallback) {
+        var source = typeof backend.referenceAsset === "function" ? backend.referenceAsset(name) : "";
+        return source || fallback || "";
+    }
+    function optionLabel(value) {
+        return ({
+            video: qsTr("Video"), audio: qsTr("Audio"), playlist: qsTr("Playlist"), channel: qsTr("Channel"), Best: qsTr("Best"),
+            Any: qsTr("Any"), Unlimited: qsTr("Unlimited"), en: "English", ru: "Русский",
+            Original: qsTr("Original"), unknown: qsTr("Unknown"), Default: qsTr("Default"),
+            Maximum: qsTr("Highest"),
+            "5 min": qsTr("Every 5 minutes"), "15 min": qsTr("Every 15 minutes"),
+            "30 min": qsTr("Every 30 minutes"), "1 hour": qsTr("Every hour"),
+            "3 hours": qsTr("Every 3 hours"), "6 hours": qsTr("Every 6 hours"),
+            "12 hours": qsTr("Every 12 hours"), "1 day": qsTr("Every day")
+        })[value] || value;
     }
     function send(action) {
         var response;
@@ -138,6 +172,7 @@ ApplicationWindow {
     }
 
     function parse(url) {
+        browserVisible = false;
         manualDismissed = false;
         send({
             "action": "parse",
@@ -202,21 +237,38 @@ ApplicationWindow {
     objectName: "mainWindow"
     visible: true
     width: 1150
-    height: 760
-    minimumWidth: 880
-    minimumHeight: 600
+    height: 618
+    minimumWidth: 950
+    minimumHeight: 568
     title: "VideoDock"
-    color: "#fafafa"
-    font.family: "Sans Serif"
+    color: theme.canvas
     font.pixelSize: 14
-    palette.window: "#fafafa"
-    palette.base: "white"
-    palette.button: "#f0f0f0"
-    palette.highlight: "#5CB400"
-    palette.dark: "#5CB400"
-    palette.highlightedText: "white"
-    palette.text: "#303030"
-    palette.windowText: "#303030"
+    font.family: "Sans Serif"
+    palette.window: theme.window
+    palette.base: theme.input
+    palette.alternateBase: theme.hover
+    palette.button: theme.button
+    palette.buttonText: theme.text
+    palette.highlight: theme.accent
+    palette.highlightedText: theme.text
+    palette.text: theme.text
+    palette.windowText: theme.text
+    palette.placeholderText: theme.secondary
+    palette.mid: theme.border
+    palette.dark: theme.border
+    palette.brightText: theme.accentText
+    palette.light: theme.hover
+    palette.midlight: theme.button
+    palette.shadow: theme.list
+    palette.toolTipBase: theme.popup
+    palette.toolTipText: theme.text
+    palette.link: theme.accent
+    palette.disabled.text: theme.disabled
+    palette.disabled.windowText: theme.disabled
+    palette.disabled.buttonText: theme.disabled
+    palette.disabled.highlight: theme.border
+    palette.disabled.dark: theme.button
+    palette.disabled.brightText: theme.disabled
     onClosing: function (close) {
         if (settings.systemTrayIconVisible && tray.available && !quitConfirmed && !explicitQuit) {
             close.accepted = false;
@@ -229,6 +281,8 @@ ApplicationWindow {
             close.accepted = false;
             quitDialog.open();
         }
+        if (close.accepted && geometryRestored)
+            window.send({action: "settings", values: {windowWidth: Math.round(window.width), windowHeight: Math.round(window.height)}});
     }
 
     Backend {
@@ -237,6 +291,11 @@ ApplicationWindow {
         onSnapshotChanged: {
             try {
                 window.state = JSON.parse(snapshot);
+                if (!window.geometryRestored && window.state.settings) {
+                    window.geometryRestored = true;
+                    window.width = window.settings.windowWidth || 1150;
+                    window.height = window.settings.windowHeight || 618;
+                }
             } catch (error) {
                 window.localNotice = String(error);
             }
@@ -285,7 +344,10 @@ ApplicationWindow {
 
     Shortcut {
         sequence: "Ctrl+F"
-        onActivated: searchField.forceActiveFocus()
+        onActivated: {
+            window.searchVisible = true;
+            searchField.forceActiveFocus();
+        }
     }
 
     Shortcut {
@@ -310,233 +372,333 @@ ApplicationWindow {
         spacing: 0
 
         Rectangle {
+            objectName: "mainToolbar"
             Layout.fillWidth: true
-            implicitHeight: 82
-            color: "white"
+            implicitHeight: 64
+            color: window.hasMedia ? window.theme.toolbar : window.theme.canvas
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 18
+                anchors.leftMargin: 16
+                anchors.rightMargin: 24
                 spacing: 16
 
                 Button {
+
+                    palette.dark: window.theme.accent
                     objectName: "pasteButton"
-                    text: qsTr("＋  Paste Link")
-                    font.pixelSize: 17
+                    text: qsTr("Paste Link")
+                    icon.source: window.asset("paste-link.png", "icons/plus.svg")
+                    icon.color: window.theme.accentText
+                    font.pixelSize: 14
                     highlighted: true
-                    Layout.preferredWidth: 210
-                    Layout.preferredHeight: 44
+                    Layout.preferredWidth: window.width < 800 ? 40 : 180
+                    display: window.width < 800 ? AbstractButton.IconOnly : AbstractButton.TextBesideIcon
+                    Layout.preferredHeight: 40
                     onClicked: window.pasteLink()
                 }
 
                 Switch {
+                    id: smartSwitch
+
+                    palette.dark: window.theme.accent
                     objectName: "smartModeSwitch"
-                    text: qsTr("Smart Mode")
+                    padding: 0
+                    indicator: Rectangle {
+                        implicitWidth: 40
+                        implicitHeight: 24
+                        radius: 12
+                        color: smartSwitch.checked ? window.green : window.theme.button
+                        border.width: smartSwitch.visualFocus ? 2 : 0
+                        border.color: window.theme.text
+                        Rectangle {
+                            x: smartSwitch.checked ? 18 : 2
+                            y: 2
+                            width: 20
+                            height: 20
+                            radius: 10
+                            color: window.theme.accentText
+                            Behavior on x { NumberAnimation { duration: 150 } }
+                            layer.enabled: true
+                            layer.effect: DropShadow {
+                                color: Qt.rgba(0, 0, 0, 0.1)
+                                verticalOffset: 2
+                                samples: 5
+                                radius: 5
+                            }
+                            ColorImage {
+                                anchors.centerIn: parent
+                                width: 16
+                                height: 16
+                                source: window.asset("smart-mode.png", "icons/power.svg")
+                                color: smartSwitch.checked ? window.green : window.theme.secondary
+                                defaultColor: "#000000"
+                            }
+                        }
+                    }
+                    Layout.preferredWidth: 40
+                    Layout.preferredHeight: 24
                     checked: window.settings.smartMode === true
                     onToggled: window.setting("smartMode", checked)
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                }
-
-                TextField {
-                    id: searchField
-
-                    objectName: "searchField"
-                    Layout.preferredWidth: 230
-                    placeholderText: qsTr("Search downloads")
-                    onTextChanged: window.search = text
-                    selectByMouse: true
-                }
-
-                ToolButton {
-                    text: "◉"
-                    font.pixelSize: 23
-                    Accessible.name: qsTr("Show Browser")
-                    ToolTip.text: qsTr("Show Browser")
+                    Accessible.name: qsTr("Smart Mode")
+                    ToolTip.text: qsTr("Smart Mode")
                     ToolTip.visible: hovered
-                    onClicked: window.browserVisible = !window.browserVisible
+                }
+
+                SmartModeBar {
+                    objectName: "smartModeBar"
+                    visible: window.settings.smartMode === true
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredHeight: 20
+                    Layout.maximumHeight: 20
+                    app: window
+                    onBrowseRequested: folderDialog.open()
+                }
+
+                Label {
+                    visible: window.settings.smartMode !== true
+                    text: qsTr("Enable Smart Mode to download links in one click")
+                    color: window.theme.secondary
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
                 }
 
                 ToolButton {
-                    text: "⚙"
-                    font.pixelSize: 25
-                    Accessible.name: qsTr("Preferences")
+                    objectName: "preferencesButton"
+                    Layout.preferredWidth: 28
+                    Layout.preferredHeight: 28
+                    text: qsTr("Preferences")
+                    display: AbstractButton.IconOnly
+                    palette.button: "transparent"
+                    icon.source: window.asset("settings.png", "icons/settings.svg")
+                    Accessible.name: text
+                    ToolTip.text: text
+                    ToolTip.visible: hovered
                     onClicked: settingsDialog.open()
                 }
-
                 ToolButton {
-                    text: "☰"
-                    font.pixelSize: 25
-                    Accessible.name: qsTr("Control Panel")
+                    objectName: "controlPanelOpenerButton"
+                    Layout.preferredWidth: 28
+                    Layout.preferredHeight: 28
+                    Layout.leftMargin: -8
+                    text: qsTr("Control Panel")
+                    display: AbstractButton.IconOnly
+                    palette.button: "transparent"
+                    icon.source: window.asset("control-panel.png", "icons/panel.svg")
+                    Accessible.name: text
+                    ToolTip.text: text
+                    ToolTip.visible: hovered
                     onClicked: controlPanel.open()
                 }
             }
         }
 
-        Rectangle {
+        Item {
             Layout.fillWidth: true
-            implicitHeight: 54
-            color: "#f3f5f1"
-            visible: window.settings.smartMode === true
+            Layout.fillHeight: true
 
-            RowLayout {
+            ColumnLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 20
-                anchors.rightMargin: 20
-                spacing: 12
-
-                Label {
- textFormat: Text.PlainText;
-                    text: qsTr("Download")
-                    color: "#777"
-                }
-
-                ComboBox {
-                    model: ["video", "audio"]
-                    currentIndex: window.settings.mediaType === "audio" ? 1 : 0
-                    onActivated: window.setting("mediaType", currentText)
-                    Layout.preferredWidth: 100
-                }
-
-                Label {
- textFormat: Text.PlainText;
-                    text: qsTr("Quality")
-                    color: "#777"
-                }
-
-                ComboBox {
-                    model: ["Best", "8K", "4K", "1440p", "1080p", "720p", "480p", "360p"]
-                    currentIndex: Math.max(0, model.indexOf(window.optionText("quality", window.settings.quality)))
-                    onActivated: window.setting("quality", currentText)
-                    Layout.preferredWidth: 115
-                }
-
-                Label {
- textFormat: Text.PlainText;
-                    text: qsTr("Format")
-                    color: "#777"
-                }
-
-                ComboBox {
-                    model: window.settings.mediaType === "audio" ? ["M4A", "MP3", "OGG"] : ["MP4", "MKV"]
-                    currentIndex: Math.max(0, model.indexOf(window.optionText("container", window.settings.container)))
-                    onActivated: window.setting("container", currentText)
-                    Layout.preferredWidth: 100
-                }
-
-                Label {
- textFormat: Text.PlainText;
-                    text: qsTr("Save To")
-                    color: "#777"
-                }
-
-                Button {
-                    text: window.settings.path || qsTr("Choose Folder…")
+                spacing: 0
+                Rectangle {
+                    objectName: "mediaListHeader"
+                    visible: window.hasMedia
                     Layout.fillWidth: true
-                    onClicked: folderDialog.open()
-                }
+                    implicitHeight: 64
+                    color: window.theme.window
 
-                Button {
-                    text: qsTr("All Preferences…")
-                    onClicked: {
-                        settingsDialog.tab = 1;
-                        settingsDialog.open();
-                    }
-                }
-            }
-        }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        anchors.topMargin: 12
+                        anchors.bottomMargin: 12
+                        spacing: 0
 
-        BrowserPane {
-            id: browser
-
-            app: window
-            visible: window.browserVisible
-            Layout.fillWidth: true
-            Layout.preferredHeight: window.browserVisible ? Math.max(280, window.height * 0.46) : 0
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: 55
-            color: "white"
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
-                spacing: 2
-
-                Repeater {
-                    model: ["All", "Video", "Audio", "Playlists", "Channels", "Subscriptions", "Processed"]
-
-                    Button {
-                        id: filterTab
-                        required property string modelData
-
-                        text: window.tabTitle(modelData)
-                        flat: true
-                        checked: window.activeTab === modelData
-                        checkable: true
-                        onClicked: {
-                            window.activeTab = modelData;
-                            window.selectedIds = [];
-                        }
-                        palette.buttonText: checked ? window.green : "#777"
-                        font.bold: checked
-                        contentItem: Label {
- textFormat: Text.PlainText;
-                            text: filterTab.text
-                            color: filterTab.checked ? window.green : "#777"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            font: filterTab.font
+                        Repeater {
+                            model: ["All", "Video", "Audio", "Playlists", "Channels", "Subscriptions", "Processed"]
+                            Button {
+                                id: filterTab
+                                palette.dark: window.theme.accent
+                                required property string modelData
+                                text: window.tabTitle(modelData)
+                                visible: !window.searchVisible || window.width >= 1100 || checked
+                                flat: true
+                                checked: window.activeTab === modelData
+                                checkable: true
+                                leftPadding: 8
+                                rightPadding: leftPadding
+                                implicitWidth: Math.ceil(tabWidth.width) + 20
+                                font.weight: checked ? Font.DemiBold : Font.Normal
+                                TextMetrics {
+                                    id: tabWidth
+                                    text: filterTab.text
+                                    font.pixelSize: 14
+                                    font.weight: Font.DemiBold
+                                }
+                                onClicked: {
+                                    window.activeTab = modelData;
+                                    window.selectedIds = [];
+                                }
+                                contentItem: Label {
+                                    textFormat: Text.PlainText
+                                    text: filterTab.text
+                                    color: filterTab.checked ? window.theme.text : window.theme.secondary
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    font: filterTab.font
+                                }
+                                background: Rectangle {
+                                    color: filterTab.hovered ? window.theme.hover : "transparent"
+                                    Rectangle {
+                                        anchors.bottom: parent.bottom
+                                        width: parent.width
+                                        height: 2
+                                        color: window.green
+                                        visible: filterTab.checked
+                                    }
+                                }
+                            }
                         }
 
-                        background: Rectangle {
-                            color: "transparent"
-
-                            Rectangle {
-                                anchors.bottom: parent.bottom
-                                width: parent.width
-                                height: 3
-                                color: window.green
-                                visible: window.activeTab === modelData
+                        Item {
+                            Layout.fillWidth: true
+                        }
+                        Label {
+                            text: window.listRows().length + qsTr(" items")
+                            color: window.theme.secondary
+                            visible: !window.searchVisible
+                            font.pixelSize: 12
+                        }
+                        TextField {
+                            id: searchField
+                            objectName: "searchField"
+                            visible: window.searchVisible
+                            Layout.preferredWidth: Math.min(200, window.width * 0.18)
+                            placeholderText: qsTr("Search downloads")
+                            onTextChanged: window.search = text
+                            selectByMouse: true
+                            Keys.onEscapePressed: {
+                                clear();
+                                window.searchVisible = false;
+                            }
+                        }
+                        ToolButton {
+                            text: window.searchVisible ? qsTr("Close search") : qsTr("Search downloads")
+                            display: AbstractButton.IconOnly
+                            palette.button: "transparent"
+                            icon.source: window.searchVisible ? "icons/close.svg" : "icons/search.svg"
+                            Accessible.name: text
+                            onClicked: {
+                                window.searchVisible = !window.searchVisible;
+                                if (window.searchVisible)
+                                    searchField.forceActiveFocus();
+                                else
+                                    searchField.clear();
+                            }
+                        }
+                        ToolButton {
+                            objectName: "sortButton"
+                            text: qsTr("Sort")
+                            display: AbstractButton.IconOnly
+                            palette.button: "transparent"
+                            icon.source: "icons/sort.svg"
+                            Accessible.name: text
+                            onClicked: sortMenu.popup()
+                            Menu {
+                                id: sortMenu
+                                palette.window: window.theme.popup
+                                objectName: "sortMenu"
+                                MenuItem {
+                                    text: qsTr("Date Added")
+                                    checkable: true
+                                    checked: window.sortKey === "date"
+                                    onTriggered: window.sortKey = "date"
+                                }
+                                MenuItem {
+                                    text: qsTr("Name")
+                                    checkable: true
+                                    checked: window.sortKey === "name"
+                                    onTriggered: window.sortKey = "name"
+                                }
+                                MenuSeparator {}
+                                MenuItem {
+                                    text: qsTr("Ascending")
+                                    checkable: true
+                                    checked: !window.descending
+                                    onTriggered: window.descending = false
+                                }
+                                MenuItem {
+                                    text: qsTr("Descending")
+                                    checkable: true
+                                    checked: window.descending
+                                    onTriggered: window.descending = true
+                                }
                             }
                         }
                     }
                 }
 
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    visible: window.hasMedia
+                    color: window.theme.list
+                    JobList {
+                        app: window
+                        rows: window.listRows()
+                        anchors.fill: parent
+                    }
+                }
+
                 Item {
                     Layout.fillWidth: true
-                }
-
-                ComboBox {
-                    model: [qsTr("Date Added"), qsTr("Name")]
-                    Layout.preferredWidth: 175
-                    onActivated: window.sortKey = currentIndex === 0 ? "date" : "name"
-                }
-
-                ToolButton {
-                    text: window.descending ? "↓" : "↑"
-                    onClicked: window.descending = !window.descending
-                    Accessible.name: qsTr("Reverse sort direction")
+                    Layout.preferredHeight: 88
+                    visible: window.hasMedia
                 }
             }
-        }
 
-        JobList {
-            app: window
-            rows: window.listRows()
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+            ColumnLayout {
+                visible: !window.hasMedia && !window.browserVisible
+                objectName: "browserHomeTitle"
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: Math.max(20, (parent.height - height - browser.height) / 2)
+                width: Math.min(594, parent.width - 40)
+                spacing: 0
+                Label {
+                    text: qsTr("Find videos to download right in the app")
+                    color: window.theme.secondary
+                    font.pixelSize: 14
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                }
+                Label {
+                    text: qsTr("Click the service icon below and start searching")
+                    font.pixelSize: 28
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    horizontalAlignment: Text.AlignHCenter
+                }
+            }
+
+            BrowserPane {
+                id: browser
+                objectName: "browserPane"
+                app: window
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 16
+                width: window.browserVisible ? parent.width - 32 : Math.min(parent.width - 34, 1080)
+                height: window.browserVisible ? parent.height - 20 : window.hasMedia ? 56 : 330
+                z: 3
+            }
         }
 
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: noticeLabel.text ? Math.min(90, noticeLabel.implicitHeight + 22) : 0
-            color: "#fff2d2"
+            color: window.theme.notice
             visible: implicitHeight > 0
 
             RowLayout {
@@ -544,17 +706,20 @@ ApplicationWindow {
                 anchors.margins: 10
 
                 Label {
- textFormat: Text.PlainText;
                     id: noticeLabel
+                    textFormat: Text.PlainText
 
                     text: window.localNotice || window.state.notice || ""
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
-                    color: "#775614"
+                    color: window.theme.noticeText
                 }
 
                 ToolButton {
-                    text: "×"
+                    text: qsTr("Close")
+                    display: AbstractButton.IconOnly
+                    palette.button: "transparent"
+                    icon.source: "icons/close.svg"
                     onClicked: {
                         window.localNotice = "";
                         window.send({
@@ -562,36 +727,6 @@ ApplicationWindow {
                             "command": "clear_notice"
                         });
                     }
-                }
-            }
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: 32
-            color: "#f1f1f1"
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 18
-                anchors.rightMargin: 18
-
-                Label {
- textFormat: Text.PlainText;
-                    text: (window.state.jobs || []).length + qsTr(" items")
-                    color: "#888"
-                    font.pixelSize: 12
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                }
-
-                Label {
- textFormat: Text.PlainText;
-                    text: window.selectedIds.length ? window.selectedIds.length + qsTr(" selected") : "VideoDock"
-                    color: "#888"
-                    font.pixelSize: 12
                 }
             }
         }
@@ -640,8 +775,10 @@ ApplicationWindow {
         app: window
     }
 
-    Dialog {
+    AppDialog {
         id: urlDialog
+        app: window
+        objectName: "urlDialog"
 
         title: qsTr("Paste Link")
         modal: true
@@ -663,17 +800,26 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    AppDialog {
         id: removeDialog
+        app: window
+        objectName: "removeDialog"
+        property var pendingIds: []
 
         title: qsTr("Delete Selected Items")
         modal: true
         anchors.centerIn: parent
         width: 440
         standardButtons: Dialog.Ok | Dialog.Cancel
-        onOpened: deleteFiles.checked = false
+        onOpened: {
+            pendingIds = window.selectedIds.slice();
+            deleteFiles.checked = false;
+        }
         onAccepted: {
-            window.jobs("remove", window.selectedIds, deleteFiles.checked);
+            var ids = pendingIds;
+            pendingIds = [];
+            if (ids.length)
+                window.jobs("remove", ids, deleteFiles.checked);
             window.selectedIds = [];
         }
 
@@ -681,14 +827,15 @@ ApplicationWindow {
             width: parent.width
 
             Label {
- textFormat: Text.PlainText;
-                text: qsTr("Remove %1 item(s) from the list?").arg(window.selectedIds.length)
+                textFormat: Text.PlainText
+                text: qsTr("Remove %1 item(s) from the list?").arg(removeDialog.pendingIds.length)
                 wrapMode: Text.Wrap
                 Layout.fillWidth: true
             }
 
             CheckBox {
                 id: deleteFiles
+                objectName: "deleteFilesCheckbox"
 
                 text: qsTr("Also delete files from device")
                 checked: false
@@ -696,82 +843,16 @@ ApplicationWindow {
         }
     }
 
-    Popup {
+    ControlPanel {
         id: controlPanel
-
-        x: window.width - width - 12
-        y: 12
-        width: 315
-        padding: 20
-        modal: false
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        ColumnLayout {
-            width: parent.width
-            spacing: 12
-
-            Label {
- textFormat: Text.PlainText;
-                text: qsTr("Control Panel")
-                font.pixelSize: 20
-                font.bold: true
-            }
-
-            Label {
- textFormat: Text.PlainText;
-                text: (window.state.account || {}).logged_in ? (window.state.account.user_name || "YouTube") : qsTr("YouTube account")
-                Layout.fillWidth: true
-                elide: Text.ElideRight
-            }
-
-            Button {
-                text: (window.state.account || {}).logged_in ? qsTr("Log Out") : qsTr("Log In")
-                Layout.fillWidth: true
-                onClicked: window.send({
-                    "action": "account",
-                    "command": (window.state.account || {}).logged_in ? "logout" : "login"
-                })
-            }
-
-            Label {
- textFormat: Text.PlainText;
-                text: qsTr("Sign in through Google to access your private playlists.")
-                Layout.fillWidth: true
-                wrapMode: Text.Wrap
-                color: "#777"
-            }
-
-            Button {
-                text: qsTr('Download "Liked"')
-                Layout.fillWidth: true
-                onClicked: window.send({
-                    "action": "account",
-                    "command": "liked"
-                })
-            }
-
-            Button {
-                text: qsTr('Download "Watch Later"')
-                Layout.fillWidth: true
-                onClicked: window.send({
-                    "action": "account",
-                    "command": "watch_later"
-                })
-            }
-
-            Button {
-                text: qsTr("Preferences")
-                Layout.fillWidth: true
-                onClicked: {
-                    controlPanel.close();
-                    settingsDialog.open();
-                }
-            }
-        }
+        app: window
+        onPreferencesRequested: settingsDialog.open()
     }
 
-    Dialog {
+    AppDialog {
         id: about
+        app: window
+        objectName: "about"
 
         title: qsTr("About VideoDock")
         anchors.centerIn: parent
@@ -780,15 +861,17 @@ ApplicationWindow {
         standardButtons: Dialog.Close
 
         Label {
- textFormat: Text.PlainText;
+            textFormat: Text.PlainText
             text: qsTr("VideoDock\nRust download engine · Qt interface\nIndependent implementation.")
             padding: 18
             wrapMode: Text.Wrap
         }
     }
 
-    Dialog {
+    AppDialog {
         id: quitDialog
+        app: window
+        objectName: "quitDialog"
 
         title: qsTr("Downloads are still running")
         anchors.centerIn: parent
@@ -801,7 +884,7 @@ ApplicationWindow {
         }
 
         Label {
- textFormat: Text.PlainText;
+            textFormat: Text.PlainText
             text: qsTr("Quit with incomplete downloads?")
             padding: 16
         }
@@ -845,7 +928,17 @@ ApplicationWindow {
     }
 
     menuBar: MenuBar {
+        background: Rectangle { color: window.theme.canvas }
+        implicitHeight: 30
+        height: 30
+        delegate: MenuBarItem {
+            implicitHeight: 30
+            leftPadding: 8
+            rightPadding: 8
+            font.pixelSize: 14
+        }
         Menu {
+            palette.window: window.theme.popup
             title: qsTr("File")
 
             MenuItem {
@@ -882,6 +975,8 @@ ApplicationWindow {
         }
 
         Menu {
+
+            palette.window: window.theme.popup
             title: qsTr("Edit")
 
             MenuItem {
@@ -890,6 +985,8 @@ ApplicationWindow {
             }
 
             Menu {
+
+                palette.window: window.theme.popup
                 title: qsTr('Download "Liked"')
 
                 MenuItem {
@@ -911,6 +1008,8 @@ ApplicationWindow {
             }
 
             Menu {
+
+                palette.window: window.theme.popup
                 title: qsTr('Download "Watch Later"')
 
                 MenuItem {
@@ -955,7 +1054,10 @@ ApplicationWindow {
         }
 
         Menu {
+
+            palette.window: window.theme.popup
             title: qsTr("View")
+            objectName: "viewMenu"
 
             Repeater {
                 model: ["All", "Video", "Audio", "Playlists", "Channels", "Subscriptions", "Processed"]
@@ -973,6 +1075,8 @@ ApplicationWindow {
             MenuSeparator {}
 
             Menu {
+
+                palette.window: window.theme.popup
                 title: qsTr("Sort")
 
                 MenuItem {
@@ -1008,9 +1112,40 @@ ApplicationWindow {
                 checked: window.browserVisible
                 onTriggered: window.browserVisible = !window.browserVisible
             }
+
+            Menu {
+                objectName: "appearanceMenu"
+                title: qsTr("Appearance")
+                icon.source: "icons/appearance.svg"
+                palette.window: window.theme.popup
+
+                MenuItem {
+                    objectName: "theme-dark"
+                    text: qsTr("Dark")
+                    checkable: true
+                    checked: window.settings.theme === "dark"
+                    onTriggered: window.setting("theme", "dark")
+                }
+                MenuItem {
+                    objectName: "theme-light"
+                    text: qsTr("Light")
+                    checkable: true
+                    checked: window.settings.theme === "light"
+                    onTriggered: window.setting("theme", "light")
+                }
+                MenuItem {
+                    objectName: "theme-system"
+                    text: qsTr("System")
+                    checkable: true
+                    checked: window.settings.theme === "system"
+                    onTriggered: window.setting("theme", "system")
+                }
+            }
         }
 
         Menu {
+
+            palette.window: window.theme.popup
             title: qsTr("Tools")
 
             MenuItem {
@@ -1033,6 +1168,8 @@ ApplicationWindow {
         }
 
         Menu {
+
+            palette.window: window.theme.popup
             title: qsTr("Help")
 
             MenuItem {

@@ -250,7 +250,7 @@ fn add_subscription(inner: &Inner, media: &Media, action: &Value) -> Result<Vec<
         Ok(ids)
     })
 }
-pub(super) fn download(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
+fn parsed_media(inner: &Inner, action: &Value) -> Result<Media> {
     let media = lock(&inner.manual)
         .clone()
         .context("Нет разобранного источника. Сначала вставьте ссылку.")?;
@@ -260,6 +260,27 @@ pub(super) fn download(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
             "Источник диалога изменился; откройте его заново"
         );
     }
+    Ok(media)
+}
+pub(super) fn preview_output(inner: &Inner, action: &Value) -> Result<Value> {
+    let media = parsed_media(inner, action)?;
+    ensure!(
+        !matches!(media.kind, MediaKind::Playlist | MediaKind::Channel | MediaKind::Search),
+        "Для списка выберите папку загрузки, а не отдельный файл"
+    );
+    let settings = lock(&inner.state)["settings"].clone();
+    let spec = spec(&settings, action)?;
+    videodock_media::choose_formats(&media.formats, &spec.selection)?;
+    let path = crate::pipeline::preview_output_path(
+        &media,
+        &spec.output_dir,
+        spec.filename.as_deref(),
+        &spec.selection.container,
+    )?;
+    Ok(json!({"download_path":path}))
+}
+pub(super) fn download(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
+    let media = parsed_media(inner, action)?;
     let ids = if action["mode"] == "subscribe" {
         add_subscription(inner, &media, action)?
     } else {
@@ -480,14 +501,18 @@ async fn parse_async(
                 Ok(clip) => {
                     for format in clip.formats {
                         let key = format!(
-                            "{:?}|{}|{:?}|{:?}|{:?}|{:?}|{:?}",
+                            "{:?}|{}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{}|{:?}|{:?}",
                             format.protocol,
                             format.ext,
                             format.height,
                             format.fps,
                             format.video_codec,
                             format.audio_codec,
-                            format.bitrate
+                            format.bitrate,
+                            format.projection,
+                            format.vr,
+                            format.projection_type,
+                            format.stereo_layout
                         );
                         if keys.insert(key) {
                             formats.push(format);
@@ -593,7 +618,7 @@ fn manual_view(media: &Media, settings: &Value, errors: &HashMap<String, String>
                 "media_type":if video{"video"}else{"audio"},"container":format.ext.to_ascii_uppercase(),"quality":quality,
                 "video_codec":format.video_codec,"audio_codec":format.audio_codec,
                 "fps":if video{format.fps.map(|fps|fps.to_string()).unwrap_or_default()}else{String::new()},
-                "vr":if video&&format.vr{"360"}else{"2D"},"size":format.size.map(bytes)}));
+                "vr":if video {format.projection.map(|projection|json!(projection)).unwrap_or_else(||json!(if format.is_vr(){"Unknown"}else{"None"}))}else{json!("None")},"projection":format.projection,"size":format.size.map(bytes)}));
         }
     }
     let only_audio =
@@ -615,7 +640,7 @@ fn manual_view(media: &Media, settings: &Value, errors: &HashMap<String, String>
             ));
         }
     }
-    json!({"url":media.url,"title":media.title,"kind":if only_audio&&!matches!(media.kind,MediaKind::Playlist|MediaKind::Channel|MediaKind::Search){"audio".into()}else{source_kind(media)},
+    let mut view = json!({"url":media.url,"title":media.title,"kind":if only_audio&&!matches!(media.kind,MediaKind::Playlist|MediaKind::Channel|MediaKind::Search){"audio".into()}else{source_kind(media)},
         "media_type":if only_audio{"audio"}else{settings["mediaType"].as_str().unwrap_or("video")},
         "thumbnail":if media.thumbnail.starts_with("file:"){&media.thumbnail}else{""},
         "formats":formats,"items":media.entries.iter().map(|entry|json!({"id":entry.id,"title":entry.title,
@@ -624,7 +649,19 @@ fn manual_view(media: &Media, settings: &Value, errors: &HashMap<String, String>
             "language":subtitle.language,"label":subtitle.title,"automatic":subtitle.automatic})).collect::<Vec<_>>(),
         "can_translate_subtitles":media.subtitles.iter().any(|subtitle|subtitle.translatable),
         "audio_tracks":tracks.into_iter().map(|(language,title)|json!({"id":language,"language":language,"label":title,"default":language=="default"})).collect::<Vec<_>>(),
-        "output_dir":settings["path"]})
+        "output_dir":settings["path"]});
+    if !matches!(media.kind, MediaKind::Playlist | MediaKind::Channel | MediaKind::Search) {
+        match crate::pipeline::preview_output_path(
+            media,
+            Path::new(settings["path"].as_str().unwrap_or_default()),
+            None,
+            settings["container"].as_str().unwrap_or_default(),
+        ) {
+            Ok(path) => view["download_path"] = json!(path),
+            Err(error) => view["download_path_error"] = json!(error.to_string()),
+        }
+    }
+    view
 }
 fn modern_codec(format: &Format) -> bool {
     format.video_codec.as_deref().is_some_and(|codec| {
@@ -1494,15 +1531,15 @@ fn check_subscriptions(inner: &Arc<Inner>) {
     let state = lock(&inner.state).clone();
     let period = state["settings"]["subscriptionUpdatePeriod"]
         .as_u64()
-        .unwrap_or(86400)
-        .max(60);
+        .unwrap_or(86400);
     let due = state["subscriptions"]
         .as_array()
         .unwrap()
         .iter()
         .filter(|item| {
             item["_force_check"] == true
-                || now().saturating_sub(item["last_checked"].as_u64().unwrap_or(0)) >= period
+                || (period > 0
+                    && now().saturating_sub(item["last_checked"].as_u64().unwrap_or(0)) >= period)
         })
         .map(|item| item["id"].as_str().unwrap().to_owned())
         .collect::<Vec<_>>();

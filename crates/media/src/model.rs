@@ -21,6 +21,44 @@ pub enum Protocol {
     Dash,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum VideoProjection {
+    #[serde(rename = "None")]
+    Flat,
+    #[serde(rename = "2D/360°")]
+    Mono360,
+    #[serde(rename = "3D/180°")]
+    Stereo180,
+    #[serde(rename = "3D/360°")]
+    Stereo360,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum VideoVrMode {
+    #[default]
+    Any,
+    #[serde(rename = "2D/360°", alias = "2D360")]
+    Mono360,
+    #[serde(rename = "3D/180°", alias = "3D180")]
+    Stereo180,
+    #[serde(rename = "3D/360°", alias = "3D360")]
+    Stereo360,
+    #[serde(rename = "None")]
+    Flat,
+}
+
+impl VideoVrMode {
+    pub fn matches(self, format: &Format, legacy_any_vr: bool) -> bool {
+        match self {
+            Self::Any => !legacy_any_vr || format.is_vr(),
+            Self::Flat => !format.is_vr(),
+            Self::Mono360 => format.projection == Some(VideoProjection::Mono360),
+            Self::Stereo180 => format.projection == Some(VideoProjection::Stereo180),
+            Self::Stereo360 => format.projection == Some(VideoProjection::Stereo360),
+        }
+    }
+}
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Format {
     pub id: String,
@@ -32,10 +70,22 @@ pub struct Format {
     pub fps: Option<f64>,
     #[serde(default)]
     pub vr: bool,
+    #[serde(default)]
+    pub projection: Option<VideoProjection>,
+    #[serde(default)]
+    pub projection_type: Option<String>,
+    #[serde(default)]
+    pub stereo_layout: Option<String>,
     pub video_codec: Option<String>,
     pub audio_codec: Option<String>,
     pub audio_language: Option<String>,
     pub audio_title: Option<String>,
+    #[serde(default)]
+    pub audio_track_id: Option<String>,
+    #[serde(default)]
+    pub audio_default: Option<bool>,
+    #[serde(default)]
+    pub audio_original: Option<bool>,
     pub bitrate: Option<u64>,
     pub size: Option<u64>,
     pub headers: BTreeMap<String, String>,
@@ -59,6 +109,13 @@ impl std::fmt::Debug for Format {
 }
 
 impl Format {
+    pub fn is_vr(&self) -> bool {
+        self.vr
+            || self
+                .projection
+                .is_some_and(|projection| projection != VideoProjection::Flat)
+    }
+
     pub fn has_video(&self) -> bool {
         self.video_codec
             .as_deref()
@@ -186,6 +243,7 @@ pub struct Selection {
     pub audio_bitrate: u32,
     pub fps: u32,
     pub vr: bool,
+    pub vr_mode: VideoVrMode,
     pub subtitles: Vec<String>,
     pub audio_tracks: Vec<String>,
     pub format_id: Option<String>,
@@ -202,6 +260,7 @@ impl Default for Selection {
             audio_bitrate: 192,
             fps: 0,
             vr: false,
+            vr_mode: VideoVrMode::Any,
             subtitles: vec![],
             audio_tracks: vec![],
             format_id: None,

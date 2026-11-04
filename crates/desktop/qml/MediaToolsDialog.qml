@@ -2,213 +2,228 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 
-Dialog {
+AppDialog {
     id: root
 
-    required property var app
-    property string selectedEffect: "remove_vocals"
-    property var effects: [
+    property var sourceIds: []
+    property string errorMessage: ""
+    readonly property var effects: [
         {
-            "id": "remove_vocals",
-            "title": qsTr("Remove Vocals"),
-            "description": qsTr("Create a backing track by removing vocals."),
-            "available": true
+            id: "remove_vocals",
+            title: qsTr("Remove Vocals"),
+            description: qsTr("Creates a backing track by removing the vocal part."),
+            icon: "ai-remove-vocals.png"
         },
         {
-            "id": "extract_vocals",
-            "title": qsTr("Extract Vocals"),
-            "description": qsTr("Separate vocals from the backing track."),
-            "available": true
+            id: "extract_vocals",
+            title: qsTr("Extract Vocals"),
+            description: qsTr("Isolates clear vocals by removing the backing track."),
+            icon: "ai-extract-vocals.png"
         },
         {
-            "id": "extract_voice",
-            "title": qsTr("Extract Voice"),
-            "description": qsTr("Isolate voice from background sounds."),
-            "available": true
+            id: "extract_voice",
+            title: qsTr("Extract Voice"),
+            description: qsTr("Isolates voice from all background sounds."),
+            icon: "ai-extract-voice.png"
         },
         {
-            "id": "remove_echo",
-            "title": qsTr("Remove Echo"),
-            "description": qsTr("Reduce echo and reverberation."),
-            "available": true
-        },
-        {
-            "id": "burn_captions",
-            "title": qsTr("Burn In Captions"),
-            "available": false
-        },
-        {
-            "id": "transcribe",
-            "title": qsTr("Transcribe Speech"),
-            "available": false
-        },
-        {
-            "id": "remove_music",
-            "title": qsTr("Remove Background Music"),
-            "available": false
-        },
-        {
-            "id": "remove_noise",
-            "title": qsTr("Remove Noise"),
-            "available": false
-        },
-        {
-            "id": "instruments",
-            "title": qsTr("Extract Instruments"),
-            "available": false
-        },
-        {
-            "id": "karaoke",
-            "title": qsTr("Make Karaoke"),
-            "available": false
-        },
-        {
-            "id": "highlights",
-            "title": qsTr("Create Highlights"),
-            "available": false
-        },
-        {
-            "id": "loudness",
-            "title": qsTr("Balance Loudness"),
-            "available": false
-        },
-        {
-            "id": "upscale_audio",
-            "title": qsTr("Upscale Audio"),
-            "available": false
-        },
-        {
-            "id": "voice",
-            "title": qsTr("Change Voice"),
-            "available": false
-        },
-        {
-            "id": "lead_vocal",
-            "title": qsTr("Extract Lead Vocal"),
-            "available": false
-        },
-        {
-            "id": "back_vocal",
-            "title": qsTr("Extract Back Vocal"),
-            "available": false
-        },
-        {
-            "id": "reframe",
-            "title": qsTr("Reframe Video"),
-            "available": false
-        },
-        {
-            "id": "upscale_video",
-            "title": qsTr("Upscale Video"),
-            "available": false
+            id: "remove_echo",
+            title: qsTr("Remove Echo"),
+            description: qsTr("Eliminates echo and reverb from voice and vocals."),
+            icon: "ai-echo.png"
         }
     ]
+    readonly property bool canProcess: (app.state.capabilities || {}).processing === true && sourceIds.length > 0 && sourceIds.every(function (id) {
+        const row = (root.app.state.jobs || []).concat(root.app.state.processing || []).find(function (item) {
+            return item.id === id;
+        });
+        return root.validSource(row);
+    })
+
+    function validSource(row) {
+        if (!row)
+            return false;
+        if (Array.isArray(row.items))
+            return row.items.length > 0 && row.items.every(validSource);
+        return ["video", "audio"].indexOf(row.kind) >= 0 && row.state === "complete" && typeof row.path === "string" && row.path.length > 0;
+    }
+
+    function chooseEffect(effectId) {
+        if (!canProcess || !effects.some(function (effect) {
+            return effect.id === effectId;
+        }))
+            return;
+        const result = app.send({
+            action: "process",
+            ids: sourceIds.slice(),
+            effect: effectId
+        });
+        if (result.error)
+            errorMessage = String(result.error);
+        else
+            close();
+    }
 
     title: qsTr("Media Tools")
     objectName: "mediaToolsDialog"
     modal: true
     anchors.centerIn: parent
-    width: Math.min(820, parent.width - 50)
-    height: Math.min(620, parent.height - 50)
+    width: Math.min(548, parent.width - 40)
+    height: Math.min(384, app.height - 90)
+    padding: 0
+    header: null
+    footer: null
+    closePolicy: Popup.CloseOnEscape
+    Overlay.modal: Rectangle {
+        color: Qt.rgba(0, 0, 0, 0.6)
+    }
+    background: Rectangle {
+        color: root.app.theme.dark ? "#333333" : "#f6f6f6"
+        radius: 2
+    }
+    onOpened: {
+        sourceIds = Array.isArray(app.selectedIds) ? app.selectedIds.slice() : [];
+        errorMessage = "";
+    }
 
     contentItem: ColumnLayout {
-        Label {
- textFormat: Text.PlainText;
-            text: root.app.localNotice
-            visible: text.length > 0
-            color: "#b94332"
-            wrapMode: Text.Wrap
+        spacing: 0
+        Rectangle {
+            id: header
+            objectName: "mediaToolsHeader"
             Layout.fillWidth: true
-        }
-        Label {
- textFormat: Text.PlainText;
-            text: qsTr("Choose a tool for %1 selected download(s)").arg(root.app.selectedIds.length)
-            font.pixelSize: 18
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
+            Layout.preferredHeight: 56
+            color: root.app.theme.window
+            z: 1
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowBlur: 0.4
+                shadowColor: Qt.rgba(0, 0, 0, 0.1)
+                shadowVerticalOffset: 4
+                shadowHorizontalOffset: 0
+            }
+            Label {
+                x: 24
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - 80
+                text: root.title
+                font.pixelSize: 18
+                elide: Text.ElideRight
+            }
+            ToolButton {
+                id: closeButton
+                objectName: "mediaToolsCloseButton"
+                anchors.right: parent.right
+                anchors.rightMargin: 20
+                anchors.verticalCenter: parent.verticalCenter
+                width: 28
+                height: 28
+                display: AbstractButton.IconOnly
+                icon.source: root.app.asset("cross.png", "icons/close.svg")
+                icon.width: 20
+                icon.height: 20
+                icon.color: root.app.theme.text
+                Accessible.name: qsTr("Close")
+                ToolTip.text: qsTr("Close")
+                ToolTip.visible: hovered
+                background: Rectangle {
+                    radius: 12
+                    color: closeButton.hovered || closeButton.visualFocus ? root.app.theme.hover : "transparent"
+                }
+                onClicked: root.close()
+            }
         }
 
         Label {
- textFormat: Text.PlainText;
-            text: qsTr("Processing runs locally. Availability depends on the source audio and installed models.")
-            color: "#888"
+            objectName: "processingErrorText"
+            text: root.errorMessage
+            visible: text.length > 0
+            textFormat: Text.PlainText
+            font.pixelSize: 14
+            color: root.app.theme.error
             wrapMode: Text.Wrap
             Layout.fillWidth: true
+            Layout.leftMargin: 24
+            Layout.rightMargin: 24
+            Layout.topMargin: 12
         }
 
         ScrollView {
+            id: scroll
             Layout.fillWidth: true
             Layout.fillHeight: true
             contentWidth: availableWidth
-
+            contentHeight: grid.implicitHeight + 48
+            clip: true
             GridLayout {
-                width: parent.width
-                columns: 3
-                columnSpacing: 10
-                rowSpacing: 10
-
+                id: grid
+                objectName: "mediaToolsGrid"
+                x: 24
+                y: 24
+                width: scroll.availableWidth - 48
+                columns: 2
+                columnSpacing: 8
+                rowSpacing: 8
+                readonly property real cellWidth: (width + columnSpacing) / columns
+                readonly property int cellHeight: 136 + rowSpacing
                 Repeater {
                     model: root.effects
-
                     Button {
-                        id: effectButton
+                        id: card
                         required property var modelData
-
+                        objectName: "effectCard_" + modelData.id
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 95
-                        enabled: modelData.available
-                        highlighted: root.selectedEffect === modelData.id
-                        onClicked: root.selectedEffect = modelData.id
-
+                        Layout.preferredWidth: grid.cellWidth - grid.columnSpacing
+                        Layout.preferredHeight: 136
+                        padding: 16
+                        enabled: root.canProcess
+                        Accessible.name: modelData.title + ". " + modelData.description
+                        background: Rectangle {
+                            radius: 2
+                            color: card.hovered || card.visualFocus ? (root.app.theme.dark ? "#383838" : Qt.rgba(233 / 255, 233 / 255, 233 / 255, 0.6)) : root.app.theme.window
+                        }
+                        onClicked: root.chooseEffect(modelData.id)
                         contentItem: ColumnLayout {
-                            Label {
- textFormat: Text.PlainText;
-                                text: modelData.title
-                                font.bold: true
-                                color: effectButton.highlighted ? "white" : effectButton.modelData.available ? "#444" : "#999"
-                                wrapMode: Text.Wrap
-                                Layout.fillWidth: true
-                                horizontalAlignment: Text.AlignHCenter
+                            spacing: 0
+                            Rectangle {
+                                width: 32
+                                height: 32
+                                color: root.app.theme.dark ? Qt.rgba(0, 0, 0, 0.1) : Qt.rgba(246 / 255, 246 / 255, 246 / 255, 0.84)
+                                Image {
+                                    anchors.centerIn: parent
+                                    width: 20
+                                    height: 20
+                                    source: root.app.asset(card.modelData.icon, "icons/audio.svg")
+                                }
                             }
-
                             Label {
- textFormat: Text.PlainText;
-                                text: modelData.available ? modelData.description : qsTr("Not available yet")
-                                color: effectButton.highlighted ? "#efffe8" : "#999"
-                                font.pixelSize: 11
-                                wrapMode: Text.Wrap
                                 Layout.fillWidth: true
-                                horizontalAlignment: Text.AlignHCenter
+                                Layout.topMargin: 8
+                                text: card.modelData.title
+                                font.pixelSize: 14
+                                color: root.app.theme.text
+                                elide: Text.ElideRight
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.topMargin: 4
+                                text: card.modelData.description
+                                font.pixelSize: 14
+                                lineHeight: 20
+                                lineHeightMode: Text.FixedHeight
+                                color: root.app.theme.secondary
+                                wrapMode: Text.Wrap
+                                elide: Text.ElideRight
+                                maximumLineCount: 2
+                            }
+                            Item {
+                                Layout.fillHeight: true
                             }
                         }
                     }
-                }
-            }
-        }
-
-        RowLayout {
-            Item {
-                Layout.fillWidth: true
-            }
-
-            Button {
-                text: qsTr("Cancel")
-                onClicked: root.close()
-            }
-
-            Button {
-                text: qsTr("Process")
-                highlighted: true
-                enabled: root.app.selectedIds.length > 0 && (root.app.state.capabilities || {}).processing !== false
-                onClicked: {
-                    var result = root.app.send({
-                        "action": "process",
-                        "ids": root.app.selectedIds,
-                        "effect": root.selectedEffect
-                    });
-                    if (!result.error)
-                        root.close();
                 }
             }
         }

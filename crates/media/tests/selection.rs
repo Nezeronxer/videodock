@@ -70,6 +70,17 @@ fn audio_mode_never_chooses_video_only() {
 }
 
 #[test]
+fn vp8_menu_choice_accepts_both_registered_codec_spellings() {
+    for codec in ["vp8", "vp08.00.10.08"] {
+        let selected = choose_formats(
+            &[format("vp8", 720, Some(codec), Some("aac"), None)],
+            &Selection { video_codec: "vp8".into(), ..Default::default() },
+        ).unwrap();
+        assert_eq!(selected[0].id, "vp8");
+    }
+}
+
+#[test]
 fn exact_audio_id_and_vr_are_not_silently_ignored() {
     let formats = vec![
         format("audio1", 0, None, Some("aac"), None),

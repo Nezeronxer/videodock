@@ -5,7 +5,7 @@ case "$(uname -s)" in
   Linux)
     build="${CARGO_TARGET_DIR:-$HOME/.cache/videodock-rust-target}"
     binary="$build/release/videodock-desktop"
-    [ -x "$binary" ] || "$project/scripts/rust/build.sh"
+    "$project/scripts/rust/build.sh"
     install -Dm755 "$binary" "$HOME/.local/lib/videodock/videodock"
     install -Dm644 "$project/assets/videodock.svg" "$HOME/.local/share/icons/hicolor/scalable/apps/videodock.svg"
     mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
@@ -26,18 +26,29 @@ EOF
     export PATH="/opt/homebrew/opt/qtbase/bin:/opt/homebrew/opt/qttools/bin:/usr/local/opt/qtbase/bin:/usr/local/opt/qttools/bin:$PATH"
     build="${CARGO_TARGET_DIR:-$HOME/Library/Caches/VideoDock/build}"
     binary="$build/release/videodock-desktop"
-    [ -x "$binary" ] || "$project/scripts/rust/build.sh"
-    app="$HOME/Applications/VideoDock.app"
+    app="${VIDEODOCK_MAC_APP:-$HOME/Applications/VideoDock.app}"
+    case "$app" in /*.app) ;; *) echo 'Expected an absolute .app destination' >&2; exit 1 ;; esac
+    "$project/scripts/rust/build.sh"
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
     cp "$binary" "$app/Contents/MacOS/VideoDock"
+    for tool in ffmpeg ffprobe; do
+        install -m755 "$(command -v "$tool")" "$app/Contents/MacOS/$tool"
+    done
     cat > "$app/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict><key>CFBundleName</key><string>VideoDock</string><key>CFBundleIdentifier</key><string>com.nezeronxer.videodock</string><key>CFBundleExecutable</key><string>VideoDock</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>0.2.0</string><key>CFBundleVersion</key><string>0.2.0</string><key>NSHighResolutionCapable</key><true/></dict></plist>
 EOF
     command -v macdeployqt >/dev/null
-    macdeployqt "$app" -qmldir="$project/crates/desktop/qml" -always-overwrite
+    macdeployqt "$app" -qmldir="$project/crates/desktop/qml" -executable="$app/Contents/MacOS/ffmpeg" -executable="$app/Contents/MacOS/ffprobe" -always-overwrite
     plutil -lint "$app/Contents/Info.plist"
+    for tool in VideoDock ffmpeg ffprobe; do
+        dependencies=$(otool -L "$app/Contents/MacOS/$tool")
+        if printf '%s\n' "$dependencies" | awk 'NR>1 && $1 ~ /^\/(opt\/homebrew|usr\/local|Users)\// {bad=1} END {exit !bad}'; then
+            echo "Unbundled library dependency in $tool" >&2
+            exit 1
+        fi
+    done
     ;;
   *) echo 'Use build-windows.ps1 on Windows' >&2; exit 1 ;;
 esac

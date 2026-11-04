@@ -6,7 +6,7 @@ pub(super) fn defaults() -> Value {
     let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .map(PathBuf::from)
         .unwrap_or_default();
-    json!({"language":"ru","smartMode":true,"mediaType":"video","quality":1080,"container":"mp4","videoCodec":"any","audioCodec":"any","audioBitrate":192,"frameRate":0,"videoVR":false,"subtitles":[],"audioTracks":[],"path":home.join(if cfg!(target_os="macos"){"Movies"}else{"Videos"}).join("VideoDock"),"systemTrayIconVisible":false,"autoStart":false,"autoUpdate":false,"betaAccessEnabled":false,"simultaneousDownloads":4,"subscriptionUpdatePeriod":86400,"preventSleepEnabled":false,"separateFolderCreationEnabled":true,"numerationEnabled":false,"skipDuplicates":false,"m3uEnabled":false,"embedSubtitles":false,"tagsEnabled":true,"removeCompletedDownloads":false,"recommendationServiceEnabled":true,"aiProcessingAllowed":true,"displayAllCodecs":false,"speedLimit":0,"proxyEnabled":false,"proxyType":"SOCKS5","proxyHost":"","proxyPort":1080,"proxyLogin":"","proxyPasswordSet":false,"notificationEnabled":true,"processingNotificationsEnabled":true,"remindNotificationEnabled":true,"similarVideosNotificationEnabled":true,"askQuit":true,"askDownloadChannel":true,"systemNotificationsEnabled":true,"notificationSound":false})
+    json!({"language":"ru","theme":"dark","windowWidth":1150,"windowHeight":618,"smartMode":true,"mediaType":"video","quality":1080,"container":"mp4","videoContainer":"mp4","audioContainer":"mp3","containerOSAlias":"","videoCodec":"any","audioCodec":"any","audioBitrate":192,"frameRate":0,"videoVR":"Any","subtitles":[],"audioTracks":[],"paths":[],"path":home.join(if cfg!(target_os="macos"){"Movies"}else{"Videos"}).join("VideoDock"),"systemTrayIconVisible":false,"autoStart":false,"autoUpdate":false,"betaAccessEnabled":false,"simultaneousDownloads":4,"subscriptionUpdatePeriod":86400,"preventSleepEnabled":false,"separateFolderCreationEnabled":true,"numerationEnabled":false,"skipDuplicates":false,"m3uEnabled":false,"embedSubtitles":false,"tagsEnabled":true,"removeCompletedDownloads":false,"recommendationServiceEnabled":true,"aiProcessingAllowed":true,"displayAllCodecs":false,"speedLimit":0,"proxyEnabled":false,"proxyType":"SOCKS5","proxyHost":"","proxyPort":1080,"proxyLogin":"","proxyPasswordSet":false,"notificationEnabled":true,"processingNotificationsEnabled":true,"remindNotificationEnabled":true,"similarVideosNotificationEnabled":true,"askQuit":true,"askDownloadChannel":true,"systemNotificationsEnabled":true,"notificationSound":false})
 }
 pub(super) fn text(value: &Value) -> Result<&str> {
     value.as_str().context("Ожидается строка")
@@ -45,6 +45,13 @@ pub(super) fn quality(value: &Value) -> Result<u32> {
     Ok(n)
 }
 fn interval(value: &Value) -> Result<u64> {
+    if value == 0
+        || value
+            .as_str()
+            .is_some_and(|value| value.eq_ignore_ascii_case("never"))
+    {
+        return Ok(0);
+    }
     if value.is_number() {
         let seconds = integer(value)?;
         ensure!(
@@ -116,6 +123,12 @@ pub(super) fn normalize(key: &str, value: &Value) -> Result<Value> {
             );
             json!(n)
         }
+        "windowWidth" | "windowHeight" => {
+            let n = integer(value)?;
+            let minimum = if key == "windowWidth" { 950 } else { 568 };
+            ensure!((minimum..=16384).contains(&n), "Недопустимый размер окна");
+            json!(n)
+        }
         "audioBitrate" => {
             let n = if value.as_str().is_some_and(|value| {
                 ["original", "maximum", "any", "best"]
@@ -156,6 +169,14 @@ pub(super) fn normalize(key: &str, value: &Value) -> Result<Value> {
             ensure!((1..=65535).contains(&n), "Порт должен быть от 1 до 65535");
             json!(n)
         }
+        "theme" => {
+            let value = text(value)?;
+            ensure!(
+                ["dark", "light", "system"].contains(&value),
+                "Неизвестная тема"
+            );
+            json!(value)
+        }
         "language" => {
             let value = text(value)?;
             ensure!(
@@ -168,6 +189,27 @@ pub(super) fn normalize(key: &str, value: &Value) -> Result<Value> {
             let value = text(value)?;
             ensure!(["video", "audio"].contains(&value), "Неизвестный тип медиа");
             json!(value)
+        }
+        "containerOSAlias" => {
+            let value = text(value)?;
+            ensure!(
+                ["", "Windows", "Mac OS", "Linux", "iOS", "Android"].contains(&value),
+                "Неизвестная операционная система"
+            );
+            json!(value)
+        }
+        "videoContainer" | "audioContainer" => {
+            let value = normalize("container", value)?;
+            let allowed = if key == "videoContainer" {
+                &["mp4", "mkv", "webm"][..]
+            } else {
+                &["mp3", "m4a", "ogg", "flac", "wav"][..]
+            };
+            ensure!(
+                allowed.contains(&value.as_str().unwrap()),
+                "Контейнер не подходит для этого типа медиа"
+            );
+            value
         }
         "container" => {
             let value = text(value)?.to_ascii_lowercase();
@@ -186,6 +228,8 @@ pub(super) fn normalize(key: &str, value: &Value) -> Result<Value> {
                 "h265"
             } else if value.starts_with("vp09") {
                 "vp9"
+            } else if value.starts_with("vp08") {
+                "vp8"
             } else if value.starts_with("av01") {
                 "av1"
             } else if value.starts_with("mp4a") {
@@ -201,6 +245,7 @@ pub(super) fn normalize(key: &str, value: &Value) -> Result<Value> {
                     "h264",
                     "h265",
                     "hevc",
+                    "vp8",
                     "vp9",
                     "av1",
                     "aac",
@@ -215,24 +260,38 @@ pub(super) fn normalize(key: &str, value: &Value) -> Result<Value> {
             );
             json!(value)
         }
-        "videoVR" => {
-            let enabled = match value {
-                Value::Bool(v) => *v,
-                Value::String(v) if ["Any", "2D", "false"].contains(&v.as_str()) => false,
-                Value::String(v) if ["3D", "360", "true", "VR"].contains(&v.as_str()) => true,
-                _ => bail!("Некорректный режим VR"),
-            };
-            json!(enabled)
-        }
+        "videoVR" => match value {
+            Value::Bool(value) => json!(value),
+            Value::String(value) if ["2D", "false"].contains(&value.as_str()) => json!(false),
+            Value::String(value) if ["3D", "360", "true", "VR"].contains(&value.as_str()) => {
+                json!(true)
+            }
+            _ => json!(
+                serde_json::from_value::<videodock_media::VideoVrMode>(value.clone())
+                    .context("Некорректный режим VR")?
+            ),
+        },
         "subtitles" | "audioTracks" => {
             let values = value.as_array().context("Ожидается список языков")?;
-            ensure!(values.len() <= 64, "Слишком много языков");
+            ensure!(values.len() <= 256, "Слишком много языков");
             json!(
                 values
                     .iter()
                     .map(|v| bounded(v, 128))
                     .collect::<Result<Vec<_>>>()?
             )
+        }
+        "paths" => {
+            let paths = value.as_array().context("Ожидается история папок")?;
+            ensure!(paths.len() <= 64, "История папок превышает 64 элемента");
+            let mut unique = Vec::new();
+            for path in paths {
+                let path = normalize("path", path)?;
+                if !unique.contains(&path) {
+                    unique.push(path);
+                }
+            }
+            json!(unique)
         }
         "proxyType" => {
             let value = text(value)?.to_ascii_uppercase();
@@ -277,6 +336,8 @@ pub(super) fn update(inner: &Inner, values: &Value) -> Result<()> {
         .context("Настройки должны быть объектом")?;
     ensure!(values.len() <= 64, "Слишком много настроек");
     let mut settings = lock(&inner.state)["settings"].clone();
+    let previous_audio = settings["mediaType"] == "audio";
+    let previous_container = settings["container"].clone();
     let previous_password = lock(&inner.secrets).proxy_password.clone();
     let mut password = previous_password.clone();
     for (key, value) in values {
@@ -285,6 +346,65 @@ pub(super) fn update(inner: &Inner, values: &Value) -> Result<()> {
         } else {
             settings[key] = normalize(key, value)?;
         }
+    }
+    let audio = settings["mediaType"] == "audio";
+    let codec_key = if audio { "audioCodec" } else { "videoCodec" };
+    let container_key = if audio {
+        "audioContainer"
+    } else {
+        "videoContainer"
+    };
+    let mode_changed = audio != previous_audio;
+    if mode_changed {
+        let previous_key = if previous_audio {
+            "audioContainer"
+        } else {
+            "videoContainer"
+        };
+        settings[previous_key] = previous_container;
+        if !values.contains_key("container") {
+            settings["container"] = settings[container_key].clone();
+        }
+    }
+    if values.contains_key("container") {
+        ensure!(
+            !values
+                .get("containerOSAlias")
+                .is_some_and(|value| value != ""),
+            "Выберите контейнер или операционную систему, не оба варианта одновременно"
+        );
+        settings["containerOSAlias"] = json!("");
+        if !values.contains_key(codec_key) {
+            settings[codec_key] = json!("any");
+        }
+    }
+    if (mode_changed || values.contains_key("containerOSAlias"))
+        && settings["containerOSAlias"] != ""
+    {
+        let alias = settings["containerOSAlias"].as_str().unwrap_or("");
+        // Observed in the isolated original: all ten video/audio OS aliases.
+        let container = match (audio, alias) {
+            (false, "Linux") => "mkv",
+            (false, _) => "mp4",
+            (true, "Linux") => "ogg",
+            (true, "Mac OS" | "iOS") => "m4a",
+            (true, _) => "mp3",
+        };
+        settings["container"] = json!(container);
+        if values.contains_key("containerOSAlias") {
+            settings[codec_key] = json!("any");
+        }
+    }
+    if mode_changed || values.contains_key("container") || values.contains_key("containerOSAlias") {
+        settings[container_key] = normalize(container_key, &settings["container"])?;
+    }
+    if values.contains_key("path") {
+        let path = settings["path"].clone();
+        let mut paths = settings["paths"].as_array().cloned().unwrap_or_default();
+        paths.retain(|previous| previous != &path);
+        paths.insert(0, path);
+        paths.truncate(64);
+        settings["paths"] = json!(paths);
     }
     if settings["proxyEnabled"] == true {
         ensure!(
@@ -323,6 +443,12 @@ pub(super) fn update(inner: &Inner, values: &Value) -> Result<()> {
         })?;
     }
     if let Err(error) = change(inner, |state| {
+        if state["settings"]["path"] != settings["path"] {
+            state["jobs"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|item| item["_library"] != true);
+        }
         state["settings"] = settings.clone();
         Ok(())
     }) {
@@ -389,6 +515,11 @@ pub(super) fn selection(settings: &Value, action: &Value) -> Result<Selection> {
             values[target] = normalize(target, value)?;
         }
     }
+    if let Some(mode) = format.get("vr_mode")
+        && (mode != "Any" || format.get("vr") != Some(&json!(true)))
+    {
+        values["videoVR"] = normalize("videoVR", mode)?;
+    }
     for (source, target) in [("subtitles", "subtitles"), ("audio_tracks", "audioTracks")] {
         if let Some(value) = action.get(source).or_else(|| format.get(source)) {
             values[target] = normalize(target, value)?;
@@ -403,6 +534,11 @@ pub(super) fn selection(settings: &Value, action: &Value) -> Result<Selection> {
         audio_bitrate: values["audioBitrate"].as_u64().unwrap_or(192) as u32,
         fps: values["frameRate"].as_u64().unwrap_or(0) as u32,
         vr: values["videoVR"] == true,
+        vr_mode: if values["videoVR"].is_boolean() {
+            videodock_media::VideoVrMode::Any
+        } else {
+            serde_json::from_value(values["videoVR"].clone())?
+        },
         subtitles: serde_json::from_value(values["subtitles"].clone())?,
         audio_tracks: serde_json::from_value(values["audioTracks"].clone())?,
         format_id: action["format_id"]
@@ -410,4 +546,36 @@ pub(super) fn selection(settings: &Value, action: &Value) -> Result<Selection> {
             .filter(|v| !v.is_empty())
             .map(str::to_owned),
     })
+}
+
+#[cfg(test)]
+mod vr_contract_tests {
+    use super::*;
+    use videodock_media::VideoVrMode;
+
+    #[test]
+    fn serialized_selection_keeps_exact_modes_and_legacy_any_vr_when_requeued() {
+        for mode in [
+            VideoVrMode::Any,
+            VideoVrMode::Mono360,
+            VideoVrMode::Stereo180,
+            VideoVrMode::Stereo360,
+            VideoVrMode::Flat,
+        ] {
+            let original = Selection {
+                vr_mode: mode,
+                ..Default::default()
+            };
+            let recovered = selection(&defaults(), &json!({"format":original})).unwrap();
+            assert_eq!(recovered.vr_mode, mode);
+            assert!(!recovered.vr);
+        }
+        let legacy = Selection {
+            vr: true,
+            ..Default::default()
+        };
+        let recovered = selection(&defaults(), &json!({"format":legacy})).unwrap();
+        assert!(recovered.vr);
+        assert_eq!(recovered.vr_mode, VideoVrMode::Any);
+    }
 }

@@ -11,6 +11,7 @@ case "$(uname -s)" in
   *) echo 'Use build-windows.ps1 on Windows' >&2; exit 1 ;;
 esac
 command -v cargo >/dev/null
+command -v git >/dev/null
 command -v ffmpeg >/dev/null
 command -v ffprobe >/dev/null
 cd "$project"

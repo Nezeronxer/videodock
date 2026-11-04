@@ -6,6 +6,35 @@ use std::{
 use videodock_media::{Auth, catalog::Catalog};
 
 #[tokio::test]
+async fn direct_media_uses_its_application_identity_for_metadata_and_transfer() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}/video.mp4", listener.local_addr().unwrap());
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut buffer = [0; 8192];
+        let count = stream.read(&mut buffer).unwrap();
+        let headers = String::from_utf8_lossy(&buffer[..count]).to_lowercase();
+        if headers.contains("user-agent: videodock/0.2\r\n") {
+            stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\nContent-Length: 16\r\nConnection: close\r\n\r\n\0\0\0\x18ftypisom\0\0\0\0").unwrap();
+        } else {
+            stream
+                .write_all(
+                    b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .unwrap();
+        }
+    });
+    let media = Catalog::new(None)
+        .unwrap()
+        .inspect(&address, &Auth::default())
+        .await
+        .unwrap();
+    assert_eq!(media.formats[0].headers["User-Agent"], "VideoDock/0.2");
+    assert_eq!(media.formats[0].size, Some(16));
+    server.join().unwrap();
+}
+
+#[tokio::test]
 async fn redirect_does_not_forward_source_credentials_or_export_them() {
     let source = TcpListener::bind("127.0.0.1:0").unwrap();
     let target = TcpListener::bind("127.0.0.1:0").unwrap();

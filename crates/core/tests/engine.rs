@@ -3,6 +3,63 @@ use tempfile::TempDir;
 use videodock_core::Engine;
 
 #[test]
+fn changing_library_folder_removes_old_scan_rows_but_keeps_download_history() {
+    let data = TempDir::new().unwrap();
+    let old = data.path().join("old");
+    let saved = json!({"settings":{"path":old},"jobs":[
+        {"id":"library-synthetic","title":"Old library file","state":"complete","_library":true,"path":old.join("file.mp4")},
+        {"id":"download-synthetic","title":"Download history","state":"complete","path":old.join("download.mp4")}
+    ],"subscriptions":[],"processing":[]});
+    let store = rusqlite::Connection::open(data.path().join("state.sqlite")).unwrap();
+    store
+        .execute_batch("CREATE TABLE state (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+        .unwrap();
+    store
+        .execute("INSERT INTO state VALUES(1, ?1)", [saved.to_string()])
+        .unwrap();
+    drop(store);
+    let engine = Engine::new(data.path().to_owned()).unwrap();
+    assert_eq!(engine.snapshot()["jobs"].as_array().unwrap().len(), 2);
+    engine
+        .dispatch(
+            json!({"action":"settings","values":{"path":data.path().join("new-empty-folder")}}),
+        )
+        .unwrap();
+    let snapshot = engine.snapshot();
+    let jobs = snapshot["jobs"].as_array().unwrap();
+    assert_eq!(jobs.len(), 1, "old folder scan is still visible");
+    assert_eq!(jobs[0]["id"], "download-synthetic");
+}
+
+#[test]
+fn theme_is_validated_and_survives_restart() {
+    let data = TempDir::new().unwrap();
+    let engine = Engine::new(data.path().to_owned()).unwrap();
+    assert_eq!(engine.snapshot()["settings"]["theme"], "dark");
+    for theme in ["light", "system", "dark"] {
+        engine
+            .dispatch(json!({"action":"settings","values":{"theme":theme}}))
+            .unwrap();
+        assert_eq!(engine.snapshot()["settings"]["theme"], theme);
+    }
+    for invalid in [json!("sepia"), json!(true), json!(null), json!(3)] {
+        assert!(
+            engine
+                .dispatch(json!({"action":"settings","values":{"theme":invalid,"quality":720}}))
+                .is_err()
+        );
+        assert_eq!(engine.snapshot()["settings"]["theme"], "dark");
+        assert_eq!(engine.snapshot()["settings"]["quality"], 1080);
+    }
+    engine
+        .dispatch(json!({"action":"settings","values":{"theme":"light"}}))
+        .unwrap();
+    drop(engine);
+    let recovered = Engine::new(data.path().to_owned()).unwrap();
+    assert_eq!(recovered.snapshot()["settings"]["theme"], "light");
+}
+
+#[test]
 fn settings_are_normalized_persisted_and_rejected_atomically() {
     let data = TempDir::new().unwrap();
     let engine = Engine::new(data.path().to_owned()).unwrap();

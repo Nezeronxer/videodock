@@ -12,9 +12,11 @@ mod ffi {
         fn create_application() -> UniquePtr<QGuiApplication>;
         fn application_data_directory() -> QString;
         fn prepare_profile(directory: &QString);
+        fn configure_browser_proxy(address: &QString) -> bool;
         fn watch_cookies(backend: Pin<&mut QObject>);
         fn clear_browser_cookies();
         fn install_translation(language: &QString);
+        fn reference_asset(name: &QString) -> QString;
     }
     extern "RustQt" {
         #[qobject]
@@ -29,6 +31,9 @@ mod ffi {
         #[cxx_name = "initializeProfile"]
         fn initialize_profile(self: Pin<&mut Self>);
         #[qinvokable]
+        #[cxx_name = "referenceAsset"]
+        fn reference_asset(self: &Self, name: &QString) -> QString;
+        #[qinvokable]
         #[cxx_name = "cookieEvent"]
         fn cookie_event(
             self: Pin<&mut Self>,
@@ -42,10 +47,10 @@ mod ffi {
         );
     }
 }
-use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
+use cxx_qt::casting::Upcast;
 use cxx_qt_lib::QString;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::{
     path::PathBuf,
     pin::Pin,
@@ -58,8 +63,11 @@ pub struct BackendRust {
     engine: Option<Arc<Engine>>,
     error: Option<String>,
     profile_connected: bool,
+    browser_proxy_supported: bool,
+    browser_proxy_restart_required: bool,
 }
 static ENGINE: OnceLock<Arc<Engine>> = OnceLock::new();
+static BROWSER_PROXY: OnceLock<(Option<String>, bool)> = OnceLock::new();
 fn data_directory() -> PathBuf {
     std::env::var_os("VIDEODOCK_DATA_DIR")
         .map(PathBuf::from)
@@ -85,6 +93,9 @@ pub fn prepare_profile() -> anyhow::Result<()> {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
     }
+    let proxy = engine.network_proxy()?;
+    let supported = ffi::configure_browser_proxy(&QString::from(proxy.clone().unwrap_or_default()));
+    let _ = BROWSER_PROXY.set((proxy, supported));
     ffi::prepare_profile(&QString::from(directory.to_string_lossy().as_ref()));
     let state = engine.snapshot();
     ffi::install_translation(&QString::from(
@@ -96,6 +107,7 @@ pub fn prepare_profile() -> anyhow::Result<()> {
 impl Default for BackendRust {
     fn default() -> Self {
         let engine = ENGINE.get().cloned();
+        let browser_proxy_supported = BROWSER_PROXY.get().is_some_and(|(_, supported)| *supported);
         let error = if engine.is_none() {
             Some("Движок не инициализирован".to_owned())
         } else {
@@ -106,10 +118,15 @@ impl Default for BackendRust {
             engine,
             error,
             profile_connected: false,
+            browser_proxy_supported,
+            browser_proxy_restart_required: false,
         }
     }
 }
 impl ffi::Backend {
+    pub fn reference_asset(&self, name: &QString) -> QString {
+        ffi::reference_asset(name)
+    }
     pub fn initialize_profile(mut self: Pin<&mut Self>) {
         if self.rust().profile_connected {
             return;
@@ -142,6 +159,8 @@ impl ffi::Backend {
         if let Some(error) = &self.rust().error {
             state["notice"] = Value::String(error.clone());
         }
+        state["browserProxySupported"] = json!(self.rust().browser_proxy_supported);
+        state["browserProxyRestartRequired"] = json!(self.rust().browser_proxy_restart_required);
         let next = QString::from(state.to_string());
         if self.snapshot() != &next {
             self.as_mut().set_snapshot(next);
@@ -152,12 +171,21 @@ impl ffi::Backend {
             .map_err(anyhow::Error::from)
             .and_then(|action| {
                 let logout = action["action"] == "account" && action["command"] == "logout";
+                let settings = action["action"] == "settings";
                 let response = self
                     .rust()
                     .engine
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Движок недоступен"))?
                     .dispatch(action)?;
+                if settings {
+                    let proxy = self.rust().engine.as_ref().unwrap().network_proxy()?;
+                    let original = BROWSER_PROXY.get();
+                    let changed = original.is_none_or(|(initial, _)| initial != &proxy);
+                    self.as_mut().rust_mut().browser_proxy_restart_required = changed;
+                    self.as_mut().rust_mut().browser_proxy_supported =
+                        !changed && original.is_some_and(|(_, supported)| *supported);
+                }
                 if logout {
                     ffi::clear_browser_cookies();
                 }

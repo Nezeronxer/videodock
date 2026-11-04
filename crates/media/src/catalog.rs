@@ -12,10 +12,12 @@ use url::Url;
 
 const DOCUMENT_LIMIT: usize = 8 * 1024 * 1024;
 const ENTRY_LIMIT: usize = 10_000;
+const APP_UA: &str = "VideoDock/0.2";
 const UA: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36";
 
 pub struct Catalog {
     http: Client,
+    media_http: Client,
     proxy: Option<String>,
 }
 
@@ -24,29 +26,38 @@ impl Catalog {
         let proxy = proxy
             .filter(|value| !value.trim().is_empty())
             .map(str::to_owned);
-        let mut builder = Client::builder()
-            .default_headers(reqwest::header::HeaderMap::from_iter([(
-                reqwest::header::ACCEPT,
-                reqwest::header::HeaderValue::from_static("*/*"),
-            )]))
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent(UA)
-            .timeout(Duration::from_secs(30));
-        if let Some(value) = &proxy {
-            builder = builder.proxy(
-                reqwest::Proxy::all(value).map_err(|_| anyhow!("Некорректный адрес прокси"))?,
-            );
-        }
+        let builder = || -> Result<reqwest::ClientBuilder> {
+            let mut builder = Client::builder()
+                .default_headers(reqwest::header::HeaderMap::from_iter([(
+                    reqwest::header::ACCEPT,
+                    reqwest::header::HeaderValue::from_static("*/*"),
+                )]))
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+                .user_agent(UA)
+                .connect_timeout(Duration::from_secs(30));
+            if let Some(value) = &proxy {
+                builder = builder.proxy(
+                    reqwest::Proxy::all(value).map_err(|_| anyhow!("Некорректный адрес прокси"))?,
+                );
+            }
+            Ok(builder)
+        };
         Ok(Self {
-            http: builder
+            http: builder()?
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|_| anyhow!("Не удалось создать HTTP клиент"))?,
+            // Long media responses need an idle timeout, not a total download deadline.
+            media_http: builder()?
+                .read_timeout(Duration::from_secs(30))
                 .build()
                 .map_err(|_| anyhow!("Не удалось создать HTTP клиент"))?,
             proxy,
         })
     }
     pub fn client(&self) -> Client {
-        self.http.clone()
+        self.media_http.clone()
     }
     pub async fn search(&self, value: &str, auth: &Auth) -> Result<Media> {
         crate::youtube::YouTube::new(self.proxy.as_deref())
@@ -196,6 +207,9 @@ impl Catalog {
         let mut current = url.clone();
         for _ in 0..6 {
             let mut request = self.http.get(current.clone());
+            if direct_extension(&current) {
+                request = request.header(reqwest::header::USER_AGENT, APP_UA);
+            }
             if same_origin(&current, origin) && !auth.cookie_header.is_empty() {
                 request = request.header(reqwest::header::COOKIE, &auth.cookie_header);
             }
@@ -541,6 +555,7 @@ fn direct_media(url: &Url, mime: &str, size: Option<u64>) -> Media {
     };
     let mut stream =
         format(url, "source", url.as_str(), mime, audio).expect("already validated HTTP URL");
+    stream.headers.insert("User-Agent".into(), APP_UA.into());
     stream.size = size;
     media.formats.push(stream);
     media
@@ -1170,6 +1185,8 @@ fn parse_bilibili(origin: &Url, metadata: &Value, response: &Value) -> Result<Me
         stream
             .headers
             .insert("User-Agent".into(), "VideoDock/0.2".into());
+        // The CDN rejects full GETs without Range even when its byte probes succeed.
+        stream.headers.insert("Range".into(), "bytes=0-".into());
     }
     finish(media)
 }
@@ -1396,7 +1413,7 @@ impl Catalog {
             .collect();
         if url.host_str() == Some("clips.twitch.tv") || parts.contains(&"clip") {
             let slug = id_from_path(url);
-            let data=self.twitch_gql(&client_id,"query($slug:ID!){clip(slug:$slug){slug title durationSeconds thumbnailURL broadcaster{id displayName} videoQualities{frameRate quality sourceURL} playbackAccessToken{signature value}}}",json!({"slug":slug})).await?;
+            let data=self.twitch_gql(&client_id,"query($slug:ID!){clip(slug:$slug){slug title durationSeconds thumbnailURL broadcaster{id displayName} videoQualities{frameRate quality sourceURL} playbackAccessToken(params:{platform:\"web\",playerBackend:\"mediaplayer\",playerType:\"site\"}){signature value}}}",json!({"slug":slug})).await?;
             return parse_twitch_clip(url, &data["clip"]);
         }
         if parts.first().copied() == Some("videos") {
@@ -2374,23 +2391,23 @@ fn parse_html(origin: &Url, html: &str) -> Result<Media> {
     let selector=Selector::parse("script[type='application/json'],script[id='___INITIAL_STATE___'],script[id='__NEXT_DATA__']").unwrap();
     for script in document.select(&selector) {
         if let Ok(data) = serde_json::from_str::<Value>(&script.text().collect::<String>()) {
-            objects(&data, 0, &mut |object| {
-                if object.get("type").and_then(Value::as_str) == Some("video")
-                    && let Some(value) = object
-                        .get("media")
-                        .and_then(|media| media.get("url"))
-                        .and_then(Value::as_str)
-                    && let Ok(stream) = format(
-                        origin,
-                        &format!("npf-{}", media.formats.len()),
-                        value,
-                        "video/mp4",
-                        false,
-                    )
-                {
-                    media.formats.push(stream);
-                }
-            });
+            if let Some(post_id) = tumblr_post_id(origin) {
+                objects(&data, 0, &mut |object| {
+                    if object
+                        .get("idString")
+                        .or_else(|| object.get("id"))
+                        .is_some_and(|id| {
+                            id.as_str() == Some(post_id)
+                                || id.as_u64().is_some_and(|id| id.to_string() == post_id)
+                        })
+                        && let Some(content) = object.get("content")
+                    {
+                        parse_npf(origin, content, &mut media);
+                    }
+                });
+            } else {
+                parse_npf(origin, &data, &mut media);
+            }
         }
     }
     let mut seen = HashSet::new();
@@ -2398,6 +2415,39 @@ fn parse_html(origin: &Url, html: &str) -> Result<Media> {
         .formats
         .retain(|stream| seen.insert(stream.url.clone()));
     Ok(media)
+}
+fn tumblr_post_id(url: &Url) -> Option<&str> {
+    let host = url.host_str()?;
+    if !domain(host, "tumblr.com") {
+        return None;
+    }
+    let mut parts = url.path_segments()?.filter(|part| !part.is_empty());
+    let id = if matches!(host, "www.tumblr.com" | "tumblr.com") {
+        parts.nth(1)?
+    } else {
+        parts.find(|part| *part == "post")?;
+        parts.next()?
+    };
+    (!id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit())).then_some(id)
+}
+fn parse_npf(origin: &Url, data: &Value, media: &mut Media) {
+    objects(data, 0, &mut |object| {
+        if object.get("type").and_then(Value::as_str) == Some("video")
+            && let Some(value) = object
+                .get("media")
+                .and_then(|media| media.get("url"))
+                .and_then(Value::as_str)
+            && let Ok(stream) = format(
+                origin,
+                &format!("npf-{}", media.formats.len()),
+                value,
+                "video/mp4",
+                false,
+            )
+        {
+            media.formats.push(stream);
+        }
+    });
 }
 fn parse_jsonld(origin: &Url, data: &Value, media: &mut Media) {
     objects(data, 0, &mut |object| {
@@ -2410,6 +2460,19 @@ fn parse_jsonld(origin: &Url, data: &Value, media: &mut Media) {
                         .is_some_and(|list| list.iter().any(|value| value.as_str() == Some(name)))
             })
         };
+        if (is_type("VideoObject") || is_type("AudioObject"))
+            && let Some(post_id) = tumblr_post_id(origin)
+            && !object
+                .get("mainEntityOfPage")
+                .and_then(|page| {
+                    page.as_str()
+                        .or_else(|| page.get("@id").and_then(Value::as_str))
+                })
+                .and_then(|page| origin.join(page).ok())
+                .is_some_and(|page| tumblr_post_id(&page) == Some(post_id))
+        {
+            return;
+        }
         if (is_type("VideoObject") || is_type("AudioObject"))
             && let Some(value) = object.get("contentUrl").and_then(Value::as_str)
         {
@@ -2717,15 +2780,7 @@ impl Catalog {
                     .all(|ch| ch.is_ascii_alphanumeric() || ch == '-'),
             "Tumblr: неверный blog id"
         );
-        let id = if host == "www.tumblr.com" {
-            parts.get(1).copied()
-        } else {
-            parts
-                .iter()
-                .position(|part| *part == "post")
-                .and_then(|index| parts.get(index + 1).copied())
-        }
-        .filter(|value| value.chars().all(|ch| ch.is_ascii_digit()));
+        let id = tumblr_post_id(url);
         let endpoint = api_url(
             &format!("https://{blog}.tumblr.com/api/read/json"),
             &[("type", "video"), ("num", "50")],
@@ -2906,6 +2961,12 @@ mod tests {
         assert!(media.formats[0].has_video() && !media.formats[0].has_audio());
         assert!(media.formats[1].has_audio() && !media.formats[1].has_video());
         assert!((media.formats[0].fps.unwrap() - 59.940).abs() < 0.01);
+        assert!(
+            media
+                .formats
+                .iter()
+                .all(|format| format.headers["Range"] == "bytes=0-")
+        );
     }
     #[test]
     fn rumble_quality_metadata_and_captions() {
@@ -3019,6 +3080,47 @@ mod tests {
                 .is_empty()
         );
         assert!(parse_facebook(&origin("www.facebook.com"), image_only).is_err());
+    }
+    #[test]
+    fn tumblr_post_excludes_other_posts_from_jsonld_and_npf() {
+        let page = r#"<script type="application/ld+json">[{"@type":"VideoObject","mainEntityOfPage":{"@id":"https://www.tumblr.com/staff/123/wanted"},"name":"Wanted","duration":"PT10S","contentUrl":"https://media.example/wanted.mp4"},{"@type":"VideoObject","mainEntityOfPage":{"@id":"https://www.tumblr.com/staff/456/recommended"},"name":"Recommendation","duration":"PT90S","contentUrl":"https://media.example/unrelated.mp4"}]</script><script id="___INITIAL_STATE___" type="application/json">{"posts":[{"idString":"123","content":[{"type":"video","media":{"url":"https://media.example/wanted.mp4"}}]},{"idString":"456","content":[{"type":"video","media":{"url":"https://media.example/unrelated.mp4"}}]}]}</script>"#;
+        for address in [
+            "https://www.tumblr.com/staff/123/wanted",
+            "https://tumblr.com/staff/123/wanted",
+            "https://staff.tumblr.com/post/123/wanted",
+        ] {
+            let media = parse_html(&Url::parse(address).unwrap(), page).unwrap();
+            assert_eq!(media.formats.len(), 1);
+            assert_eq!(media.formats[0].url, "https://media.example/wanted.mp4");
+            assert_eq!(media.title, "Wanted");
+            assert_eq!(media.duration, Some(10.0));
+        }
+        let missing = parse_html(
+            &Url::parse("https://www.tumblr.com/staff/789").unwrap(),
+            page,
+        )
+        .unwrap();
+        assert!(missing.formats.is_empty());
+    }
+    #[test]
+    fn tumblr_numeric_post_identity_scopes_npf_without_jsonld() {
+        let page = r#"<script type="application/json">{"posts":[{"id":123,"content":[{"type":"video","media":{"url":"https://media.example/wanted.mp4"}}]},{"id":456,"content":[{"type":"video","media":{"url":"https://media.example/unrelated.mp4"}}]}]}</script>"#;
+        let media = parse_html(
+            &Url::parse("https://www.tumblr.com/staff/123").unwrap(),
+            page,
+        )
+        .unwrap();
+        assert_eq!(media.formats.len(), 1);
+        assert_eq!(media.formats[0].url, "https://media.example/wanted.mp4");
+        assert!(tumblr_post_id(&origin("www.tumblr.com")).is_none());
+        assert!(
+            tumblr_post_id(&Url::parse("https://www.tumblr.com/staff/not-a-post").unwrap())
+                .is_none()
+        );
+        assert!(
+            tumblr_post_id(&Url::parse("https://tumblr.com.attacker.example/staff/123").unwrap())
+                .is_none()
+        );
     }
     #[test]
     fn jsonld_playlist_and_durations() {

@@ -6,19 +6,22 @@
 
 | Область оригинала | Реализация | Проверено | Остаток |
 |---|---|---|---|
-| Главный список, семь вкладок, поиск, сортировка, выбор и контекстные действия | Qt/QML + Rust snapshot/action bridge | Qt bootstrap, offline core tests | Живой проход по рабочему столу |
-| Smart Mode и ручной выбор форматов | Rust selection/planner, фильтры Qt | HTTP fixture, ограничения качества/кодеков/языков/VR | Полный набор источников и настоящий 4K/360 sample |
+| Главный список, семь вкладок, поиск, сортировка, выбор и контекстные действия | Qt/QML + Rust snapshot/action bridge | Qt bootstrap, offline core tests; живые File export/import, список и сведения | Прочие пользовательские состояния и три ОС |
+| Smart Mode и ручной выбор форматов | Rust selection/planner, фильтры Qt; раздельные 2D/360°, 3D/180°, 3D/360° и обычное видео | Точный каталог 71/72 языков из runtime оригинала; сохранение VR и запрет подмены проекции | Полный набор источников и настоящий 4K/360 sample |
 | Разбор списков и каналов | Rust catalog/YouTube adapter, выбор элементов, пауза разбора | Сохранение прогресса при паузе, локальный список; отдельные online samples | Полные коллекции каждого сервиса |
 | Загрузка и обработка дорожек | Rust HTTP/Range, HLS/AES, DASH; FFmpeg с локальными путями | Реальные localhost media -> FFmpeg -> ffprobe; compatible multi-period DASH | Прочие DASH/HLS layouts, DRM не поддерживается |
 | Очередь и история | SQLite, concurrency, pause/resume/retry/force/remove | Restart/resume и свежие signed URLs; неразрушающая публикация | Недетерминированные гонки и долгие стресс-прогоны |
-| Субтитры и аудиодорожки | Выбор языков/дорожек, VTT/SRT/JSON/TTML, embedding | Parser tests и локальные media fixtures | Все форматы и переводы каждого сервиса |
+| Субтитры и аудиодорожки | Выбор языков/дорожек, VTT/SRT/JSON/TTML, embedding; все выбранные аудиодорожки в совместимых контейнерах | 16 тестов выбора и 5 реальных localhost/FFmpeg/ffprobe сценариев нескольких дорожек, original/default/all и контейнеров | Все форматы и переводы каждого сервиса |
 | Подписки | Базовый список ID, периодический поиск нового, настройки | Synthetic channel: baseline/new IDs/restart без дублей | Живые каналы всех сервисов и длительный scheduler |
 | Встроенный браузер и аккаунт | Новый профиль Qt WebEngine, cookie scope/expiry, авторизация YouTube | Qt native cookie callback, localhost expiry/replay/legacy tests | Реальный вход, liked/watch-later и protected content |
-| Import/export | Проверка JSON, original-schema preferences/subscriptions | Атомарное отклонение опасных URL, round trip | Все варианты оригинальных экспортов |
+| Import/export | JSON original-schema; legacy Downloads Version 1 CSV через CSV/TXT/4KV; экспорт обычного видео как dimension=2D | 11 legacy-тестов, UTF-8/16/32 BOM, кавычки/разделители, атомарное отклонение; VR round trip | Динамический импорт оригинала закрыт его Pro gate; старые подписки и прочие форматы не подтверждены |
 | Медиаинструменты | Spleeter stems, DPDFNet speech, WPE dereverb | Реальные модели/demo, сохранение кадров и синхронизации, отмена | Другие CPU/OS, длинные и разнообразные пользовательские записи |
 | Настройки и системная интеграция | Пять разделов, tray, autostart, sleep guard, proxy | Нормализация, отклонение ошибок, native path/cookie tests | Tray/уведомления/автозапуск и GUI на трёх ОС |
+| Точность UI и тёмная тема | Общая палитра; Вид → Оформление; иконки; размеры toolbar/списка/настроек и режимы браузера | Живые парные dark-снимки Linux 1703×1336: пустой экран и General; Qt RU/EN и вариант без локального appearance pack; [подробности](ui-parity.md) | Полный парный проход всех состояний и пиксельное совпадение остаются открытыми |
 | Обновления | Проверка явно настроенного HTTPS источника | Ошибка без источника не скрывается | Собственный подписанный release/update channel |
-| Локализация | Английский и русский | 279 строк Qt | Остальные языки оригинала |
+| Локализация | Английский и русский | 319 завершённых переводов Qt; обновлённые браузер, импорт, языковые меню и оформление | Остальные языки оригинала |
 | Сборка и установка | Rust/CXX-Qt build/install scripts | Linux debug build | Проверенные пакеты Linux/macOS/Windows, лицензии поставки, живой QA |
 
-Поддержка отдельных сайтов и различие online/fixture-only описаны в [каталоге](../crates/media/tests/catalog/SUPPORT.md). Неподтверждённые Facebook/NaverTV/Likee/Tumblr, неполные коллекции Twitch/Rumble и отсутствующие dedicated handlers остаются работой по этой задаче. Закрытые код и ресурсы оригинала не включаются в продукт; собственное открытое приложение не использует его активацию.
+Поддержка отдельных сайтов и различие online/fixture-only описаны в [каталоге](../crates/media/tests/catalog/SUPPORT.md). Неподтверждённые Facebook/NaverTV/Likee, неполные коллекции Twitch/Rumble и отсутствующие dedicated handlers остаются работой по этой задаче. Закрытые код и ресурсы оригинала не включаются в продукт; собственное открытое приложение не использует его активацию.
+
+Свежая матрица полного скачивания и ограничений 04.11: [stability-2026-11-04.md](stability-2026-11-04.md). Успешный одиночный Tumblr sample не закрывает blog pagination; длинные YouTube samples пока HTTP403.

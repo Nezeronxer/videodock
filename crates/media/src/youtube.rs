@@ -1,11 +1,11 @@
-use crate::{Auth, Entry, Format, Media, MediaKind, Protocol, Subtitle};
+use crate::{Auth, Entry, Format, Media, MediaKind, Protocol, Subtitle, VideoProjection};
 use anyhow::{Result, anyhow, ensure};
 use rustypipe::{
     client::{ClientType, RustyPipe, RustyPipeQuery},
     error::{Error as PipeError, ExtractionError},
     model::{
-        Thumbnail, UrlTarget, VideoItem, VideoPlayer, paginator::Paginator, richtext::ToPlaintext,
-        traits::FileFormat,
+        AudioTrackType, Thumbnail, UrlTarget, VideoItem, VideoPlayer, paginator::Paginator,
+        richtext::ToPlaintext, traits::FileFormat,
     },
 };
 use std::{
@@ -245,11 +245,16 @@ fn map_player(player: VideoPlayer, query: &RustyPipeQuery) -> Result<Media> {
                     .projection_type
                     .as_deref()
                     .is_some_and(|value| matches!(value, "MESH" | "EQUIRECTANGULAR" | "360")),
+                // Mesh/stereo flags alone do not establish angular coverage or a precise VR mode.
+                projection: (stream.projection_type.as_deref() == Some("RECTANGULAR"))
+                    .then_some(VideoProjection::Flat),
+                projection_type: stream.projection_type.clone(),
+                stereo_layout: stream.stereo_layout.clone(),
                 video_codec,
                 audio_codec: if muxed { audio_codec } else { None },
                 bitrate: Some(stream.bitrate.into()),
                 size: stream.size,
-                headers: headers.clone(),
+                headers: stream_headers(&headers, stream.size),
                 ..Default::default()
             });
         }
@@ -267,9 +272,16 @@ fn map_player(player: VideoPlayer, query: &RustyPipeQuery) -> Result<Media> {
             audio_codec,
             audio_language: track.and_then(|track| track.lang.clone()),
             audio_title: track.map(|track| track.lang_name.clone()),
+            audio_track_id: track.map(|track| track.id.clone()),
+            audio_default: track.map(|track| track.is_default),
+            audio_original: track.and_then(|track| {
+                track
+                    .track_type
+                    .map(|kind| kind == AudioTrackType::Original)
+            }),
             bitrate: Some(stream.bitrate.into()),
             size: Some(stream.size),
-            headers: headers.clone(),
+            headers: stream_headers(&headers, Some(stream.size)),
             ..Default::default()
         });
     }
@@ -330,6 +342,18 @@ fn map_player(player: VideoPlayer, query: &RustyPipeQuery) -> Result<Media> {
         subtitles,
         ..Default::default()
     })
+}
+
+fn stream_headers(
+    headers: &BTreeMap<String, String>,
+    size: Option<u64>,
+) -> BTreeMap<String, String> {
+    let mut headers = headers.clone();
+    // YouTube throttles unbounded GETs; request the advertised file range without changing its URL.
+    if let Some(end) = size.and_then(|size| size.checked_sub(1)) {
+        headers.insert("Range".into(), format!("bytes=0-{end}"));
+    }
+    headers
 }
 
 fn map_entry(item: VideoItem) -> Entry {
@@ -494,6 +518,125 @@ fn parse_account_info(response: &str) -> Result<AccountInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bounded_ranges_handle_unknown_zero_and_max_size_without_changing_shared_headers() {
+        let base = BTreeMap::from([("User-Agent".into(), "Fixture public agent".into())]);
+        for size in [None, Some(0)] {
+            assert!(!stream_headers(&base, size).contains_key("Range"));
+        }
+        assert_eq!(stream_headers(&base, Some(1))["Range"], "bytes=0-0");
+        assert_eq!(stream_headers(&base, Some(1024))["Range"], "bytes=0-1023");
+        assert_eq!(
+            stream_headers(&base, Some(u64::MAX))["Range"],
+            "bytes=0-18446744073709551614"
+        );
+        assert!(!base.contains_key("Range"));
+        let headers = crate::request_headers(
+            &stream_headers(&base, Some(1024)),
+            "https://www.youtube.com/",
+            "https://cdn.example/fixture",
+            &[],
+        )
+        .unwrap();
+        assert_eq!(headers["Range"], "bytes=0-1023");
+        assert!(!headers.keys().any(|name| matches!(
+            name.to_ascii_lowercase().as_str(),
+            "cookie" | "authorization" | "proxy-authorization"
+        )));
+    }
+    #[tokio::test]
+    async fn offline_player_preserves_track_identity_default_and_original_metadata() {
+        let stream = |itag, track| {
+            serde_json::json!({
+                "url":"https://media.example/fixture-audio?token=synthetic-stream-token", "itag":itag,
+                "bitrate":128000, "average_bitrate":128000, "size":1024,
+                "mime":"audio/mp4; codecs=\"mp4a.40.2\"", "format":"m4a", "codec":"mp4a", "track":track,
+                "drm_systems":[]
+            })
+        };
+        let player: VideoPlayer = serde_json::from_value(serde_json::json!({
+            "details":{"id":"fixture0001","name":"Fixture video","duration":1,"thumbnail":[],"channel_id":"fixture-channel","view_count":1,"keywords":[],"is_live":false,"is_live_content":false},
+            "video_streams":[], "video_only_streams":[],
+            "audio_streams":[
+                stream(140,serde_json::json!({"id":"en.0","lang":"en-US","lang_name":"English","is_default":false,"track_type":"original"})),
+                stream(141,serde_json::json!({"id":"ru.1","lang":"ru","lang_name":"Russian","is_default":true,"track_type":"dubbed"})),
+                stream(142,serde_json::json!({"id":"unknown.0","lang":"en","lang_name":"Unknown type","is_default":false,"track_type":null})),
+                stream(143,serde_json::Value::Null)
+            ],
+            "subtitles":[],"preview_frames":[],"expires_in_seconds":3600,"valid_until":"2026-11-03T00:00:00Z","client_type":"desktop"
+        })).unwrap();
+        let pipe = RustyPipe::builder()
+            .no_storage()
+            .no_reporter()
+            .no_botguard()
+            .build()
+            .unwrap();
+        let media = map_player(player, &pipe.query()).unwrap();
+        let mapped = serde_json::to_value(&media.formats).unwrap();
+        assert!(
+            media
+                .formats
+                .iter()
+                .all(|format| format.headers["Range"] == "bytes=0-1023")
+        );
+        assert_eq!(mapped[0]["audio_track_id"], "en.0");
+        assert_eq!(mapped[0]["audio_default"], false);
+        assert_eq!(mapped[0]["audio_original"], true);
+        assert_eq!(mapped[1]["audio_default"], true);
+        assert_eq!(mapped[1]["audio_original"], false);
+        assert!(mapped[2]["audio_original"].is_null());
+        assert!(mapped[3]["audio_default"].is_null());
+        assert!(mapped[3]["audio_track_id"].is_null());
+        assert!(!format!("{:?}", media.formats).contains("synthetic-stream-token"));
+    }
+    #[tokio::test]
+    async fn offline_player_preserves_projection_and_stereo_without_inventing_exact_geometry() {
+        let stream = |itag, projection, stereo| {
+            serde_json::json!({
+                "url":"https://media.example/fixture-video?token=synthetic-stream-token","itag":itag,
+                "bitrate":128000,"average_bitrate":128000,"size":1024,"width":1920,"height":1080,"fps":30,"quality":"1080p","hdr":false,
+                "projection_type":projection,"stereo_layout":stereo,"mime":"video/mp4; codecs=\"avc1.4d401f, mp4a.40.2\"","format":"mp4","codec":"avc1","drm_systems":[]
+            })
+        };
+        let player: VideoPlayer = serde_json::from_value(serde_json::json!({
+            "details":{"id":"fixture0001","name":"Fixture video","duration":1,"thumbnail":[],"channel_id":"fixture-channel","view_count":1,"keywords":[],"is_live":false,"is_live_content":false},
+            "video_streams":[stream(18,Some("RECTANGULAR"),None),stream(19,Some("EQUIRECTANGULAR"),None),stream(20,Some("MESH"),Some("LEFT_RIGHT"))],
+            "video_only_streams":[],"audio_streams":[],"subtitles":[],"preview_frames":[],"expires_in_seconds":3600,"valid_until":"2026-11-03T00:00:00Z","client_type":"desktop"
+        })).unwrap();
+        let pipe = RustyPipe::builder()
+            .no_storage()
+            .no_reporter()
+            .no_botguard()
+            .build()
+            .unwrap();
+        let media = map_player(player, &pipe.query()).unwrap();
+        assert!(
+            media
+                .formats
+                .iter()
+                .all(|format| format.headers["Range"] == "bytes=0-1023")
+        );
+        assert_eq!(media.formats[0].projection, Some(VideoProjection::Flat));
+        assert!(!media.formats[0].is_vr());
+        assert!(media.formats[1].is_vr());
+        assert_eq!(
+            media.formats[1].projection_type.as_deref(),
+            Some("EQUIRECTANGULAR")
+        );
+        assert_eq!(media.formats[1].projection, None);
+        assert_eq!(media.formats[2].projection_type.as_deref(), Some("MESH"));
+        assert_eq!(
+            media.formats[2].stereo_layout.as_deref(),
+            Some("LEFT_RIGHT")
+        );
+        assert_eq!(media.formats[2].projection, None);
+        let selection = crate::Selection {
+            vr_mode: crate::VideoVrMode::Stereo180,
+            ..Default::default()
+        };
+        assert!(crate::choose_formats(&media.formats, &selection).is_err());
+        assert!(!format!("{:?}", media.formats).contains("synthetic-stream-token"));
+    }
     #[test]
     fn parses_muxed_and_audio_mime() {
         assert_eq!(

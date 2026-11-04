@@ -14,3 +14,4 @@ dist/
 /target/
 /vendor/**/*.original
 .qmlls.ini
+/.verification/

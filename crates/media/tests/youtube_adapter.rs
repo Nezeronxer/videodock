@@ -54,7 +54,9 @@ async fn live_youtube_video_media_captions_channel_and_search() {
         .unwrap();
     let mut request = http.get(&stream.url).header("Range", "bytes=0-65535");
     for (name, value) in &stream.headers {
-        request = request.header(name, value);
+        if !name.eq_ignore_ascii_case("range") {
+            request = request.header(name, value);
+        }
     }
     let mut response = request
         .send()

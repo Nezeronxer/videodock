@@ -9,6 +9,26 @@ Item {
     required property var app
     property var rows: []
 
+    function openCompleted(job) {
+        if (job.state === "complete" && job.path)
+            app.jobs("open", [job.id]);
+    }
+    function description(job, hovered) {
+        if (job.error)
+            return job.error;
+        var duration = typeof job.duration === "number" ? Math.floor(job.duration / 60) + ":" + String(Math.floor(job.duration % 60)).padStart(2, "0") : job.duration;
+        var metadata = [duration, job.size, job.format, job.quality, job.channel_title].filter(Boolean);
+        if (job.state === "complete")
+            return metadata.join(" · ");
+        if (job.state === "parsing")
+            return qsTr("retrieving information") + "…";
+        var progress = Number(job.progress || 0);
+        var status = job.state === "processing" ? qsTr("%1% converted").arg(progress) : qsTr("%1% downloaded").arg(progress);
+        if (["queued", "downloading", "processing", "paused"].indexOf(job.state) >= 0)
+            return [status, job.remaining ? qsTr("%1 left").arg(job.remaining) : "", job.state === "paused" ? "" : job.speed].concat(hovered ? metadata : []).filter(Boolean).join(" · ");
+        return app.statusTitle(job.state || "");
+    }
+
     ListView {
         id: list
 
@@ -16,7 +36,8 @@ Item {
         anchors.fill: parent
         clip: true
         model: root.rows
-        spacing: 1
+        spacing: 0
+        footer: Item { height: 34 }
 
         ScrollBar.vertical: ScrollBar {}
 
@@ -26,17 +47,36 @@ Item {
             required property var modelData
             required property int index
             property bool selected: root.app.selectedIds.indexOf(modelData.id) >= 0
+            readonly property bool current: root.app.focusedJob && root.app.focusedJob.id === modelData.id
+            readonly property bool previousSelected: index > 0 && root.app.selectedIds.indexOf(root.rows[index - 1].id) >= 0
+            readonly property bool nextSelected: index + 1 < root.rows.length && root.app.selectedIds.indexOf(root.rows[index + 1].id) >= 0
+            readonly property bool nextCurrent: index + 1 < root.rows.length && root.app.focusedJob && root.app.focusedJob.id === root.rows[index + 1].id
+            readonly property bool busy: ["queued", "downloading", "processing"].indexOf(modelData.state) >= 0
 
-            width: list.width
-            height: 106
-            color: selected ? "#edf6e8" : hover.hovered ? "#f4f4f4" : "white"
+            objectName: "downloadRow"
+            width: Math.min(list.width - 34, 1080)
+            x: (list.width - width) / 2
+            height: 64
+            radius: 2
+            topLeftRadius: selected && previousSelected ? 0 : 2
+            topRightRadius: topLeftRadius
+            bottomLeftRadius: selected && nextSelected ? 0 : 2
+            bottomRightRadius: bottomLeftRadius
+            color: selected ? root.app.theme.selected : root.app.theme.toolbar
 
+            Rectangle { anchors.left: parent.left; width: 1; height: parent.height; color: "#f8e6ab"; visible: row.selected || row.current }
+            Rectangle { anchors.right: parent.right; width: row.selected ? 3 : 1; height: parent.height; color: "#f8e6ab"; visible: row.selected || row.current }
+            Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: "#f8e6ab"; visible: row.current || (row.selected && !row.previousSelected) }
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: "#f8e6ab"; visible: row.current || (row.selected && !row.nextSelected) }
             Rectangle {
+                anchors.bottom: parent.bottom
                 anchors.left: parent.left
-                height: parent.height
-                width: 3
-                color: root.app.green
-                visible: row.selected
+                anchors.right: parent.right
+                anchors.leftMargin: 94
+                anchors.rightMargin: 12
+                height: 1
+                color: row.selected ? "#f8e6ab" : root.app.theme.border
+                visible: row.index + 1 < root.rows.length && row.selected === row.nextSelected && (row.selected || (!row.current && !row.nextCurrent))
             }
 
             HoverHandler {
@@ -50,110 +90,138 @@ Item {
                     if (button === Qt.RightButton)
                         contextMenu.popup();
                 }
-                onDoubleTapped: root.app.viewDetails(row.modelData)
+                onDoubleTapped: root.openCompleted(row.modelData)
             }
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 17
-                anchors.rightMargin: 18
-                spacing: 14
+                anchors.leftMargin: 12
+                anchors.rightMargin: 20
+                spacing: 12
 
-                CheckBox {
-                    checked: row.selected
-                    onClicked: root.app.chooseJob(row.modelData, true)
-                    Accessible.name: qsTr("Select %1").arg(row.modelData.title || "")
-                }
-
-                Rectangle {
-                    Layout.preferredWidth: 112
-                    Layout.preferredHeight: 70
-                    color: "#e4e7e1"
-                    radius: 3
-
-                    Label {
- textFormat: Text.PlainText;
+                Item {
+                    Layout.preferredWidth: 70
+                    Layout.preferredHeight: 40
+                    Rectangle {
+                        id: thumbnail
                         anchors.centerIn: parent
-                        text: row.modelData.kind === "audio" ? "♫" : row.modelData.kind === "channel" ? "▤" : "▶"
-                        font.pixelSize: 29
-                        color: "#9ba592"
-                    }
-
-                    Image {
-                        anchors.fill: parent
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        source: {
-                            var image = row.modelData.thumbnail || "";
-                            return image.indexOf("file:") === 0 || image.indexOf("data:") === 0 ? image : "";
+                        width: row.modelData.kind === "audio" ? 40 : 70
+                        height: 40
+                        color: root.app.theme.placeholderBase
+                        radius: 2
+                        Image {
+                            id: thumbnailImage
+                            objectName: "downloadThumbnail"
+                            anchors.fill: parent
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            source: {
+                                var image = row.modelData.thumbnail || "";
+                                return image.indexOf("file:") === 0 || image.indexOf("data:") === 0 ? image : "";
+                            }
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 2
+                            color: row.modelData.state === "error" ? root.app.theme.error : "black"
+                            opacity: row.modelData.state === "error" ? (thumbnailImage.status === Image.Ready ? 0.4 : 0) : row.busy || row.modelData.state === "paused" ? 0.6 : row.modelData.state === "complete" ? 0.2 : 0
+                        }
+                        Canvas {
+                            anchors.centerIn: parent
+                            width: 40
+                            height: 40
+                            visible: row.busy || (row.modelData.state === "paused" && completeness > 0)
+                            property real completeness: Math.max(0, Math.min(100, Number(row.modelData.progress || 0)))
+                            property bool paused: row.modelData.state === "paused"
+                            onCompletenessChanged: requestPaint()
+                            onPausedChanged: requestPaint()
+                            onVisibleChanged: requestPaint()
+                            onPaint: {
+                                var context = getContext("2d");
+                                context.clearRect(0, 0, width, height);
+                                context.lineWidth = 2;
+                                if (!paused) {
+                                    context.beginPath();
+                                    context.strokeStyle = root.app.theme.secondary;
+                                    context.arc(20, 20, 17, 0, Math.PI * 2);
+                                    context.stroke();
+                                }
+                                context.beginPath();
+                                context.strokeStyle = paused ? root.app.theme.secondary : "white";
+                                context.arc(20, 20, 17, -Math.PI / 2, -Math.PI / 2 + completeness / 100 * Math.PI * 2);
+                                context.stroke();
+                            }
+                        }
+                        ToolButton {
+                            objectName: "thumbnailAction"
+                            anchors.centerIn: parent
+                            width: 24
+                            height: 24
+                            visible: row.busy || row.modelData.state === "paused" || (row.modelData.state === "complete" && !!row.modelData.path)
+                            text: row.busy ? qsTr("Stop Download") : row.modelData.state === "paused" ? qsTr("Resume Download") : qsTr("Play")
+                            Accessible.name: (row.modelData.title || "") + ". " + text
+                            display: AbstractButton.IconOnly
+                            icon.source: row.busy ? "" : row.modelData.state === "paused" ? "icons/download.svg" : "icons/play.svg"
+                            icon.width: 20
+                            icon.height: 20
+                            icon.color: "white"
+                            background: Rectangle { color: parent.hovered ? root.app.theme.secondary : "transparent"; radius: 2 }
+                            Rectangle { anchors.centerIn: parent; width: 8; height: 8; color: "white"; visible: row.busy }
+                            onClicked: {
+                                root.app.chooseJob(row.modelData, false);
+                                if (row.busy)
+                                    root.app.jobs("pause", [row.modelData.id]);
+                                else if (row.modelData.state === "paused")
+                                    root.app.jobs("resume", [row.modelData.id]);
+                                else
+                                    root.openCompleted(row.modelData);
+                            }
+                        }
+                        Label {
+                            anchors.centerIn: parent
+                            text: "!"
+                            font.pixelSize: 22
+                            font.bold: true
+                            color: root.app.theme.error
+                            visible: row.modelData.state === "error"
+                        }
+                        BusyIndicator {
+                            anchors.centerIn: parent
+                            width: 24
+                            height: 24
+                            running: row.modelData.state === "parsing"
+                            visible: running
                         }
                     }
                 }
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 7
-
+                    spacing: 0
                     Label {
- textFormat: Text.PlainText;
+                        textFormat: Text.PlainText
                         text: row.modelData.title || row.modelData.url || qsTr("Untitled")
                         Layout.fillWidth: true
                         elide: Text.ElideRight
-                        font.pixelSize: 15
-                        font.bold: row.selected
+                        font.pixelSize: 14
                     }
-
-                    RowLayout {
-                        spacing: 10
-
-                        Label {
- textFormat: Text.PlainText;
-                            text: [row.modelData.format, row.modelData.quality, row.modelData.size].filter(Boolean).join(" · ")
-                            color: "#888"
-                            font.pixelSize: 12
-                        }
-
-                        Item {
-                            Layout.fillWidth: true
-                        }
-
-                        Label {
- textFormat: Text.PlainText;
-                            text: row.modelData.speed || ""
-                            color: "#888"
-                            font.pixelSize: 12
-                        }
-                    }
-
-                    ProgressBar {
-                        Layout.fillWidth: true
-                        from: 0
-                        to: 100
-                        value: Number(row.modelData.progress || 0)
-                        visible: ["downloading", "queued", "parsing", "processing", "paused"].indexOf(row.modelData.state) >= 0
-                        indeterminate: row.modelData.state === "parsing"
-                    }
-
                     Label {
- textFormat: Text.PlainText;
-                        text: row.modelData.error || (root.app.statusTitle(row.modelData.state || "") + (row.modelData.remaining ? " · " + row.modelData.remaining : ""))
-                        color: row.modelData.error ? "#b54537" : "#858585"
+                        objectName: "downloadDescription"
+                        textFormat: Text.PlainText
+                        text: root.description(row.modelData, hover.hovered)
+                        color: row.modelData.error ? root.app.theme.error : root.app.theme.secondary
                         Layout.fillWidth: true
                         elide: Text.ElideRight
-                        font.pixelSize: 12
+                        font.pixelSize: 14
                     }
                 }
 
                 ToolButton {
-                    text: row.modelData.state === "paused" ? "▶" : "Ⅱ"
-                    visible: ["queued", "downloading", "paused", "processing"].indexOf(row.modelData.state) >= 0
-                    Accessible.name: row.modelData.state === "paused" ? qsTr("Resume") : qsTr("Pause")
-                    onClicked: root.app.jobs(row.modelData.state === "paused" ? "resume" : "pause", [row.modelData.id])
-                }
-
-                ToolButton {
-                    text: "♫"
-                    visible: row.modelData.state === "complete"
+                    text: qsTr("Media Tools")
+                    display: AbstractButton.IconOnly
+                    palette.button: "transparent"
+                    icon.source: "icons/audio.svg"
+                    visible: row.modelData.state === "complete" && (hover.hovered || row.current) && root.app.settings.aiProcessingAllowed !== false
                     Accessible.name: qsTr("Media Tools")
                     onClicked: {
                         root.app.chooseJob(row.modelData, false);
@@ -162,8 +230,19 @@ Item {
                 }
 
                 ToolButton {
-                    text: "⋮"
-                    font.pixelSize: 24
+                    text: qsTr("Show in Folder")
+                    visible: !!row.modelData.path && (hover.hovered || row.current)
+                    display: AbstractButton.IconOnly
+                    icon.source: "icons/folder.svg"
+                    Accessible.name: text
+                    onClicked: root.app.jobs("reveal", [row.modelData.id])
+                }
+                ToolButton {
+                    text: qsTr("More actions")
+                    visible: hover.hovered || row.current
+                    display: AbstractButton.IconOnly
+                    palette.button: "transparent"
+                    icon.source: "icons/more.svg"
                     Accessible.name: qsTr("More actions")
                     onClicked: {
                         root.app.chooseJob(row.modelData, false);
@@ -180,50 +259,30 @@ Item {
         visible: root.rows.length === 0
         spacing: 16
 
-        Rectangle {
-            Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: 90
-            Layout.preferredHeight: 90
-            radius: 45
-            color: "#eff3ec"
-
-            Label {
- textFormat: Text.PlainText;
-                anchors.centerIn: parent
-                text: root.app.activeTab === "Processed" ? "♫" : "↓"
-                font.pixelSize: 54
-                color: "#a6bc98"
-            }
-        }
-
         Label {
- textFormat: Text.PlainText;
+            textFormat: Text.PlainText
             text: root.app.search ? qsTr("No media found") : root.app.activeTab === "Subscriptions" ? qsTr("Subscribe to channels and playlists") : root.app.activeTab === "Processed" ? qsTr("Processed items appear here") : qsTr("Download your first video")
             font.pixelSize: 24
-            color: "#777"
+            color: root.app.theme.secondary
             Layout.alignment: Qt.AlignHCenter
         }
 
         Label {
- textFormat: Text.PlainText;
+            textFormat: Text.PlainText
             text: root.app.activeTab === "Subscriptions" ? qsTr("Paste a channel or playlist link and choose Subscribe to automatically download new videos.") : root.app.activeTab === "Processed" ? qsTr("Apply Media Tools to a completed download to extract voice or vocals.") : qsTr("Copy a video or song link, then click Paste Link. You can also find videos in the built-in browser.")
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignHCenter
             Layout.fillWidth: true
-            color: "#999"
+            color: root.app.theme.secondary
             lineHeight: 1.4
-        }
-
-        Button {
-            text: qsTr("Paste Link")
-            highlighted: true
-            Layout.alignment: Qt.AlignHCenter
-            onClicked: root.app.pasteLink()
         }
     }
 
     Menu {
         id: contextMenu
+        objectName: "downloadContextMenu"
+
+        palette.window: root.app.theme.popup
 
         MenuItem {
             text: qsTr("Show Details")
@@ -265,6 +324,7 @@ Item {
         MenuSeparator {}
 
         MenuItem {
+            objectName: "copyLinkAction"
             text: qsTr("Copy Link Address")
             onTriggered: root.app.jobs("copy_url")
         }
@@ -302,6 +362,7 @@ Item {
         MenuSeparator {}
 
         MenuItem {
+            objectName: "deleteAction"
             text: qsTr("Delete…")
             onTriggered: root.app.confirmRemove()
         }

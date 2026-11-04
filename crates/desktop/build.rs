@@ -3,6 +3,10 @@ fn main() {
     let mut module = QmlModule::new("VideoDock");
     for file in [
         "Main",
+        "UiTheme",
+        "SmartModeBar",
+        "ControlPanel",
+        "AppDialog",
         "SettingsDialog",
         "ManualDialog",
         "BrowserPane",
@@ -22,6 +26,7 @@ fn main() {
         .qt_module("WebEngineCore")
         .qt_module("Widgets")
         .qrc("qml/translations.qrc")
+        .qrc("qml/icons.qrc")
         .include_dir("include");
     // Only add Qt glue; preserve all compiler flags selected by CXX-Qt.
     unsafe {

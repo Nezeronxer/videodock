@@ -112,6 +112,7 @@ pub(crate) struct Format {
     pub quality: Option<Quality>,
     pub fps: Option<u8>,
     pub projection_type: Option<String>,
+    pub stereo_layout: Option<String>,
     pub quality_label: Option<String>,
     pub average_bitrate: Option<u32>,
     pub color_info: Option<ColorInfo>,

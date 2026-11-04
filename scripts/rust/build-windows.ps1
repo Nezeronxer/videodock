@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $project = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = Join-Path $env:LOCALAPPDATA 'VideoDock\build' }
 if (-not $env:CARGO_BUILD_JOBS) { $env:CARGO_BUILD_JOBS = '2' }
-Get-Command cargo, ffmpeg, ffprobe -ErrorAction Stop | Out-Null
+Get-Command cargo, git, ffmpeg, ffprobe -ErrorAction Stop | Out-Null
 Push-Location $project
 try {
     & cargo build --locked --release -p videodock-desktop

@@ -3,10 +3,9 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-Dialog {
+AppDialog {
     id: root
 
-    required property var app
     property var job: app.focusedJob || ({})
 
     title: qsTr("Details")
@@ -21,7 +20,7 @@ Dialog {
         spacing: 12
 
         Label {
- textFormat: Text.PlainText;
+            textFormat: Text.PlainText
             text: root.job.title || root.job.url || ""
             font.pixelSize: 20
             font.bold: true
@@ -43,10 +42,10 @@ Dialog {
             Layout.fillWidth: true
 
             Repeater {
-                model: [qsTr("Type"), root.job.kind || "", qsTr("Status"), root.job.state || "", qsTr("Format"), [root.job.format, root.job.quality].filter(Boolean).join(" · "), qsTr("Size"), root.job.size || "", qsTr("Save To"), root.job.path || "", qsTr("Progress"), root.job.progress === undefined ? "" : root.job.progress + "%"]
+                model: [qsTr("Type"), root.app.optionLabel(root.job.kind || ""), qsTr("Status"), root.app.statusTitle(root.job.state || ""), qsTr("Format"), [root.job.format, root.job.quality].filter(Boolean).join(" · "), qsTr("Size"), root.job.size || "", qsTr("Save To"), root.job.path || "", qsTr("Progress"), root.job.progress === undefined ? "" : root.job.progress + "%"]
 
                 Label {
- textFormat: Text.PlainText;
+                    textFormat: Text.PlainText
                     required property string modelData
 
                     text: modelData
@@ -57,9 +56,9 @@ Dialog {
         }
 
         Label {
- textFormat: Text.PlainText;
+            textFormat: Text.PlainText
             text: root.job.error || ""
-            color: "#b94332"
+            color: root.app.theme.error
             wrapMode: Text.Wrap
             Layout.fillWidth: true
         }
@@ -70,17 +69,22 @@ Dialog {
 
         RowLayout {
             Button {
+                palette.dark: root.app.theme.accent
                 text: qsTr("Show in Folder")
                 enabled: !!root.job.path
                 onClicked: root.app.jobs("reveal", [root.job.id])
             }
 
             Button {
+
+                palette.dark: root.app.theme.accent
                 text: qsTr("Open Link")
                 onClicked: root.app.jobs("open_url", [root.job.id])
             }
 
             Button {
+
+                palette.dark: root.app.theme.accent
                 text: qsTr("Redownload")
                 onClicked: root.app.jobs("redownload", [root.job.id])
             }
@@ -90,6 +94,8 @@ Dialog {
             visible: ["playlist", "channel"].indexOf(root.job.kind) >= 0
 
             Button {
+
+                palette.dark: root.app.theme.accent
                 text: qsTr("Subscribe")
                 onClicked: {
                     root.app.parse(root.job.url);
@@ -98,6 +104,8 @@ Dialog {
             }
 
             Button {
+
+                palette.dark: root.app.theme.accent
                 text: qsTr("Edit Settings")
                 onClicked: {
                     root.app.send({

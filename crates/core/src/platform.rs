@@ -7,10 +7,14 @@ use std::{
 };
 
 pub fn media_tool(name: &str) -> PathBuf {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     if let Ok(executable) = std::env::current_exe() {
         if let Some(parent) = executable.parent() {
-            let path = parent.join(format!("{name}.exe"));
+            let path = parent.join(if cfg!(windows) {
+                format!("{name}.exe")
+            } else {
+                name.to_owned()
+            });
             if path.is_file() {
                 return path;
             }
@@ -364,7 +368,12 @@ pub async fn check_updates(client: &Client) -> Result<Option<Value>> {
         url.scheme() == "https",
         "Источник обновлений должен использовать HTTPS"
     );
-    let mut response = client.get(url).send().await?.error_for_status()?;
+    let mut response = client
+        .get(url)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await?
+        .error_for_status()?;
     ensure!(
         response
             .content_length()

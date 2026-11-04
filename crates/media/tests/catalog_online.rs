@@ -31,7 +31,9 @@ async fn public_sample(service: &str, address: &str) {
             .get(current.clone())
             .header("Range", "bytes=0-65535");
         for (name, value) in &headers {
-            request = request.header(name, value);
+            if !name.eq_ignore_ascii_case("range") {
+                request = request.header(name, value);
+            }
         }
         let mut response = request
             .send()

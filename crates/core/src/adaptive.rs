@@ -11,7 +11,7 @@ use std::{
 };
 use tokio::{
     fs::{File, OpenOptions},
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
 };
 use tokio_util::sync::CancellationToken;
 use videodock_media::{Format, Media, MediaKind, Protocol, validate_url};
@@ -109,8 +109,20 @@ fn playlist(data: &[u8]) -> Result<Playlist> {
         .collect::<Vec<_>>()
         .join("\n");
     text.push('\n');
-    m3u8_rs::parse_playlist_res(text.as_bytes())
-        .map_err(|_| anyhow::anyhow!("Неверный HLS-манифест"))
+    let mut parsed = m3u8_rs::parse_playlist_res(text.as_bytes())
+        .map_err(|_| anyhow::anyhow!("Неверный HLS-манифест"))?;
+    if let Playlist::MediaPlaylist(media) = &mut parsed {
+        // m3u8-rs reports KEY declarations only; HLS keys persist until replaced or METHOD=NONE.
+        let mut key = None;
+        for segment in &mut media.segments {
+            if segment.key.is_some() {
+                key = segment.key.clone();
+            } else {
+                segment.key = key.clone();
+            }
+        }
+    }
+    Ok(parsed)
 }
 
 pub async fn expand(client: &Client, media: &mut Media, cancel: &CancellationToken) -> Result<()> {
@@ -250,8 +262,8 @@ async fn decrypt(source: &Path, target: &Path, key: &[u8], iv: &[u8]) -> Result<
     );
     let mut cipher = cbc::Decryptor::<aes::Aes128>::new_from_slices(key, iv)
         .map_err(|_| anyhow::anyhow!("Неверный AES-128 key/IV"))?;
-    let mut input = File::open(source).await?;
-    let mut output = File::create(target).await?;
+    let mut input = BufReader::new(File::open(source).await?);
+    let mut output = BufWriter::new(File::create(target).await?);
     let mut pending = None;
     loop {
         let mut block = [0u8; 16];
@@ -469,6 +481,33 @@ mod tests {
         assert_eq!(iv(None, 259).unwrap(), 259u128.to_be_bytes());
         assert!(iv(Some("ZZ"), 0).is_err());
     }
+    #[test]
+    fn hls_key_applies_to_following_segments_until_cleared_or_rotated() {
+        let data = b"#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-KEY:METHOD=AES-128,URI=\"first.key\"\n#EXTINF:1,\na.ts\n#EXTINF:1,\nb.ts\n#EXT-X-KEY:METHOD=NONE\n#EXTINF:1,\nc.ts\n#EXTINF:1,\nd.ts\n#EXT-X-KEY:METHOD=AES-128,URI=\"second.key\"\n#EXTINF:1,\ne.ts\n#EXTINF:1,\nf.ts\n#EXT-X-ENDLIST\n";
+        let Playlist::MediaPlaylist(media) = playlist(data).unwrap() else {
+            panic!("not media")
+        };
+        for (segment, expected) in media.segments.iter().zip([
+            Some("first.key"),
+            Some("first.key"),
+            None,
+            None,
+            Some("second.key"),
+            Some("second.key"),
+        ]) {
+            assert!(segment.key.is_some(), "HLS key state must be inherited");
+            let key = segment.key.as_ref().unwrap();
+            assert_eq!(key.uri.as_deref(), expected);
+            assert_eq!(
+                key.method,
+                if expected.is_some() {
+                    KeyMethod::AES128
+                } else {
+                    KeyMethod::None
+                }
+            );
+        }
+    }
     #[tokio::test]
     async fn aes_cbc_decrypts_each_padding_length() {
         use aes::cipher::BlockEncryptMut;
@@ -485,5 +524,22 @@ mod tests {
             decrypt(&source, &target, &key, &iv).await.unwrap();
             assert_eq!(tokio::fs::read(target).await.unwrap(), plain);
         }
+    }
+    #[tokio::test]
+    async fn aes_cbc_decrypts_a_large_fragment_without_truncation() {
+        use aes::cipher::BlockEncryptMut;
+        let dir = tempfile::tempdir().unwrap();
+        let key = [7u8; 16];
+        let iv = [3u8; 16];
+        let plain = vec![42u8; 1024 * 1024 + 7];
+        let cipher = cbc::Encryptor::<aes::Aes128>::new((&key).into(), (&iv).into())
+            .encrypt_padded_vec_mut::<cbc::cipher::block_padding::Pkcs7>(&plain);
+        let source = dir.path().join("source");
+        let target = dir.path().join("target");
+        tokio::fs::write(&source, cipher).await.unwrap();
+        let started = Instant::now();
+        decrypt(&source, &target, &key, &iv).await.unwrap();
+        println!("AES_1MiB_ms={}", started.elapsed().as_millis());
+        assert_eq!(tokio::fs::read(target).await.unwrap(), plain);
     }
 }

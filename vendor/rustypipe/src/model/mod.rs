@@ -222,6 +222,9 @@ pub struct VideoStream {
     /// Projection metadata from the player response (e.g. MESH for spherical video).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub projection_type: Option<String>,
+    /// Stereo layout metadata, preserved without inferring projection coverage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stereo_layout: Option<String>,
     /// MIME file type
     pub mime: String,
     /// Video file format

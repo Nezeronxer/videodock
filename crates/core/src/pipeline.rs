@@ -251,6 +251,44 @@ fn unique_path(folder: &Path, stem: &str, ext: &str) -> PathBuf {
     path
 }
 
+fn output_stem(media: &Media, filename: Option<&str>) -> String {
+    let stem = filename
+        .map(|filename| {
+            Path::new(filename)
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .unwrap_or_else(|| media.title.clone());
+    safe_name(&stem)
+}
+
+/// Reads occupied names without reserving a path or creating files.
+pub fn preview_output_path(
+    media: &Media,
+    output_dir: &Path,
+    filename: Option<&str>,
+    container: &str,
+) -> Result<PathBuf> {
+    ensure!(
+        output_dir.is_absolute(),
+        "Нужен абсолютный путь к папке загрузок"
+    );
+    let ext = container.to_ascii_lowercase();
+    ensure!(
+        ["mp4", "mkv", "webm", "mp3", "m4a", "ogg", "flac", "wav"].contains(&ext.as_str()),
+        "Неизвестный контейнер"
+    );
+    let destination = unique_path(output_dir, &output_stem(media, filename), &ext);
+    #[cfg(windows)]
+    ensure!(
+        destination.as_os_str().len() < 245,
+        "Слишком длинный путь. Выбери более короткую папку"
+    );
+    Ok(destination)
+}
+
 pub async fn run(
     mut media: Media,
     client: Client,
@@ -260,95 +298,142 @@ pub async fn run(
     limiter: Arc<Limiter>,
     on_progress: Arc<dyn Fn(PipelineProgress) + Send + Sync>,
 ) -> Result<Output> {
-    ensure!(
-        options.output_dir.is_absolute(),
-        "Нужен абсолютный путь к папке загрузок"
-    );
     let ext = options.selection.container.to_ascii_lowercase();
-    ensure!(
-        ["mp4", "mkv", "webm", "mp3", "m4a", "ogg", "flac", "wav"].contains(&ext.as_str()),
-        "Неизвестный контейнер"
-    );
+    preview_output_path(
+        &media,
+        &options.output_dir,
+        options.filename.as_deref(),
+        &ext,
+    )?;
     tokio::fs::create_dir_all(&staging_dir).await?;
     tokio::fs::create_dir_all(&options.output_dir).await?;
     prepare(&client, &mut media, &cancel).await?;
     let selected = choose_formats(&media.formats, &options.selection)?;
-    let mut inputs = Vec::new();
-    let mut downloaded = 0u64;
+    ensure!(
+        options.selection.media_type != "audio"
+            || selected.len() <= 1
+            || !matches!(ext.as_str(), "mp3" | "wav" | "flac"),
+        "Контейнер {ext} поддерживает только одну аудиодорожку; выберите M4A, MP4, MKV, OGG или WebM"
+    );
     let total = selected.iter().try_fold(0u64, |sum, format| {
         format.size.and_then(|size| sum.checked_add(size))
     });
-    for (index, format) in selected.iter().enumerate() {
-        let stream_downloaded = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let partial = staging_dir.join(format!("stream-{index}-{}.part", safe_name(&format.id)));
-        let callback = {
-            let callback = on_progress.clone();
-            let base = downloaded;
-            let count = selected.len();
-            let stream_downloaded = stream_downloaded.clone();
-            Arc::new(move |p: Progress| {
-                stream_downloaded.store(p.downloaded, std::sync::atomic::Ordering::Relaxed);
-                let fraction = p
-                    .total
-                    .filter(|n| *n > 0)
-                    .map(|n| p.downloaded as f64 / n as f64)
-                    .unwrap_or(0.0);
+    let states = Arc::new(std::sync::Mutex::new(vec![
+        Progress {
+            downloaded: 0,
+            total: None,
+            speed: 0.0,
+        };
+        selected.len()
+    ]));
+    let permits = Arc::new(tokio::sync::Semaphore::new(4));
+    let mut transfers = tokio::task::JoinSet::new();
+    for (index, format) in selected.iter().cloned().enumerate() {
+        let (client, staging_dir, cancel, limiter) = (
+            client.clone(),
+            staging_dir.clone(),
+            cancel.clone(),
+            limiter.clone(),
+        );
+        let (states, on_progress, permits) = (states.clone(), on_progress.clone(), permits.clone());
+        transfers.spawn(async move {
+            let _permit = tokio::select! {
+                _ = cancel.cancelled() => bail!("Загрузка приостановлена"),
+                permit = permits.acquire_owned() => permit?,
+            };
+            let partial =
+                staging_dir.join(format!("stream-{index}-{}.part", safe_name(&format.id)));
+            let callback = Arc::new(move |p: Progress| {
+                let mut states = states
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                states[index] = Progress {
+                    downloaded: states[index].downloaded.max(p.downloaded),
+                    ..p
+                };
+                let downloaded = states.iter().map(|state| state.downloaded).sum();
                 let percent = total
                     .filter(|n| *n > 0)
-                    .map(|n| 80.0 * (base + p.downloaded) as f64 / n as f64)
-                    .unwrap_or(80.0 * (index as f64 + fraction) / count as f64);
-                callback(PipelineProgress {
+                    .map(|n| 80.0 * downloaded as f64 / n as f64)
+                    .unwrap_or_else(|| {
+                        80.0 * states
+                            .iter()
+                            .map(|state| {
+                                state
+                                    .total
+                                    .filter(|n| *n > 0)
+                                    .map(|n| state.downloaded as f64 / n as f64)
+                                    .unwrap_or(0.0)
+                            })
+                            .sum::<f64>()
+                            / states.len() as f64
+                    });
+                on_progress(PipelineProgress {
                     phase: "downloading".into(),
-                    downloaded: base + p.downloaded,
+                    downloaded,
                     total,
-                    speed: p.speed,
+                    speed: states.iter().map(|state| state.speed).sum(),
                     percent: percent.clamp(0.0, 80.0),
                 });
-            }) as Arc<dyn Fn(Progress) + Send + Sync>
-        };
-        let path = match format.protocol {
-            Protocol::Http => {
-                transfer::download_with_cookies(
-                    &client,
-                    &format.url,
-                    &format.headers,
-                    &format.cookies,
-                    &partial,
-                    &cancel,
-                    &limiter,
-                    callback,
-                )
-                .await?;
-                partial
-            }
-            Protocol::Hls => {
-                adaptive::download_hls(
-                    &client,
-                    format,
-                    &staging_dir.join(format!("hls-{index}")),
-                    &cancel,
-                    &limiter,
-                    callback,
-                )
-                .await?
-            }
-            Protocol::Dash => {
-                crate::dash::download_dash(
-                    &client,
-                    format,
-                    &staging_dir.join(format!("dash-{index}")),
-                    &cancel,
-                    &limiter,
-                    callback,
-                )
-                .await?
-            }
-        };
-        downloaded += stream_downloaded
-            .load(std::sync::atomic::Ordering::Relaxed)
-            .max(tokio::fs::metadata(&path).await?.len());
-        inputs.push(path);
+            }) as Arc<dyn Fn(Progress) + Send + Sync>;
+            let path = match format.protocol {
+                Protocol::Http => {
+                    transfer::download_with_cookies(
+                        &client,
+                        &format.url,
+                        &format.headers,
+                        &format.cookies,
+                        &partial,
+                        &cancel,
+                        &limiter,
+                        callback.clone(),
+                    )
+                    .await?;
+                    partial
+                }
+                Protocol::Hls => {
+                    adaptive::download_hls(
+                        &client,
+                        &format,
+                        &staging_dir.join(format!("hls-{index}")),
+                        &cancel,
+                        &limiter,
+                        callback.clone(),
+                    )
+                    .await?
+                }
+                Protocol::Dash => {
+                    crate::dash::download_dash(
+                        &client,
+                        &format,
+                        &staging_dir.join(format!("dash-{index}")),
+                        &cancel,
+                        &limiter,
+                        callback.clone(),
+                    )
+                    .await?
+                }
+            };
+            let size = tokio::fs::metadata(&path).await?.len();
+            callback(Progress {
+                downloaded: size,
+                total: Some(size),
+                speed: 0.0,
+            });
+            Ok::<_, anyhow::Error>((index, path))
+        });
     }
+    let mut inputs = vec![PathBuf::new(); selected.len()];
+    while let Some(result) = transfers.join_next().await {
+        let (index, path) = result??;
+        inputs[index] = path;
+    }
+    let downloaded = states
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .iter()
+        .map(|state| state.downloaded)
+        .sum::<u64>();
     let mut subtitles = Vec::new();
     for requested in &options.selection.subtitles {
         let (track, id) = crate::subtitles::select(&media.subtitles, requested)?;
@@ -393,37 +478,43 @@ pub async fn run(
         }
     }
     if options.selection.media_type == "audio" {
-        args.extend(["-map".into(), "0:a:0".into(), "-vn".into()]);
-        let mut source_codec = selected[0]
-            .audio_codec
-            .clone()
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        if options.selection.audio_bitrate == 0
-            && (source_codec.is_empty() || source_codec == "unknown")
-            && let Ok(info) = probe(&inputs[0]).await
-        {
-            source_codec = info["streams"]
-                .as_array()
-                .and_then(|streams| streams.iter().find(|s| s["codec_type"] == "audio"))
-                .and_then(|s| s["codec_name"].as_str())
-                .unwrap_or("")
-                .to_owned();
+        for index in 0..inputs.len() {
+            args.extend(["-map".into(), format!("{index}:a:0")]);
         }
-        let compatible = match ext.as_str() {
-            "mp3" => source_codec == "mp3",
-            "m4a" | "mp4" => {
-                source_codec.starts_with("aac")
-                    || source_codec.starts_with("mp4a")
-                    || ["alac", "ac3", "eac3"].contains(&source_codec.as_str())
+        args.push("-vn".into());
+        let mut compatible = true;
+        for (index, format) in selected.iter().enumerate() {
+            let mut source_codec = format
+                .audio_codec
+                .clone()
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            if options.selection.audio_bitrate == 0
+                && (source_codec.is_empty() || source_codec == "unknown")
+                && let Ok(info) = probe(&inputs[index]).await
+            {
+                source_codec = info["streams"]
+                    .as_array()
+                    .and_then(|streams| streams.iter().find(|s| s["codec_type"] == "audio"))
+                    .and_then(|s| s["codec_name"].as_str())
+                    .unwrap_or("")
+                    .to_owned();
             }
-            "ogg" => ["opus", "vorbis", "flac"].contains(&source_codec.as_str()),
-            "flac" => source_codec == "flac",
-            "wav" => source_codec.starts_with("pcm_"),
-            "webm" => ["opus", "vorbis"].contains(&source_codec.as_str()),
-            "mkv" => true,
-            _ => false,
-        };
+            compatible &= match ext.as_str() {
+                "mp3" => source_codec == "mp3",
+                "m4a" | "mp4" => {
+                    source_codec.starts_with("aac")
+                        || source_codec.starts_with("mp4a")
+                        || ["alac", "ac3", "eac3"].contains(&source_codec.as_str())
+                }
+                "ogg" => ["opus", "vorbis", "flac"].contains(&source_codec.as_str()),
+                "flac" => source_codec == "flac",
+                "wav" => source_codec.starts_with("pcm_"),
+                "webm" => ["opus", "vorbis"].contains(&source_codec.as_str()),
+                "mkv" => true,
+                _ => false,
+            };
+        }
         let codec = if options.selection.audio_bitrate == 0 && compatible {
             "copy"
         } else {
@@ -455,6 +546,24 @@ pub async fn run(
                 args.extend(["-q:a".into(), "0".into()]);
             } else if codec == "libvorbis" {
                 args.extend(["-q:a".into(), "10".into()]);
+            } else if codec == "libopus" {
+                for (index, input) in inputs.iter().enumerate() {
+                    let info = probe(input).await?;
+                    let channels = info["streams"]
+                        .as_array()
+                        .and_then(|streams| {
+                            streams
+                                .iter()
+                                .find(|stream| stream["codec_type"] == "audio")
+                        })
+                        .and_then(|stream| stream["channels"].as_u64())
+                        .filter(|channels| *channels > 0)
+                        .context("Не удалось определить каналы выбранной аудиодорожки")?;
+                    args.extend([
+                        format!("-b:a:{index}"),
+                        format!("{}k", channels.saturating_mul(256).min(320)),
+                    ]);
+                }
             } else {
                 args.extend(["-b:a".into(), "320k".into()]);
             }
@@ -464,13 +573,7 @@ pub async fn run(
         if inputs.len() == 1 {
             args.extend(["-map".into(), "0:a?".into()]);
         } else {
-            if selected[0].has_audio()
-                && options
-                    .selection
-                    .audio_tracks
-                    .iter()
-                    .any(|language| language == "default")
-            {
+            if selected[0].has_audio() {
                 args.extend(["-map".into(), "0:a:0".into()]);
             }
             for index in 1..inputs.len() {
@@ -526,6 +629,20 @@ pub async fn run(
     });
     ffmpeg(args, media.duration, &cancel, on_progress.clone()).await?;
     let result = probe(&assembled).await?;
+    if let Some(expected) = media
+        .duration
+        .filter(|duration| duration.is_finite() && *duration > 0.0)
+    {
+        let actual = result["format"]["duration"]
+            .as_str()
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|duration| duration.is_finite() && *duration > 0.0)
+            .context("Не удалось подтвердить длительность готового файла")?;
+        ensure!(
+            actual + (expected * 0.02).max(2.0) >= expected,
+            "Получен неполный медиафайл: длительность {actual:.1} с вместо {expected:.1} с"
+        );
+    }
     let streams = result["streams"]
         .as_array()
         .context("В готовом файле нет медиапотоков")?;
@@ -535,25 +652,27 @@ pub async fn run(
             .any(|s| s["codec_type"] == options.selection.media_type),
         "Готовый файл не содержит выбранный тип медиа"
     );
-    ensure!(!cancel.is_cancelled(), "Загрузка приостановлена");
-    let stem = options
-        .filename
-        .as_deref()
-        .map(|f| {
-            Path::new(f)
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned()
-        })
-        .unwrap_or_else(|| format!("{} [{}]", media.title, media.id));
-    let stem = safe_name(&stem);
-    let mut destination = unique_path(&options.output_dir, &stem, &ext);
-    #[cfg(windows)]
+    let expected_audio = if options.selection.media_type == "audio" {
+        selected.len()
+    } else {
+        usize::from(selected[0].has_audio()) + selected.len() - 1
+    };
     ensure!(
-        destination.as_os_str().len() < 245,
-        "Слишком длинный путь. Выбери более короткую папку"
+        streams
+            .iter()
+            .filter(|stream| stream["codec_type"] == "audio")
+            .count()
+            >= expected_audio,
+        "Готовый файл потерял выбранную аудиодорожку"
     );
+    ensure!(!cancel.is_cancelled(), "Загрузка приостановлена");
+    let stem = output_stem(&media, options.filename.as_deref());
+    let mut destination = preview_output_path(
+        &media,
+        &options.output_dir,
+        options.filename.as_deref(),
+        &ext,
+    )?;
     loop {
         ensure!(!cancel.is_cancelled(), "Загрузка приостановлена");
         match publish(&assembled, &destination).await {
@@ -563,7 +682,12 @@ pub async fn run(
                     .downcast_ref::<std::io::Error>()
                     .is_some_and(|e| e.kind() == std::io::ErrorKind::AlreadyExists) =>
             {
-                destination = unique_path(&options.output_dir, &stem, &ext)
+                destination = preview_output_path(
+                    &media,
+                    &options.output_dir,
+                    options.filename.as_deref(),
+                    &ext,
+                )?
             }
             Err(error) => return Err(error),
         }

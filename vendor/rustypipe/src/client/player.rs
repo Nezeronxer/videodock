@@ -777,6 +777,7 @@ impl<'a> StreamsMapper<'a> {
             hdr: f.color_info.unwrap_or_default().primaries
                 == player::Primaries::ColorPrimariesBt2020,
             projection_type: f.projection_type,
+            stereo_layout: f.stereo_layout,
             format,
             codec: get_video_codec(codecs),
             mime: f.mime_type,
@@ -988,6 +989,20 @@ mod tests {
 
     use super::*;
     use crate::{deobfuscate::DeobfData, param::Language, util::tests::TESTFILES};
+
+    #[test]
+    fn projection_metadata_survives_response_deserialization_and_stream_mapping() {
+        let raw: player::Format = serde_json::from_value(serde_json::json!({
+            "itag":18,"url":"https://media.example/fixture.mp4","mimeType":"video/mp4; codecs=\"avc1.4d401f, mp4a.40.2\"",
+            "bitrate":128000,"width":1920,"height":1080,"fps":30,"quality":"hd1080","qualityLabel":"1080p",
+            "projectionType":"MESH","stereoLayout":"LEFT_RIGHT"
+        })).unwrap();
+        let mut mapper = StreamsMapper::new(None, None).unwrap();
+        let mapped = mapper.map_video_stream(raw).unwrap();
+        let value = serde_json::to_value(mapped).unwrap();
+        assert_eq!(value["projection_type"], "MESH");
+        assert_eq!(value["stereo_layout"], "LEFT_RIGHT");
+    }
 
     static DEOBF_DATA: Lazy<DeobfData> = Lazy::new(|| {
         DeobfData {
