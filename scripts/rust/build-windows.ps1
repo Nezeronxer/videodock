@@ -10,6 +10,9 @@ try {
     $destination = Join-Path $env:LOCALAPPDATA 'VideoDock\app'
     New-Item -ItemType Directory -Force $destination | Out-Null
     Copy-Item (Join-Path $env:CARGO_TARGET_DIR 'release\videodock-desktop.exe') (Join-Path $destination 'VideoDock.exe') -Force
+    $image = [IO.File]::ReadAllBytes((Join-Path $destination 'VideoDock.exe'))
+    $pe = [BitConverter]::ToInt32($image, 0x3c)
+    if ([BitConverter]::ToUInt16($image, $pe + 24 + 68) -ne 2) { throw 'Release executable must use the Windows GUI subsystem' }
     Copy-Item (Get-Command ffmpeg -ErrorAction Stop).Source (Join-Path $destination 'ffmpeg.exe') -Force
     Copy-Item (Get-Command ffprobe -ErrorAction Stop).Source (Join-Path $destination 'ffprobe.exe') -Force
     & windeployqt --release --qmldir (Join-Path $project 'crates\desktop\qml') (Join-Path $destination 'VideoDock.exe')

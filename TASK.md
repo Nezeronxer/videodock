@@ -246,3 +246,15 @@ Qt ShaderTools в Windows QA установлен: aqt exit0, Qt6ShaderTools.dll
 Cloud Linux первого прогона: workspace и release build завершились, Qt appearance остановился при запуске Chromium от root в одноразовом контейнере (Running as root without --no-sandbox is not supported). Только Linux CI job получил QTWEBENGINE_DISABLE_SANDBOX=1 для localhost fixtures; production launcher и приложение не менялись.
 
 Windows после удаления повреждённого кэша пакета и возобновления: 162 passed / 0 failed / 42 ignored, 34 suites; актуальный release build exit0 за 6м09с, windeployqt дошёл до translations. Итоговый код упаковки и native runtime проверяются отдельно.
+
+## Продолжение 04.11: Windows GUI и публикация проверенного кода
+
+Результат: завершить оставленные Windows packaging/GUI исправления и отправить проверенные исходники на GitHub. Объём: текущая инженерная ветка, существующий QA-гость и native workflow; stable и prerelease остаются запрещены до закрытия прежних gates. Проверка: Windows PE subsystem и запуск пакета без build PATH, workspace/Clippy/Qt/actionlint, secret scan, remote SHA и фактические native jobs.
+
+- [x] Восстановить последнюю рабочую сессию и сохранить незавершённые изменения.
+- [ ] Проверить Windows-пакет, исправить подтверждённые зависимости и GUI subsystem.
+- [ ] Выполнить свежие локальные проверки; исследовательские диагностики хранить вне публичного дерева.
+- [ ] Отправить изменения на GitHub, проверить native jobs и доступность исходников.
+- [ ] Обновить фактические блокеры stable по результатам.
+
+Свежий локальный прогон возобновления: workspace 165/0/42ignored, Clippy PASS; Qt appearance с настоящим Engine PASS. Gitleaks history:0. В export исходников детектор отметил 4 публичные строки RustyPipe fixtures (continuation tokens), классификация выполняется отдельно. Повтор полного длинного YouTube напрямую снова завершился ошибкой; stable остаётся заблокирован.

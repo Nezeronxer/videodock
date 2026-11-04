@@ -1,3 +1,5 @@
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod bridge;
 use cxx_qt_lib::{QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 fn main() {
