@@ -38,6 +38,8 @@ impl Drop for Owner {
         if let Some(inner) = self.inner.upgrade() {
             drop(lock(&inner.state));
         }
+        // A concurrent fork may retain the file description until its child execs.
+        let _ = self._lease.unlock();
     }
 }
 
@@ -347,4 +349,25 @@ fn app_action(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
         _ => anyhow::bail!("Неизвестное действие приложения"),
     }
     Ok(json!({}))
+}
+
+#[cfg(all(test, unix))]
+mod lease_tests {
+    use super::*;
+
+    #[test]
+    fn last_owner_releases_profile_even_if_a_child_inherited_the_descriptor() {
+        let directory = tempfile::tempdir().unwrap();
+        let engine = Engine::new(directory.path().to_owned()).unwrap();
+        let clone = engine.clone();
+        // A forked child retains this open file description until exec closes it.
+        let inherited = engine._owner._lease.try_clone().unwrap();
+        drop(engine);
+        assert!(Engine::new(directory.path().to_owned()).is_err());
+        drop(clone);
+        let reopened = Engine::new(directory.path().to_owned()).unwrap();
+        assert!(Engine::new(directory.path().to_owned()).is_err());
+        drop(reopened);
+        drop(inherited);
+    }
 }

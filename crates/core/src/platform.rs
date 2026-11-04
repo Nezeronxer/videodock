@@ -1,9 +1,11 @@
 use anyhow::{Context, Result, bail, ensure};
 use reqwest::Client;
 use serde_json::Value;
+#[cfg(unix)]
+use std::process::Child;
 use std::{
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Command, Stdio},
 };
 
 pub fn media_tool(name: &str) -> PathBuf {
@@ -42,6 +44,7 @@ pub fn media_tool(name: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
+#[cfg(unix)]
 fn spawn(program: &str, args: &[&std::ffi::OsStr]) -> Result<()> {
     Command::new(program)
         .args(args)
@@ -128,6 +131,7 @@ fn shell_open(path: &std::ffi::OsStr) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn home() -> Result<PathBuf> {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .map(PathBuf::from)
