@@ -53,6 +53,7 @@ AppDialog {
         id: toggle
         palette.dark: root.app.green
         required property string settingKey
+        objectName: settingKey
 
         Layout.fillWidth: true
         implicitHeight: Math.max(20, contentItem.implicitHeight)
@@ -451,8 +452,9 @@ AppDialog {
                                 Label {
                                     required property int index
                                     required property string modelData
+                                    objectName: "simultaneousLabel" + index
                                     text: modelData + "\n" + [qsTr("Safe"), qsTr("Safe"), qsTr("Stable"), qsTr("Optimal"), qsTr("Risky")][index]
-                                    font.pixelSize: 14
+                                    font.pixelSize: 12
                                     lineHeight: 20
                                     lineHeightMode: Text.FixedHeight
                                     y: -10
@@ -530,6 +532,7 @@ AppDialog {
                                     required property var modelData
                                     settingKey: modelData.key
                                     text: modelData.label
+                                    enabled: modelData.key !== "preventSleepEnabled" || (root.app.state.capabilities || {}).prevent_sleep !== false
                                 }
                             }
                         }

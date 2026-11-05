@@ -314,63 +314,87 @@ Item {
         }
     }
 
+    component ContextAction: MenuItem {
+        leftPadding: 12
+        rightPadding: 12
+        topPadding: 6
+        bottomPadding: 6
+        implicitHeight: Math.max(32, implicitContentHeight + topPadding + bottomPadding)
+    }
+
+    component ContextSeparator: MenuSeparator {
+        topPadding: 4
+        bottomPadding: 4
+    }
+
     Menu {
         id: contextMenu
         objectName: "downloadContextMenu"
 
         palette.window: root.app.theme.popup
+        topPadding: 4
+        bottomPadding: 4
+        implicitWidth: {
+            var widest = 240;
+            for (var i = 0; i < count; ++i) {
+                var item = itemAt(i);
+                if (item && item.visible)
+                    widest = Math.max(widest, item.implicitWidth);
+            }
+            return Math.ceil(widest) + leftPadding + rightPadding;
+        }
 
-        MenuItem {
+        ContextAction {
             text: qsTr("Show Details")
             onTriggered: root.app.viewDetails(root.app.focusedJob)
         }
 
-        MenuSeparator {}
+        ContextSeparator {}
 
-        MenuItem {
+        ContextAction {
             text: qsTr("Resume")
             onTriggered: root.app.jobs("resume")
         }
 
-        MenuItem {
+        ContextAction {
             text: qsTr("Pause")
             onTriggered: root.app.jobs("pause")
         }
 
-        MenuItem {
+        ContextAction {
             text: qsTr("Move to Front of Queue")
             onTriggered: root.app.jobs("force")
         }
 
-        MenuItem {
+        ContextAction {
             text: qsTr("Redownload")
             onTriggered: root.app.jobs("redownload")
         }
 
-        MenuItem {
+        ContextAction {
             text: qsTr("Show in Folder")
             onTriggered: root.app.jobs("reveal")
         }
 
-        MenuItem {
+        ContextAction {
             text: qsTr("Open File")
             onTriggered: root.app.jobs("open")
         }
 
-        MenuSeparator {}
+        ContextSeparator {}
 
-        MenuItem {
+        ContextAction {
             objectName: "copyLinkAction"
             text: qsTr("Copy Link Address")
             onTriggered: root.app.jobs("copy_url")
         }
 
-        MenuItem {
+        ContextAction {
             text: qsTr("Open Links in Browser")
             onTriggered: root.app.jobs("open_url")
         }
 
-        MenuItem {
+        ContextAction {
             text: qsTr("Edit Subscription Settings")
             visible: root.app.activeTab === "Subscriptions"
             height: visible ? implicitHeight : 0
@@ -381,7 +405,7 @@ Item {
             })
         }
 
-        MenuItem {
+        ContextAction {
             text: qsTr("Unsubscribe")
             visible: root.app.activeTab === "Subscriptions"
             height: visible ? implicitHeight : 0
@@ -392,9 +416,9 @@ Item {
             })
         }
 
-        MenuSeparator {}
+        ContextSeparator {}
 
-        MenuItem {
+        ContextAction {
             objectName: "deleteAction"
             text: qsTr("Delete…")
             onTriggered: root.app.confirmRemove()

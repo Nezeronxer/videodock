@@ -119,6 +119,11 @@ fn discover() -> Result<Option<String>> {
 }
 fn output(program: &str, arguments: &[&str]) -> Option<String> {
     let mut command = Command::new(program);
+    #[cfg(target_os = "linux")]
+    if program == "ss" && crate::platform::flatpak() {
+        command = Command::new("flatpak-spawn");
+        command.args(["--host", "--watch-bus", "ss"]);
+    }
     command
         .args(arguments)
         .stdin(Stdio::null())

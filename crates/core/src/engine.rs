@@ -150,6 +150,11 @@ impl Engine {
             }
         }
         settings["speedLimit"] = json!(0);
+        #[cfg(target_os = "linux")]
+        if crate::platform::flatpak() {
+            settings["autoStart"] = json!(false);
+            settings["preventSleepEnabled"] = json!(false);
+        }
         settings["proxyPasswordSet"] = json!(!secrets.proxy_password.is_empty());
         state["settings"] = settings;
         for key in ["jobs", "subscriptions"] {
@@ -182,6 +187,11 @@ impl Engine {
         state["manual"] = Value::Null;
         state["account"] = json!({"logged_in":false,"user_name":"","avatar_url":""});
         state["capabilities"] = json!({"browser":true,"tray":true,"auto_start":true});
+        #[cfg(target_os = "linux")]
+        if crate::platform::flatpak() {
+            state["capabilities"]["auto_start"] = json!(false);
+            state["capabilities"]["prevent_sleep"] = json!(false);
+        }
         if retired_media_tools {
             store.save(&persisted(&state))?;
         }

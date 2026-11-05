@@ -302,6 +302,12 @@ mod tests {
         body: Vec<u8>,
         declared: Option<usize>,
     ) -> (Resolver, Arc<AtomicUsize>, std::thread::JoinHandle<()>) {
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(DOH_TIMEOUT)
+            .build()
+            .unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let address = listener.local_addr().unwrap();
@@ -344,14 +350,7 @@ mod tests {
         });
         (
             Resolver {
-                doh: Some(
-                    reqwest::Client::builder()
-                        .no_proxy()
-                        .redirect(reqwest::redirect::Policy::none())
-                        .timeout(DOH_TIMEOUT)
-                        .build()
-                        .unwrap(),
-                ),
+                doh: Some(client),
                 endpoint: format!("http://{address}/dns-query"),
             },
             count,

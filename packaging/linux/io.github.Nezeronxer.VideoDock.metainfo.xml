@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.Nezeronxer.VideoDock</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>VideoDock</name>
+  <summary>Download videos and audio</summary>
+  <summary xml:lang="ru">Скачивание видео и аудио</summary>
+  <description>
+    <p>Download videos, audio and playlists, choose quality and format, and keep your downloads in one place.</p>
+    <p xml:lang="ru">Скачивайте видео, аудио и плейлисты, выбирайте качество и формат, сохраняйте историю загрузок.</p>
+  </description>
+  <launchable type="desktop-id">io.github.Nezeronxer.VideoDock.desktop</launchable>
+  <developer id="io.github.nezeronxer"><name>Nezeronxer</name></developer>
+  <url type="homepage">https://github.com/Nezeronxer/videodock</url>
+  <url type="bugtracker">https://github.com/Nezeronxer/videodock/issues</url>
+  <provides><binary>videodock</binary></provides>
+</component>

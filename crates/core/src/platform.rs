@@ -5,6 +5,11 @@ use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::process::{Child, Command, Stdio};
 
+#[cfg(target_os = "linux")]
+pub(crate) fn flatpak() -> bool {
+    std::env::var_os("FLATPAK_ID").is_some() || Path::new("/.flatpak-info").is_file()
+}
+
 pub fn media_tool(name: &str) -> PathBuf {
     #[cfg(any(windows, target_os = "macos"))]
     if let Ok(executable) = std::env::current_exe() {
@@ -146,6 +151,11 @@ fn xml(value: &str) -> String {
 }
 
 pub fn set_autostart(enabled: bool) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    ensure!(
+        !enabled || !flatpak(),
+        "Автозапуск недоступен в этом пакете"
+    );
     let executable = std::env::current_exe()?.canonicalize()?;
     #[cfg(target_os = "linux")]
     {

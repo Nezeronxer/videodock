@@ -417,3 +417,18 @@ New packaging metadata/script inrepo: packaging/linux/flatpak-metadata, scripts/
 - [ ] macOS: run 41897879185 FAIL на packaged proof worker, stdout пуст; FFmpeg/FFprobe и codesign до него прошли. В harness обработан socket.timeout совместимо с системным Python 3.9, добавлена проверка exit code до JSON и сохранение native crash reports. Нужен новый native run текущего кода.
 - [ ] Свежая проверка установленного Flatpak, комплект соответствующих исходников и точная матрица поддержанных ОС.
 - [ ] Публикация только после закрытия native macOS gate; существующий v0.2.0 остаётся Draft.
+
+Пользователь 05.11 прислал скриншот контекстного меню: обрезаны длинные русские подписи, недостаточный горизонтальный padding и избыточные вертикальные интервалы. До выпуска нужны отдельные geometry regressions и проверка свежего меню. Дополнительно требуется повторный полный download/decode каждого сервиса и подтипа из матрицы 4K; старые metadata/ограниченные GET не засчитываются. Обновить матрицу PASS/FAIL/BLOCKED по фактическим файлам.
+
+Русские подписи интенсивности загрузок: новое geometry assertion воспроизвело наложение (RED); размер шрифта12 даёт раздельные подписи с зазором6+px. Полный Qt fixture EN/RU GREEN, screenshot в /tmp/videodock-layout-qa/green-{en,ru}; эти изменения пока не включены в прежние бинарные пакеты.
+
+Меню: regression RED `Context action lacks horizontal padding`; общий ContextAction теперь задаёт12px по бокам, компактную высоту32+px, меню вычисляет ширину по самому длинному видимому пункту, separators9px. Полные Qt fixture EN/RU GREEN, длинные подписи и оба вида меню проверены. Снимок `research/user-polish-2026-11-05/menu-spacing-fixed-ru.png`.
+
+Проверка первоисточников сервисов 05.11: официальная tv.naver.com показывает уведомление о закрытии NaverTV30.09.2026 и переходе в Clip; старый parser ticket не подтверждает поддержку Clip. Likee public profile возвращает `This page is not available in your area`. Новый публичный Vimeo33951933 доступен в Chrome с video и длительностью1:00; добавлен отдельный полный тест, успех пока НЕ подтверждён. Идёт последовательная lowmem сборка catalog_downloads в ~/.cache/videodock-service-check, journal /tmp/videodock-service-build.log; новые full_sample теперь требуют FFmpeg decode до успешного PASS. Не прерывать только из-за незавершённости; сетевые отказы фиксировать отдельно.
+
+
+05.11 18:48: свежие core/media203PASS/0FAIL/43ignored; sandbox_settings PASS, DNS7PASS. DNS nativeMac run42052359410 отказал на fixture: таймер ожидания1с запускался до подготовки HTTP-клиента. Подготовка клиента перенесена до запуска fixture-thread, production DNS не менялся; локальная проверка7PASS, nativeMac ещё нужен. Mac cache restore/save разнесены, чтобы сохранять сборочные файлы и после позднего test/package FAIL; pinned save/action.yml прочитан через GitHub MCP. Нельзя выдавать сбой unitfixture за исправленный macOS runtime.
+
+Свежие полные сервисы: direct10PASS/3FAIL (TikTok network, Vimeo DRM, Vimeo-public403), TikTok SOCKS1PASS; additional Facebook/Likee-profile/NaverTV3FAIL. files-proof.json содержит11 файлов с full decode. docs/services-release-2026-11-05.md фиксирует всю матрицу и ограничения; fullstable не готов. Только metadata/HTML200 не означает успех.
+
+Кэши предыдущей SDK-сборки отсутствовали. Восстановлены официальные rustc/rust-std/cargo1.99.1 с проверкой SHA256 каждого архива; подготовка ~/.cache/videodock-flatpak/baseapp с KDE SDK6.11 и llvm22. Далее SDK build текущего QML, пакет/живой GUI, fresh source archive и nativeMac. Windows предыдущий проверенный installer53304e2 сохраняется; новые QML изменения требуют нового бинаря.

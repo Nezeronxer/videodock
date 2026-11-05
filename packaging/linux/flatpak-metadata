@@ -1,0 +1,25 @@
+[Application]
+name=io.github.Nezeronxer.VideoDock
+runtime=org.kde.Platform/x86_64/6.11
+sdk=org.kde.Sdk/x86_64/6.11
+base=app/io.qt.qtwebengine.BaseApp/x86_64/6.11
+command=videodock
+
+[Context]
+shared=ipc;network;
+sockets=fallback-x11;pulseaudio;wayland;
+devices=dri;
+filesystems=xdg-videos;
+
+[Session Bus Policy]
+org.freedesktop.Flatpak=talk
+org.freedesktop.Notifications=talk
+org.kde.StatusNotifierWatcher=talk
+
+[Environment]
+LD_LIBRARY_PATH=/app/lib/x86_64-linux-gnu:/app/lib
+QML2_IMPORT_PATH=/app/lib/qml:/usr/lib/qml
+QT_QPA_PLATFORMTHEME=xdgdesktopportal
+QTWEBENGINEPROCESS_PATH=/app/lib/libexec/QtWebEngineProcess
+QTWEBENGINE_RESOURCES_PATH=/app/resources
+QTWEBENGINE_LOCALES_PATH=/app/translations/qtwebengine_locales

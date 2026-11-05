@@ -335,6 +335,17 @@ pub(super) fn update(inner: &Inner, values: &Value) -> Result<()> {
         .as_object()
         .context("Настройки должны быть объектом")?;
     ensure!(values.len() <= 64, "Слишком много настроек");
+    #[cfg(target_os = "linux")]
+    if crate::platform::flatpak() {
+        ensure!(
+            values.get("autoStart") != Some(&json!(true)),
+            "Автозапуск недоступен в этом пакете"
+        );
+        ensure!(
+            values.get("preventSleepEnabled") != Some(&json!(true)),
+            "Защита от сна недоступна в этом пакете"
+        );
+    }
     let mut settings = lock(&inner.state)["settings"].clone();
     let previous_audio = settings["mediaType"] == "audio";
     let previous_container = settings["container"].clone();

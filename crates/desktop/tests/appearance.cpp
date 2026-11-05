@@ -37,7 +37,7 @@ public:
     QJsonObject state{
         {"settings", QJsonObject{{"theme", "dark"}, {"smartMode", true}, {"quality", 1080}, {"mediaType", "video"}, {"container", "mp4"}, {"path", "/tmp/VideoDock"}}},
         {"onboarding_completed", true}, {"jobs", QJsonArray{}}, {"subscriptions", QJsonArray{}}, {"account", QJsonObject{}},
-        {"capabilities", QJsonObject{{"tray", false}, {"auto_start", false}}}
+        {"capabilities", QJsonObject{{"tray", false}, {"auto_start", false}, {"prevent_sleep", false}}}
     };
     QJsonObject lastAction;
     QProcess engineProcess;
@@ -430,6 +430,14 @@ int main(int argc, char **argv) {
                     continue;
                 }
                 const bool separator = item->inherits("QQuickMenuSeparator");
+                if (separator) {
+                    check(item->height() <= 9, "Context separator adds excessive vertical space");
+                } else {
+                    check(item->property("leftPadding").toReal() >= 12 && item->property("rightPadding").toReal() >= 12, "Context action lacks horizontal padding");
+                    auto *content = qvariant_cast<QQuickItem *>(item->property("contentItem"));
+                    check(content && content->implicitWidth() <= content->width() + 1, "Context action text is truncated");
+                    check(item->height() <= 34, "Context action has excessive vertical padding");
+                }
                 check(!separator || (previous && !previousSeparator), "Context menu has a leading or duplicate separator");
                 if (previous) {
                     const qreal gap = item->mapToScene(QPointF()).y() - previous->mapToScene(QPointF(0, previous->height())).y();
@@ -474,6 +482,29 @@ int main(int argc, char **argv) {
 
         auto *settings = named(window, "settingsDialog");
         click(window, named(window, "preferencesButton"));
+        check(!named(window, "autoStart")->property("enabled").toBool(), "Unsupported autostart is offered in settings");
+        settings->setProperty("tab", 1);
+        QTest::qWait(150);
+        QList<QQuickItem *> pending{qvariant_cast<QQuickItem *>(settings->property("contentItem"))};
+        QQuickItem *sleepToggle = nullptr;
+        QList<QQuickItem *> intensityLabels(5, nullptr);
+        while (!pending.isEmpty()) {
+            auto *item = pending.takeLast();
+            check(item != nullptr, "Settings content is missing");
+            if (item->objectName() == "preventSleepEnabled") sleepToggle = item;
+            for (int index = 0; index < intensityLabels.size(); ++index)
+                if (item->objectName() == "simultaneousLabel" + QString::number(index)) intensityLabels[index] = item;
+            pending.append(item->childItems());
+        }
+        check(sleepToggle && !sleepToggle->isEnabled(), "Unsupported sleep inhibition is offered in settings");
+        for (int index = 1; index < 5; ++index) {
+            auto *previous = intensityLabels[index - 1];
+            auto *current = intensityLabels[index];
+            check(previous && current, "Simultaneous download label is missing");
+            check(previous->x() + previous->width() + 6 <= current->x(), "Simultaneous download labels overlap or lack spacing");
+        }
+        settings->setProperty("tab", 0);
+        QTest::qWait(150);
         check(settings->property("visible").toBool(), "Preferences button did not open dialog");
         check(settings->property("width").toInt() == 800 + settings->property("sidebarExtra").toInt(), "Settings width must include measured sidebar localization allowance");
         for (const QString &mode : {"dark", "light", "system"}) {

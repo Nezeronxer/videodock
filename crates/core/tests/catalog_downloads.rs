@@ -109,6 +109,19 @@ async fn full_sample(service: &str, address: &str, audio: bool) {
             "{service}: incomplete duration {duration}/{expected}"
         );
     }
+    let decoded = tokio::time::timeout(
+        Duration::from_secs(600),
+        tokio::process::Command::new("ffmpeg")
+            .args(["-nostdin", "-v", "error", "-xerror", "-i"])
+            .arg(&result.path)
+            .args(["-f", "null", "-"])
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .expect("full decode deadline")
+    .expect("start FFmpeg decoder");
+    assert!(decoded.status.success(), "{service}: full decode failed");
     println!(
         "{service}: PASS bytes={} download_seconds={download_seconds:.3} MiB_per_second={:.3} duration={duration:.3}",
         result.size,
@@ -126,6 +139,30 @@ macro_rules! sample {
     };
 }
 sample!(vimeo, "Vimeo", "https://vimeo.com/76979871", false);
+sample!(
+    facebook_public,
+    "Facebook",
+    "https://www.facebook.com/cnn/videos/10155529876156509/",
+    false
+);
+sample!(
+    likee_profile,
+    "Likee-profile",
+    "https://likee.video/@ttgymgirl",
+    false
+);
+sample!(
+    naver_legacy,
+    "NaverTV",
+    "https://tv.naver.com/v/101180476",
+    false
+);
+sample!(
+    vimeo_public,
+    "Vimeo-public",
+    "https://vimeo.com/33951933",
+    false
+);
 sample!(
     dailymotion,
     "Dailymotion",
