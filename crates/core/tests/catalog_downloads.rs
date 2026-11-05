@@ -30,6 +30,9 @@ async fn full_sample(service: &str, address: &str, audio: bool) {
         panic!("{service}: metadata failed: {safe}")
     });
     let metadata_seconds = started.elapsed().as_secs_f64();
+    if service == "Facebook" {
+        assert_ne!(media.title, media.id, "public embed lost the watch-page title");
+    }
     let expected_duration = media.duration;
     println!(
         "{service}: metadata_seconds={metadata_seconds:.3} duration={expected_duration:?} formats={}",
@@ -149,6 +152,12 @@ sample!(
     likee_profile,
     "Likee-profile",
     "https://likee.video/@ttgymgirl",
+    false
+);
+sample!(
+    likee_public,
+    "Likee",
+    "https://likee.video/@huynh_hong_quan_/video/7093444807096327263",
     false
 );
 sample!(

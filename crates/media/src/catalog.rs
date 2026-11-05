@@ -202,7 +202,16 @@ impl Catalog {
             return Ok(media);
         }
         if domain(host, "facebook.com") || domain(host, "fb.watch") {
-            return parse_facebook(&final_url, &text);
+            if let Ok(media) = parse_facebook(&final_url, &text) {
+                return Ok(media);
+            }
+            let mut embed = Url::parse("https://www.facebook.com/plugins/video.php")?;
+            embed.query_pairs_mut().append_pair("href", final_url.as_str());
+            let page = body(self.source_get(&embed, &embed, &Auth::default()).await?).await?;
+            let mut media = parse_facebook(&final_url, &page)?;
+            media.title = meta(&text, "og:title").unwrap_or(media.title);
+            media.thumbnail = meta(&text, "og:image").unwrap_or(media.thumbnail);
+            return Ok(media);
         }
         let media = parse_html(&final_url, &text)?;
         if !media.formats.is_empty() || !media.entries.is_empty() {
@@ -2259,6 +2268,24 @@ fn parse_facebook(origin: &Url, html: &str) -> Result<Media> {
             });
         }
     }
+    if let Some(wanted) = &wanted
+        && let Some(data) = json_after(html, r#""videoData":"#)
+    {
+        for item in data.as_array().into_iter().flatten()
+            .filter(|item| item["video_id"].as_str() == Some(wanted))
+        {
+            for key in ["sd_src", "hd_src"] {
+                if let Some(value) = item[key].as_str().filter(|value| !value.is_empty()) {
+                    let mut stream = format(origin, key, value, "video/mp4", false)?;
+                    if key == "hd_src" {
+                        stream.width = item["original_width"].as_u64().and_then(|value| value.try_into().ok());
+                        stream.height = item["original_height"].as_u64().and_then(|value| value.try_into().ok());
+                    }
+                    media.formats.push(stream);
+                }
+            }
+        }
+    }
     let pattern = Regex::new(
         r#""(browser_native_hd_url|browser_native_sd_url|playable_url_quality_hd|playable_url)"\s*:\s*("(?:[^"\\]|\\.)*")"#,
     )?;
@@ -3451,6 +3478,19 @@ mod pagination_errors {
 #[cfg(test)]
 mod facebook_selection {
     use super::*;
+    #[test]
+    fn public_embed_selects_only_requested_video_and_keeps_geometry() {
+        let html = r#"<script>require("VideoConfig").handle({"videoData":[{"video_id":"123","sd_src":"https://media.example/wanted-sd.mp4?a=1&signature=fixture","hd_src":"https://media.example/wanted-hd.mp4","original_height":1080,"original_width":1080},{"video_id":"456","hd_src":"https://media.example/unrelated.mp4"}]});</script>"#;
+        let target = Url::parse("https://www.facebook.com/watch/?v=123").unwrap();
+        let media = parse_facebook(&target, html).unwrap();
+        assert_eq!(media.formats.len(), 2);
+        assert!(media.formats.iter().all(|stream| stream.url.contains("wanted-")));
+        let hd = media.formats.iter().find(|stream| stream.id == "hd_src").unwrap();
+        assert_eq!((hd.width, hd.height), (Some(1080), Some(1080)));
+        let sd = media.formats.iter().find(|stream| stream.id == "sd_src").unwrap();
+        assert!(sd.url.contains("&signature=fixture"));
+        assert!(parse_facebook(&Url::parse("https://www.facebook.com/watch/?v=789").unwrap(), html).is_err());
+    }
     #[test]
     fn unrelated_recommended_videos_are_not_formats_of_requested_video() {
         let html = r#"<meta property="og:title" content="Requested"><script type="application/json">{"videos":[{"id":"123","browser_native_hd_url":"https://media.example/wanted.mp4?a=1&signature=fixture"},{"id":"456","browser_native_hd_url":"https://media.example/unrelated.mp4"}]}</script>"#;

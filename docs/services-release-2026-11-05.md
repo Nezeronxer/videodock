@@ -16,13 +16,15 @@
 | Twitch | 35523746 | 60.013 | 4.579 | direct | Полный файл и decode PASS |
 | TikTok | 3308460 | 24.402 | 0.455 | SOCKS | Полный файл и decode PASS |
 
+| Facebook | 12474213 | 44.331 | 6.671 | direct/public embed | Полный файл и decode PASS |
+
 ## Незакрытые источники
 
 | Источник | Проверка 05.11 | Результат |
 |---|---|---|
 | YouTube | Windows 10/11 и Linux Flatpak: настоящие загрузки, файлы и decode; Windows 11 — 1080p, 634,624 с | PASS для описанных в Windows QA сценариев; это отдельный native-прогон, не catalog_downloads |
 | Vimeo | 76979871: metadata получены, pipeline отверг шифрование HLS. Дополнительный публичный 33951933 проигрывается в Chrome, но config возвращает HTTP403; UA/Referer и SOCKS также403 | FAIL полного скачивания |
-| Facebook | Публичный CNN sample: HTML получен, parser не получил playback URL; независимый HTTP200 ответ не содержит известных native media fields | FAIL; вход и современная схема не подтверждены |
+| Facebook | Обычная страница не предоставляла URL. Исправлен анонимный fallback на официальный embed, videoData выбирается строго по запрошенному video_id; regression RED→GREEN, полный файл VP9 1080×1080 + AAC | PASS для публичного sample; вход не требовался |
 | Likee | Открытый профиль возвращает `This page is not available in your area`; Catalog не получает post id/список видео | FAIL профильного сценария; одиночный доступный post не подтверждён |
 | NaverTV | Официальная tv.naver.com сообщает о закрытии30.09.2026 и переходе в Clip; старый sample не предоставляет playback ticket | Старый сервис закрыт; новый Clip не реализован/не проверен |
 | Vine | Ранее реализован явный отказ закрытого сервиса | Файл скачать нельзя; не считать PASS |
@@ -30,7 +32,7 @@
 
 TikTok напрямую завершился сетевой ошибкой; через уже существующий SOCKS получен и декодирован полный файл. Dailymotion в этом проходе прошёл напрямую, но прежние нестабильные попытки не отменены. Скорость — разовый замер, без гарантии стабильности любого соединения.
 
-Итого свежего catalog-прогона: 10 PASS и3 FAIL из13 tests (TikTok и два Vimeo). Повтор TikTok через SOCKS:1 PASS. Дополнительные Facebook/Likee-profile/NaverTV:3 FAIL. Успешных свежих источников с decode —11, включая Generic. Матрица всех18 именованных сервисов оригинала остаётся незакрытой. Полный stable release пока не готов.
+Итого свежего catalog-прогона: 10 PASS и3 FAIL из13 tests (TikTok и два Vimeo). Повтор TikTok через SOCKS:1 PASS. Дополнительные Facebook/Likee-profile/NaverTV:3 FAIL. После исправления Facebook его полный повтор также PASS. Дополнительный отдельный Likee post через SOCKS не прошёл; независимый публичный API вернул code50003/system error. Успешных свежих источников с decode —12, включая Generic. Матрица всех18 именованных сервисов оригинала остаётся незакрытой. Полный stable release пока не готов.
 
 Первичные локальные доказательства: `~/.local/share/videodock/research/services-release-2026-11-05/`: direct.log, tiktok-proxy.log, extra-direct.log, files-proof.json, direct/ и proxy/.
 
