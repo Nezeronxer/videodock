@@ -471,3 +471,15 @@ Win10fcfactualinstallerPASS: install2/upgrade/uninstall/profile/reinstall/cleanP
 Macfcf42083105499: unitPASS, signidentityimportPASS, bundle+FFmpeg+codesignPASS, workerпо-прежнемуokFalse/internal, releaseнепубликовать. LLDBthread-returndiagnosticнепринёсQtлогов (deadline), неявляетсяуспешнойпроверкой. Следующийdiagnosehelperсобираетactualbundlemanifest/helperlibraries/entitlements/systemerrors+zip.app (никакихuserprofiles/siblingkeychain); нужендляреальногоразбораrenderer. СобственныйMacвTailscaleoffline, hardwareGUIтестнедоступен.
 
 LinuxinstalledcurrentYouTubezooPASSсactualc901worker, realGoogleproof/SABR742369transfer/744360output19.063583sfull decode. Это13-йсвежийисточник(включаяGeneric); Vimeoвсе6advertisedHLSurl/avc/fallbackдвухCDNпрямоподтвержденыSAMPLE-AES KEYFORMATcom.apple.streamingkeydelivery, незашифрованныйпотокненайден; аккаунтынеприменять.
+
+
+## Возобновление REA 05.11, macOS renderer
+
+- [x] Восстановлены свежие TASK/git/CI: HEAD fc77f65, Windows native fcf0427 PASS; macOS fc77f65 run42093840131 FAIL на selected-proxy stage=internal.
+- [ ] Прочитать сохранённые helper libraries/signatures/system errors и диагностический app; установить причину renderer.
+- [ ] Минимальное исправление с regression check и нативным подтверждением.
+- [ ] Свежая упаковка/матрица перед публикацией; Draft не выпускать до macOS gate.
+
+В дереве уже есть незакоммиченные YouTube/QML/appearance изменения; этот проход их не перезаписывает. Диагностика fc77 загружается в /tmp/videodock-macos-fc77-diagnostics, failed log /tmp/videodock-macos-fc77-failed.log.
+
+macOS причина подтверждена actual system log: dyld не находит QtWebChannel по @executable_path/../Frameworks внутри nested QtWebEngineProcess. Helper также сохраняет absolute Homebrew load commands. Реальные 4 MachO из fc77 archive: LLVM переписал23команды, все38bundledlinks разрешаются; codesign/runtime наLinux НЕ проверялись. Скрипт repair-macos-frameworks переводит load dependencies в @loader_path относительно каждого бинаря, сохраняет helper entitlements при переподписи и пересобирает nested seals. Полный offline scanner дополнительно выявил13отсутствующихQt frameworks у QMLплагинов; установщик добавляет Qt rpaths и второй macdeployqt pass для графа уже обнаруженных плагинов. Regression installer сначалаRED(skipped repair), затемGREEN; framework dependency checks/packagecontract/sh-n/diff-check PASS. Нужен nativeMacrun, release всёещё Draft. Доказательство ~/.local/share/videodock/research/macos-frameworks-2026-11-05/offline-links.json.

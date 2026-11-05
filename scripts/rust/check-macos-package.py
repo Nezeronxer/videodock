@@ -21,21 +21,26 @@ with tempfile.TemporaryDirectory() as directory:
         'cargo': '#!/bin/sh\nprintf "fresh binary" > "$CARGO_TARGET_DIR/release/videodock-desktop"\n',
         'ffmpeg': '#!/bin/sh\necho bundled-ffmpeg\n',
         'ffprobe': '#!/bin/sh\necho bundled-ffprobe\n',
-        'macdeployqt': '#!/bin/sh\nmkdir -p "$1/Contents/Frameworks"\n: > "$1/Contents/Frameworks/libdependency.dylib"\nprintf "%s\\n" "$@" > "$PACKAGE_CALLS"\n',
+        'macdeployqt': '#!/bin/sh\nmkdir -p "$1/Contents/Frameworks"\n: > "$1/Contents/Frameworks/libdependency.dylib"\nprintf "%s\\n" "$@" >> "$PACKAGE_CALLS"\n',
         'plutil': '#!/bin/sh\nexit 0\n',
         'codesign': '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PACKAGE_SIGN_CALLS"\n',
         'install_name_tool': '#!/bin/sh\nexit 0\n',
+        'python3': '#!/bin/sh\nprintf "%s\\n" "$@" >> "$PACKAGE_REPAIR_CALLS"\n',
         'otool': '#!/bin/sh\nprintf "%s:\\n\\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\\n" "$2"\n',
     }
     for name, code in scripts.items():
         path = tools / name
         path.write_text(code)
         path.chmod(0o755)
-    env = dict(os.environ, HOME=str(home), CARGO_TARGET_DIR=str(target), VIDEODOCK_MAC_APP=str(app), PACKAGE_CALLS=str(root / 'calls'), PACKAGE_SIGN_CALLS=str(root / 'sign-calls'), PATH=str(tools) + os.pathsep + os.environ['PATH'])
+    env = dict(os.environ, HOME=str(home), CARGO_TARGET_DIR=str(target), VIDEODOCK_MAC_APP=str(app), PACKAGE_CALLS=str(root / 'calls'), PACKAGE_SIGN_CALLS=str(root / 'sign-calls'), PACKAGE_REPAIR_CALLS=str(root / 'repair-calls'), PATH=str(tools) + os.pathsep + os.environ['PATH'])
     subprocess.run(['sh', str(project / 'scripts/rust/install.sh')], env=env, check=True, capture_output=True)
     assert app.is_dir(), 'Installer ignored its isolated staging destination'
     assert not (home / 'Applications').exists(), 'Verification modified the installed application location'
     assert '-codesign=VideoDock Self-Signed' in (root / 'calls').read_text(), 'Qt deployment uses an unrelated or ad-hoc identity'
+    assert (root / 'calls').read_text().count('-codesign=VideoDock Self-Signed') == 2, 'Discovered QML plugin dependencies were not deployed'
+    assert (root / 'repair-calls').is_file(), 'Nested WebEngine dependency repair was skipped'
+    repair_call = (root / 'repair-calls').read_text().splitlines()
+    assert repair_call == [str(project / 'scripts/rust/repair-macos-frameworks.py'), str(app), 'VideoDock Self-Signed']
     assert '--sign VideoDock Self-Signed' in (root / 'sign-calls').read_text(), 'Bundle does not use its own named certificate'
     assert '--sign - ' not in (root / 'sign-calls').read_text(), 'Ad-hoc re-signing replaced the stable identity'
     assert (app / 'Contents/MacOS/VideoDock').read_text() == 'fresh binary', 'Installer reused an old build'

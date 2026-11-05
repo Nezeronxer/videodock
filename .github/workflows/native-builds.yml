@@ -57,6 +57,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - run: python3 scripts/rust/check-macos-frameworks.py
       - name: Install build tools
         run: |
           brew install qt ffmpeg-full cmake ninja pkgconf

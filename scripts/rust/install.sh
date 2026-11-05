@@ -79,9 +79,17 @@ EOF
     identity='VideoDock Self-Signed'
     set -- "$app" -qmldir="$project/crates/desktop/qml" -executable="$app/Contents/MacOS/ffmpeg" -executable="$app/Contents/MacOS/ffprobe" -always-overwrite
     for qtlib in /opt/homebrew/opt/qt[0-9a-z]*/lib /usr/local/opt/qt[0-9a-z]*/lib; do
-        if [ -d "$qtlib" ]; then set -- "$@" "-libpath=$qtlib"; fi
+        if [ -d "$qtlib" ]; then
+            set -- "$@" "-libpath=$qtlib"
+            # macdeployqt resolves QML @rpath imports from executable rpaths, not -libpath.
+            if ! otool -l "$app/Contents/MacOS/VideoDock" | awk -v expected="$qtlib" '$1 == "path" && $2 == expected {found=1} END {exit !found}'; then
+                install_name_tool -add_rpath "$qtlib" "$app/Contents/MacOS/VideoDock"
+            fi
+        fi
     done
     macdeployqt "$@" "-codesign=$identity"
+    # The first pass discovers QML plugins after collecting the initial framework graph.
+    macdeployqt "$app" -always-overwrite -no-plugins "-codesign=$identity"
     plutil -lint "$app/Contents/Info.plist"
     for tool in VideoDock ffmpeg ffprobe; do
         dependencies=$(otool -L "$app/Contents/MacOS/$tool")
@@ -98,7 +106,7 @@ EOF
         fi
         codesign --force --sign "$identity" "$library"
     done
-    codesign --force --sign "$identity" "$app"
+    python3 "$project/scripts/rust/repair-macos-frameworks.py" "$app" "$identity"
     codesign --verify --deep --strict "$app"
     "$app/Contents/MacOS/ffmpeg" -version >/dev/null
     "$app/Contents/MacOS/ffprobe" -version >/dev/null
