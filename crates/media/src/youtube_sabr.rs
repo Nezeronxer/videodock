@@ -20,6 +20,27 @@ fn binary(value: &str) -> Result<Vec<u8>> {
         .map_err(|_| anyhow::anyhow!("Некорректная кодировка SABR"))
 }
 
+pub(super) fn delivery_url(data: &Value) -> Result<&str> {
+    match data["playabilityStatus"]["status"].as_str() {
+        Some("OK") => {}
+        Some("LOGIN_REQUIRED" | "AGE_CHECK_REQUIRED" | "CONTENT_CHECK_REQUIRED") => {
+            anyhow::bail!(
+                "YouTube просит подтвердить доступ. Откройте видео во встроенном браузере; при необходимости выберите вход в аккаунт YouTube в настройках."
+            )
+        }
+        Some("UNPLAYABLE" | "ERROR" | "LIVE_STREAM_OFFLINE") => {
+            anyhow::bail!(
+                "Это видео сейчас недоступно на YouTube. Откройте ссылку в браузере и проверьте, воспроизводится ли оно."
+            )
+        }
+        _ => anyhow::bail!("Не удалось получить ответ YouTube. Повторите загрузку позже."),
+    }
+    data["streamingData"]["serverAbrStreamingUrl"]
+        .as_str()
+        .filter(|url| !url.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("YouTube не предоставил поток для скачивания. Повторите загрузку. Если ошибка повторяется, проверьте обновления VideoDock."))
+}
+
 pub(super) fn map(
     data: Value,
     id: &str,
@@ -215,6 +236,28 @@ pub(super) fn map(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn player_refusal_is_reported_before_looking_for_stream_url() {
+        for (status, expected) in [
+            ("LOGIN_REQUIRED", "подтвердить"),
+            ("UNPLAYABLE", "недоступно"),
+            ("ERROR", "недоступно"),
+        ] {
+            let data = serde_json::json!({"playabilityStatus":{"status":status,"reason":"private-response-must-not-be-echoed"}});
+            let error = delivery_url(&data).unwrap_err().to_string();
+            assert!(error.contains(expected), "{error}");
+            assert!(!error.contains("SABR") && !error.contains("private-response"));
+        }
+        let missing = delivery_url(&serde_json::json!({"playabilityStatus":{"status":"OK"}}))
+            .unwrap_err()
+            .to_string();
+        assert!(missing.contains("Повторите") && !missing.contains("SABR"));
+        let live = serde_json::json!({"playabilityStatus":{"status":"OK"},"streamingData":{"serverAbrStreamingUrl":"https://r.googlevideo.com/videoplayback"}});
+        assert_eq!(
+            delivery_url(&live).unwrap(),
+            "https://r.googlevideo.com/videoplayback"
+        );
+    }
     #[tokio::test]
     async fn native_metadata_preserves_quality_and_keeps_proof_and_signed_url_out_of_serialization()
     {

@@ -128,9 +128,7 @@ impl YouTube {
                     let data: serde_json::Value = serde_json::from_str(&raw)
                         .map_err(|_| anyhow!("Некорректный ответ YouTube"))?;
                     if data["videoDetails"]["isLive"].as_bool() != Some(true) {
-                        let delivery = data["streamingData"]["serverAbrStreamingUrl"]
-                            .as_str()
-                            .ok_or_else(|| anyhow!("YouTube не вернул адрес SABR"))?;
+                        let delivery = native_sabr::delivery_url(&data)?;
                         crate::sabr::validate_url(delivery)?;
                         let delivery = attested
                             .decipher_stream_url(delivery)
@@ -495,16 +493,18 @@ fn is_youtube_host(host: &str) -> bool {
 fn pipe_error(error: PipeError) -> anyhow::Error {
     let message = match error {
         PipeError::Auth(_) => "YouTube: обновите вход в аккаунт",
-        PipeError::HttpStatus(403, _) => "YouTube: HTTP403; обновите ссылку, подпись или PO token",
+        PipeError::HttpStatus(403, _) => {
+            "YouTube отклонил запрос. Повторите загрузку. Если видео открывается только через VPN или прокси, выберите это подключение в настройках VideoDock."
+        }
         PipeError::HttpStatus(429, _) => "YouTube ограничил частоту запросов; повторите позже",
         PipeError::Extraction(ExtractionError::Deobfuscation(_)) => {
-            "YouTube изменил подписи ссылок; нужен актуальный экстрактор"
+            "YouTube изменил способ загрузки видео. Проверьте обновления VideoDock."
         }
         PipeError::Extraction(ExtractionError::Botguard(_)) => {
-            "YouTube требует актуальный PO token"
+            "Не удалось пройти проверку YouTube. Повторите загрузку. Если ошибка повторяется, проверьте подключение и обновления VideoDock."
         }
         PipeError::Extraction(ExtractionError::Unavailable { .. }) => {
-            "YouTube не разрешил воспроизведение: проверьте доступ, вход в аккаунт и PO token"
+            "YouTube не разрешил воспроизведение. Проверьте видео во встроенном браузере; для закрытого видео войдите в аккаунт YouTube в настройках."
         }
         PipeError::Extraction(ExtractionError::NotFound { .. }) => "YouTube: контент не найден",
         PipeError::Extraction(_) => {

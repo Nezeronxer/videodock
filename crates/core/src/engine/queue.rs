@@ -269,7 +269,10 @@ fn parsed_media(inner: &Inner, action: &Value) -> Result<Media> {
 pub(super) fn preview_output(inner: &Inner, action: &Value) -> Result<Value> {
     let media = parsed_media(inner, action)?;
     ensure!(
-        !matches!(media.kind, MediaKind::Playlist | MediaKind::Channel | MediaKind::Search),
+        !matches!(
+            media.kind,
+            MediaKind::Playlist | MediaKind::Channel | MediaKind::Search
+        ),
         "Для списка выберите папку загрузки, а не отдельный файл"
     );
     let settings = lock(&inner.state)["settings"].clone();
@@ -653,7 +656,10 @@ fn manual_view(media: &Media, settings: &Value, errors: &HashMap<String, String>
         "can_translate_subtitles":media.subtitles.iter().any(|subtitle|subtitle.translatable),
         "audio_tracks":tracks.into_iter().map(|(language,title)|json!({"id":language,"language":language,"label":title,"default":language=="default"})).collect::<Vec<_>>(),
         "output_dir":settings["path"]});
-    if !matches!(media.kind, MediaKind::Playlist | MediaKind::Channel | MediaKind::Search) {
+    if !matches!(
+        media.kind,
+        MediaKind::Playlist | MediaKind::Channel | MediaKind::Search
+    ) {
         match crate::pipeline::preview_output_path(
             media,
             Path::new(settings["path"].as_str().unwrap_or_default()),
@@ -852,6 +858,21 @@ pub(super) fn public_state(state: &Value) -> Value {
         match value {
             Value::Object(map) => {
                 map.retain(|key, _| !key.starts_with('_') && key != "proxyPassword");
+                for key in ["error", "notice"] {
+                    if let Some(Value::String(message)) = map.get_mut(key) {
+                        let diagnostic = message.to_ascii_lowercase();
+                        if diagnostic.contains("sabr")
+                            || diagnostic.contains("po token")
+                            || diagnostic.contains("botguard")
+                        {
+                            *message = if diagnostic.contains("403") {
+                                "YouTube отклонил загрузку. Повторите попытку. Если видео открывается только через VPN или прокси, выберите это подключение в настройках VideoDock."
+                            } else {
+                                "Не удалось получить видео с YouTube. Повторите загрузку. Если ошибка повторяется, проверьте воспроизведение во встроенном браузере и обновления VideoDock."
+                            }.to_owned();
+                        }
+                    }
+                }
                 for value in map.values_mut() {
                     clean(value);
                 }
@@ -875,31 +896,16 @@ pub(super) fn start(inner: &Arc<Inner>) -> Result<()> {
     runtime()?.spawn(async move{loop{
         let Some(inner)=weak.upgrade()else{break};if shutdown.is_cancelled(){break}
         if let Err(error)=kick(&inner){notice(&inner,error);}
-        if let Err(error)=kick_processing(&inner){notice(&inner,error);}
         check_subscriptions(&inner);check_library(&inner);drop(inner);
         tokio::select!{_ = shutdown.cancelled()=>break,_ = wake.notified()=>{},_ = tokio::time::sleep(Duration::from_millis(250))=>{}}
     }});
     Ok(())
 }
 fn job<'a>(state: &'a Value, id: &str) -> Option<&'a Value> {
-    state["jobs"]
-        .as_array()?
-        .iter()
-        .find(|job| job["id"] == id)
-        .or_else(|| {
-            state["processing"]
-                .as_array()?
-                .iter()
-                .find(|job| job["id"] == id)
-        })
+    state["jobs"].as_array()?.iter().find(|job| job["id"] == id)
 }
 fn job_mut<'a>(state: &'a mut Value, id: &str) -> Option<&'a mut Value> {
-    let key = if state["jobs"].as_array()?.iter().any(|job| job["id"] == id) {
-        "jobs"
-    } else {
-        "processing"
-    };
-    state[key]
+    state["jobs"]
         .as_array_mut()?
         .iter_mut()
         .find(|job| job["id"] == id)
@@ -1334,12 +1340,10 @@ fn remove_records(inner: &Inner, ids: &HashSet<String>, delete: bool) -> Result<
         }
     }
     change(inner, |state| {
-        for key in ["jobs", "processing"] {
-            state[key]
-                .as_array_mut()
-                .unwrap()
-                .retain(|item| !ids.contains(item["id"].as_str().unwrap_or_default()));
-        }
+        state["jobs"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|item| !ids.contains(item["id"].as_str().unwrap_or_default()));
         Ok(())
     })?;
     super::secrets::forget(inner, ids)?;
@@ -1661,168 +1665,6 @@ async fn scan_subscription(inner: &Arc<Inner>, id: &str) -> Result<()> {
         Ok(())
     })
 }
-pub(super) fn process(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
-    let effect = action["effect"].as_str().context("Не выбран инструмент")?;
-    ensure!(
-        [
-            "remove_vocals",
-            "extract_vocals",
-            "extract_voice",
-            "remove_echo"
-        ]
-        .contains(&effect),
-        "Этот инструмент пока недоступен"
-    );
-    ensure!(
-        crate::processing::available(&inner.directory),
-        "Для медиаинструментов нужны установленные проверенные модели и совместимый runtime"
-    );
-    let state = lock(&inner.state).clone();
-    let ids = requested_ids(&state, action, false)?;
-    let mut rows = Vec::new();
-    for id in ids {
-        let item = job(&state, &id).context("Элемент не найден")?;
-        if item["_group"] == true {
-            continue;
-        }
-        ensure!(item["state"] == "complete", "Сначала завершите загрузку");
-        let path = PathBuf::from(item["path"].as_str().context("Нет локального файла")?);
-        ensure!(path.is_file(), "Исходный файл не найден");
-        let output_dir = path
-            .parent()
-            .context("Нет папки исходного файла")?
-            .join("Processed");
-        rows.push(json!({"id":uuid::Uuid::new_v4().to_string(),"title":item["title"],"kind":item["kind"],"state":"queued","progress":0,"effect":effect,"created_at":now(),"_input":path,"_output_dir":output_dir}));
-    }
-    let ids = rows.iter().map(|row| row["id"].clone()).collect::<Vec<_>>();
-    change(inner, |state| {
-        state["processing"].as_array_mut().unwrap().extend(rows);
-        Ok(())
-    })?;
-    Ok(json!({"ids":ids}))
-}
-fn kick_processing(inner: &Arc<Inner>) -> Result<()> {
-    let mut active = lock(&inner.active);
-    let state = lock(&inner.state).clone();
-    if state["processing"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|item| active.contains_key(item["id"].as_str().unwrap_or_default()))
-    {
-        return Ok(());
-    }
-    let Some(item) = state["processing"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|item| item["state"] == "queued" && item.get("_remove").is_none())
-    else {
-        return Ok(());
-    };
-    let id = item["id"].as_str().unwrap().to_owned();
-    let cancel = inner.shutdown.child_token();
-    active.insert(id.clone(), cancel.clone());
-    change(inner, |state| {
-        job_mut(state, &id).unwrap()["state"] = json!("processing");
-        Ok(())
-    })?;
-    let weak = Arc::downgrade(inner);
-    runtime()?.spawn(async move {
-        let Some(inner) = weak.upgrade() else { return };
-        let saved = job(&lock(&inner.state), &id).cloned().unwrap();
-        let callback = {
-            let weak = Arc::downgrade(&inner);
-            let id = id.clone();
-            let cancel = cancel.clone();
-            Arc::new(move |percent: f64| {
-                let Some(inner) = weak.upgrade() else { return };
-                if inner.shutdown.is_cancelled() || cancel.is_cancelled() {
-                    return;
-                }
-                if let Some(item) = job_mut(&mut lock(&inner.state), &id) {
-                    item["progress"] = json!((percent * 100.0).clamp(0.0, 99.0));
-                }
-            }) as Arc<dyn Fn(f64) + Send + Sync>
-        };
-        let result = crate::processing::process(
-            PathBuf::from(saved["_input"].as_str().unwrap()),
-            saved["effect"].as_str().unwrap(),
-            PathBuf::from(saved["_output_dir"].as_str().unwrap()),
-            inner.directory.clone(),
-            cancel.clone(),
-            callback,
-        )
-        .await;
-        if !inner.shutdown.is_cancelled() {
-            let remove = job(&lock(&inner.state), &id)
-                .and_then(|item| item.get("_remove"))
-                .map(|v| v == true);
-            if let Some(delete) = remove {
-                if delete && let Ok(path) = &result {
-                    std::fs::remove_file(path).ok();
-                }
-                if let Err(error) = remove_records(&inner, &HashSet::from([id.clone()]), delete) {
-                    notice(&inner, error);
-                }
-            } else {
-                let _ = change(&inner, |state| {
-                    let notifications = state["settings"]["processingNotificationsEnabled"] == true;
-                    if let Some(item) = job_mut(state, &id) {
-                        match result {
-                            Ok(path) => {
-                                item["kind"] = json!(if path
-                                    .extension()
-                                    .and_then(|ext| ext.to_str())
-                                    .is_some_and(|ext| matches!(
-                                        ext,
-                                        "wav" | "mp3" | "m4a" | "ogg" | "flac"
-                                    )) {
-                                    "audio"
-                                } else {
-                                    "video"
-                                });
-                                item["path"] = json!(path);
-                                item["files"] = json!([path]);
-                                item["state"] = json!("complete");
-                                item["progress"] = json!(100);
-                                item["error"] = json!("");
-                            }
-                            Err(error) => {
-                                if cancel.is_cancelled() {
-                                    if item["state"] != "queued" {
-                                        item["state"] = json!("paused");
-                                    }
-                                } else {
-                                    item["state"] = json!("error");
-                                    item["error"] = json!(error.to_string());
-                                }
-                            }
-                        }
-                        if notifications && item["state"] == "complete" {
-                            notify(state, "Обработка завершена", "Медиафайл готов");
-                        }
-                    }
-                    Ok(())
-                });
-            }
-        }
-        if !inner.shutdown.is_cancelled() {
-            let remove = job(&lock(&inner.state), &id)
-                .and_then(|item| item.get("_remove"))
-                .map(|value| value == true);
-            if let Some(delete) = remove
-                && let Err(error) = remove_records(&inner, &HashSet::from([id.clone()]), delete)
-            {
-                notice(&inner, error);
-            }
-        }
-        lock(&inner.active).remove(&id);
-        inner.wake.notify_one();
-    });
-    Ok(())
-}
-
 fn check_library(inner: &Arc<Inner>) {
     if now().saturating_sub(inner.library_last.load(Ordering::SeqCst)) < 60
         || inner.library_scanning.swap(true, Ordering::SeqCst)
@@ -1850,25 +1692,39 @@ fn check_library(inner: &Arc<Inner>) {
             change(&inner,|state|{
                 if state["settings"]["path"].as_str().map(PathBuf::from).as_ref()!=Some(&folder){return Ok(())}
                 use sha2::{Digest,Sha256};
-                for key in ["jobs","processing"] {
-                    for item in state[key].as_array_mut().unwrap() {
-                        if item["thumbnail"].as_str().is_none_or(str::is_empty)
-                            && let Some(path) = item["path"].as_str().and_then(|path|std::fs::canonicalize(path).ok())
-                            && let Some(image) = previews.get(&path) { item["thumbnail"] = json!(image); }
-                    }
+                for item in state["jobs"].as_array_mut().unwrap() {
+                    if item["thumbnail"].as_str().is_none_or(str::is_empty)
+                        && let Some(path) = item["path"].as_str().and_then(|path|std::fs::canonicalize(path).ok())
+                        && let Some(image) = previews.get(&path) { item["thumbnail"] = json!(image); }
                 }
                 let mut tracked=HashSet::new();
-                for key in ["jobs","processing"]{for item in state[key].as_array().unwrap(){if item["_library"]==true{continue}
+                for item in state["jobs"].as_array().unwrap(){if item["_library"]==true{continue}
 if let Some(path)=item["path"].as_str()&& let Ok(path)=std::fs::canonicalize(path){tracked.insert(path);}
-if let Some(paths)=item["files"].as_array(){for path in paths.iter().filter_map(Value::as_str){if let Ok(path)=std::fs::canonicalize(path){tracked.insert(path);}}}}}
+if let Some(paths)=item["files"].as_array(){for path in paths.iter().filter_map(Value::as_str){if let Ok(path)=std::fs::canonicalize(path){tracked.insert(path);}}}}
                 let mut library=Vec::new();
                 for file in files{if tracked.contains(&file.path){continue}let id=format!("library-{:x}",Sha256::digest(file.path.to_string_lossy().as_bytes()));let kind=serde_json::to_value(&file.kind)?;
                     library.push(json!({"id":id,"title":file.title,"kind":kind,"media_type":kind,"state":"complete","progress":100,"thumbnail":previews.get(&file.path),"path":file.path,"files":[file.path],"size":bytes(file.size),"_size_bytes":file.size,"duration":file.duration,"format":file.path.extension().and_then(|ext|ext.to_str()).unwrap_or_default().to_ascii_uppercase(),"_library":true,"created_at":0}));
                 }
                 let jobs=state["jobs"].as_array_mut().unwrap();jobs.retain(|item|item["_library"]!=true);ensure!(jobs.len()+library.len()<=250000,"Библиотека превышает 250000 элементов");jobs.extend(library);
-                state["capabilities"]["processing"]=json!(crate::processing::available(&inner.directory));Ok(())
+                Ok(())
             })
         }.await;
         if let Err(error)=result{notice(&inner,error);}inner.library_scanning.store(false,Ordering::SeqCst);
     });
+}
+
+#[cfg(test)]
+mod user_error_tests {
+    use super::*;
+    #[test]
+    fn transient_errors_are_readable_and_normal_errors_are_preserved() {
+        let state = json!({"jobs":[],"manual":{"error":"YouTube требует актуальный PO token"},"notice":"Нет конфигурации SABR","other":{"error":"Недостаточно места на диске"}});
+        let public = public_state(&state);
+        for value in [&public["manual"]["error"], &public["notice"]] {
+            let text=value.as_str().unwrap();
+            assert!(!text.contains("SABR") && !text.contains("PO token") && text.contains("Повторите"));
+        }
+        assert_eq!(public["other"]["error"],state["other"]["error"]);
+        assert!(state["manual"]["error"].as_str().unwrap().contains("PO token"));
+    }
 }

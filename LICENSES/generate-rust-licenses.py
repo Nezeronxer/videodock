@@ -218,12 +218,23 @@ def main():
     mode.add_argument('--check', action='store_true')
     args = parser.parse_args()
     expected, count = generate()
+    current = {package['name'] + '@' + package['version'] for package in json.loads(expected['manifest.json'])['packages']}
+    supplement_file = OUTPUT / 'supplements.json'
+    supplements = json.loads(supplement_file.read_bytes())
+    obsolete = {file.relative_to(OUTPUT).as_posix() for file in (OUTPUT / 'texts').glob('*.txt')
+                if re.fullmatch('[0-9a-f]{64}', file.stem)} - expected.keys()
     if args.write:
         for relative, data in expected.items():
             file = OUTPUT / relative
             file.parent.mkdir(parents=True, exist_ok=True)
             file.write_bytes(data)
+        for relative in obsolete:
+            (OUTPUT / relative).unlink()
+        supplements['packages'] = {key: value for key, value in supplements['packages'].items() if key in current}
+        supplement_file.write_bytes(encoded(supplements))
     else:
+        assert not obsolete, 'unreferenced generated license texts; regenerate the bundle'
+        assert supplements['packages'].keys() <= current, 'retired dependency supplements; regenerate the bundle'
         for relative, data in expected.items():
             assert (OUTPUT / relative).read_bytes() == data, 'stale or altered license bundle: ' + relative
     print(('generated' if args.write else 'verified') + f': {count} Rust dependencies, {len(expected) - 2} deduplicated notice texts')

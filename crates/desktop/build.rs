@@ -11,7 +11,6 @@ fn main() {
         "ManualDialog",
         "BrowserPane",
         "JobList",
-        "MediaToolsDialog",
         "TransferDialog",
         "DetailsDialog",
         "OnboardingDialog",

@@ -524,17 +524,12 @@ AppDialog {
                                     {
                                         key: "recommendationServiceEnabled",
                                         label: qsTr("Submit download statistics")
-                                    },
-                                    {
-                                        key: "aiProcessingAllowed",
-                                        label: qsTr("Show Media Tools in downloads list")
                                     }
                                 ]
                                 Toggle {
                                     required property var modelData
                                     settingKey: modelData.key
                                     text: modelData.label
-                                    enabled: modelData.key !== "aiProcessingAllowed" || (root.app.state.capabilities || {}).processing !== false
                                 }
                             }
                         }
@@ -811,10 +806,6 @@ AppDialog {
                                     "label": qsTr("Show notification when downloading finished")
                                 },
                                 {
-                                    "key": "processingNotificationsEnabled",
-                                    "label": qsTr("Show notification when processing completes")
-                                },
-                                {
                                     "key": "remindNotificationEnabled",
                                     "label": qsTr("Show reminders to download new content")
                                 },
@@ -855,7 +846,6 @@ AppDialog {
                                 Toggle {
                                     settingKey: modelData.key
                                     text: modelData.label
-                                    enabled: modelData.key !== "processingNotificationsEnabled" || (root.app.state.capabilities || {}).processing !== false
                                 }
                             }
                         }

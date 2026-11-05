@@ -7,7 +7,7 @@ Push-Location $project
 try {
     & cargo build --locked --release -p videodock-desktop
     if ($LASTEXITCODE -ne 0) { throw 'Rust build failed' }
-    $destination = Join-Path $env:LOCALAPPDATA 'VideoDock\app'
+    $destination = Join-Path $env:CARGO_TARGET_DIR 'package\VideoDock'
     New-Item -ItemType Directory -Force $destination | Out-Null
     Copy-Item (Join-Path $env:CARGO_TARGET_DIR 'release\videodock-desktop.exe') (Join-Path $destination 'VideoDock.exe') -Force
     $image = [IO.File]::ReadAllBytes((Join-Path $destination 'VideoDock.exe'))
@@ -15,8 +15,16 @@ try {
     if ([BitConverter]::ToUInt16($image, $pe + 24 + 68) -ne 2) { throw 'Release executable must use the Windows GUI subsystem' }
     Copy-Item (Get-Command ffmpeg -ErrorAction Stop).Source (Join-Path $destination 'ffmpeg.exe') -Force
     Copy-Item (Get-Command ffprobe -ErrorAction Stop).Source (Join-Path $destination 'ffprobe.exe') -Force
-    & windeployqt --release --qmldir (Join-Path $project 'crates\desktop\qml') (Join-Path $destination 'VideoDock.exe')
+    Copy-Item (Join-Path $project 'assets/videodock.ico') $destination -Force
+    & windeployqt --release --no-compiler-runtime --include-plugins qoffscreen --qmldir (Join-Path $project 'crates\desktop\qml') (Join-Path $destination 'VideoDock.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed' }
+    if (-not $env:VCToolsRedistDir) { throw 'Run packaging from the configured Visual Studio build environment' }
+    $crt = Get-ChildItem (Join-Path $env:VCToolsRedistDir 'x64') -Directory -Filter 'Microsoft.VC*.CRT' | Sort-Object Name -Descending | Select-Object -First 1
+    if (-not $crt) { throw 'Official app-local MSVC runtime absent' }
+    Copy-Item (Join-Path $crt.FullName '*.dll') $destination -Force
+    foreach ($dll in @('vcruntime140.dll', 'msvcp140.dll', 'platforms\qoffscreen.dll')) {
+        if (-not (Test-Path (Join-Path $destination $dll) -PathType Leaf)) { throw "Incomplete portable runtime: $dll" }
+    }
     $licenses = Join-Path $destination 'licenses'
     New-Item -ItemType Directory -Force $licenses | Out-Null
     Copy-Item (Join-Path $project 'LICENSES/*') $licenses -Recurse -Force
@@ -42,10 +50,5 @@ try {
     $qtBin = Split-Path (Get-Command windeployqt).Source
     & (Join-Path $qtBin 'qmake.exe') -query QT_VERSION | Out-File (Join-Path $licenses 'qt-version.txt') -Encoding utf8
     if ($LASTEXITCODE -ne 0) { throw 'Cannot record Qt version' }
-    $shell = New-Object -ComObject WScript.Shell
-    $shortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Programs')) 'VideoDock.lnk'))
-    $shortcut.TargetPath = Join-Path $destination 'VideoDock.exe'
-    $shortcut.WorkingDirectory = $destination
-    $shortcut.Save()
-    Write-Output "VideoDock: $destination"
+    Write-Output "VideoDock staged: $destination"
 } finally { Pop-Location }

@@ -25,11 +25,6 @@ quick-xml = "0.42"
 tempfile = "3"
 isolang = { version = "2.4", default-features = false }
 roxmltree = "0.20"
-libloading = "0.8"
-hound = "3.5"
-tar = "0.4"
-bzip2 = "0.6"
-rustfft = "6"
 libc = "0.2"
 prost = "0.13"
 

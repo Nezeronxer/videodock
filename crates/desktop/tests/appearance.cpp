@@ -21,6 +21,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QTest>
+#include <QSignalSpy>
 #include <QTranslator>
 #include <QLibraryInfo>
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
@@ -35,8 +36,8 @@ public:
     using QObject::QObject;
     QJsonObject state{
         {"settings", QJsonObject{{"theme", "dark"}, {"smartMode", true}, {"quality", 1080}, {"mediaType", "video"}, {"container", "mp4"}, {"path", "/tmp/VideoDock"}}},
-        {"onboarding_completed", true}, {"jobs", QJsonArray{}}, {"subscriptions", QJsonArray{}}, {"processing", QJsonArray{}}, {"account", QJsonObject{}},
-        {"processing_capabilities", QJsonObject{}}, {"capabilities", QJsonObject{{"tray", false}, {"auto_start", false}}}
+        {"onboarding_completed", true}, {"jobs", QJsonArray{}}, {"subscriptions", QJsonArray{}}, {"account", QJsonObject{}},
+        {"capabilities", QJsonObject{{"tray", false}, {"auto_start", false}}}
     };
     QJsonObject lastAction;
     QProcess engineProcess;
@@ -184,6 +185,12 @@ int main(int argc, char **argv) {
         };
         backend->publish();
         QTest::qWait(350);
+        check(window->findChild<QObject *>("mediaToolsDialog") == nullptr, "Removed Media Tools dialog is still instantiated");
+        for (auto *object : window->findChildren<QObject *>()) {
+            const auto key = object->property("settingKey").toString();
+            check(key != "aiProcessingAllowed" && key != "processingNotificationsEnabled", "Removed processing setting is still exposed");
+            check(object->property("text").toString() != QCoreApplication::translate("Main", "Processed"), "Removed processed-media tab is still exposed");
+        }
         check(named(window, "mainToolbar")->property("height").toInt() == 64, "Toolbar must be 64px");
         check(named(window, "mediaListHeader")->property("height").toInt() == 64, "List header must be 64px");
         check(window->color() == QColor("#292929"), "Default theme must be dark");
@@ -198,6 +205,20 @@ int main(int argc, char **argv) {
         check(named(window, "browserSearchIcon")->property("visible").toBool(), "Browser search icon is missing");
 
         auto *appearance = named(window, "appearanceMenu");
+        auto checkSwitchThumb = [&]() {
+            auto *control = qobject_cast<QQuickItem *>(named(window, "smartModeSwitch"));
+            for (const bool enabled : {false, true}) {
+                auto settings = backend->state["settings"].toObject();
+                settings["smartMode"] = enabled;
+                backend->state["settings"] = settings;
+                backend->publish();
+                QTest::qWait(200);
+                const QPoint pixel = control->mapToScene(QPointF(enabled ? 28 : 12, 3)).toPoint();
+                const QColor thumb = window->grabWindow().pixelColor(pixel);
+                check(thumb.red() > 220 && thumb.green() > 220 && thumb.blue() > 220, "Smart Mode thumb is invisible");
+            }
+        };
+        checkSwitchThumb();
         auto openAppearance = [&]() {
             auto *view = engine.newQObject(window).property("menuBar").property("itemAt").call({2}).toQObject();
             click(window, view);
@@ -212,6 +233,7 @@ int main(int argc, char **argv) {
             click(window, named(window, name.constData()));
             check(backend->state["settings"].toObject()["theme"] == mode, "Appearance menu did not save the selected theme");
             check(named(window, name.constData())->property("checked").toBool(), "Appearance menu lost its selected checkmark");
+            checkSwitchThumb();
         }
 
         auto *intro = named(window, "onboardingDialog");
@@ -228,7 +250,8 @@ int main(int argc, char **argv) {
         check(intro->property("step").toInt() == 1, "Next did not advance onboarding");
         click(window, named(window, "onboardingSecondary"));
         check(intro->property("step").toInt() == 0 && intro->property("visible").toBool(), "Back closed onboarding instead of returning");
-        for (int step = 0; step < 5; ++step) {
+        check(engine.newQObject(intro).property("steps").property("length").toInt() == 4, "Onboarding retained a removed Media Tools step");
+        for (int step = 0; step < 4; ++step) {
             check(intro->property("step").toInt() == step, "Onboarding skipped a step");
             capture("onboarding-step-" + QString::number(step));
             click(window, named(window, "onboardingPrimary"));
@@ -383,6 +406,72 @@ int main(int argc, char **argv) {
         evaluate("ui.selectedIds = ['fixture-video']");
         capture("dark-downloads");
 
+        auto checkContextMenu = [&](bool subscriptions) {
+            rows.clear(); checkRows(list);
+            check(!rows.isEmpty(), "Context menu has no fixture row");
+            auto *row = rows.first();
+            QTest::mouseClick(window, Qt::RightButton, Qt::NoModifier, row->mapToScene(QPointF(row->width()/2, row->height()/2)).toPoint());
+            QTest::qWait(150);
+            auto menu = engine.newQObject(named(window, "downloadContextMenu"));
+            check(menu.property("visible").toBool(), "Context menu did not open");
+            QQuickItem *previous = nullptr;
+            bool previousSeparator = false;
+            int subscriptionActions = 0;
+            for (int i = 0; i < menu.property("count").toInt(); ++i) {
+                auto *item = qobject_cast<QQuickItem *>(menu.property("itemAt").call({i}).toQObject());
+                check(item != nullptr, "Context menu item is missing");
+                const auto text = item->property("text").toString();
+                if (text == QCoreApplication::translate("JobList", "Edit Subscription Settings") || text == QCoreApplication::translate("JobList", "Unsubscribe")) {
+                    ++subscriptionActions;
+                    check(item->isVisible() == subscriptions, "Subscription context action has wrong visibility");
+                }
+                if (!item->isVisible()) {
+                    check(item->height() == 0, "Hidden context action reserves an empty menu row");
+                    continue;
+                }
+                const bool separator = item->inherits("QQuickMenuSeparator");
+                check(!separator || (previous && !previousSeparator), "Context menu has a leading or duplicate separator");
+                if (previous) {
+                    const qreal gap = item->mapToScene(QPointF()).y() - previous->mapToScene(QPointF(0, previous->height())).y();
+                    check(std::abs(gap) <= 1, "Context menu contains a gap between visible actions");
+                }
+                previous = item;
+                previousSeparator = separator;
+            }
+            check(subscriptionActions == 2 && previous && previous->objectName() == "deleteAction", "Delete must follow the last visible context section");
+            capture(subscriptions ? "context-subscriptions" : "context-downloads");
+            invoke(named(window, "downloadContextMenu"), "close");
+        };
+        checkContextMenu(false);
+        {
+            auto *row = rows.first();
+            QQuickItem *more = nullptr;
+            for (auto *item : row->findChildren<QQuickItem *>()) {
+                if (item->property("text").toString() == QCoreApplication::translate("JobList", "More actions")) more = item;
+            }
+            check(more != nullptr, "More actions button is missing");
+            const QPointF button = more->mapToScene(QPointF(more->width()/2, more->height()/2));
+            QCursor::setPos(window->mapToGlobal(QPoint(10, window->height()-10)));
+            QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, button.toPoint());
+            QTest::qWait(150);
+            auto *menu = named(window, "downloadContextMenu");
+            auto *content = qvariant_cast<QQuickItem *>(menu->property("contentItem"));
+            check(menu->property("visible").toBool() && content, "More actions did not open a menu");
+            const QPointF position = content->mapToScene(QPointF());
+            check(std::abs(position.x()-button.x()) <= content->width()+more->width() && std::abs(position.y()-button.y()) <= content->height()+more->height(), "More actions menu opened away from its button");
+            capture("context-button-downloads");
+            invoke(menu, "close");
+        }
+        backend->state["subscriptions"] = QJsonArray{QJsonObject{{"id", "fixture-subscription"}, {"title", "Subscription fixture"}, {"kind", "channel"}, {"state", "subscribed"}}};
+        backend->publish();
+        evaluate("ui.activeTab = 'Subscriptions'");
+        QTest::qWait(150);
+        checkContextMenu(true);
+        evaluate("ui.activeTab = 'All'; ui.selectedIds = []; ui.focusedJob = null");
+        backend->state["subscriptions"] = QJsonArray{};
+        backend->publish();
+        QTest::qWait(150);
+
         auto *settings = named(window, "settingsDialog");
         click(window, named(window, "preferencesButton"));
         check(settings->property("visible").toBool(), "Preferences button did not open dialog");
@@ -417,7 +506,7 @@ int main(int argc, char **argv) {
             check(named(window, "sortMenu")->property("visible").toBool(), "Sort menu unavailable");
             capture(mode + "-sort");
             invoke(named(window, "sortMenu"), "close");
-            for (const char *name : {"manualDownloadDialog", "mediaToolsDialog", "transferDialog", "detailsDialog", "onboardingDialog", "urlDialog", "removeDialog", "controlPanel", "about", "quitDialog"}) {
+            for (const char *name : {"manualDownloadDialog", "transferDialog", "detailsDialog", "onboardingDialog", "urlDialog", "removeDialog", "controlPanel", "about", "quitDialog"}) {
                 auto *dialog = named(window, name);
                 if (QString::fromLatin1(name) == "manualDownloadDialog") {
                     backend->state["manual"] = QJsonObject{{"title", "Format selection fixture"}, {"state", "ready"}, {"kind", "video"}, {"url", "https://example.invalid/video"}, {"formats", QJsonArray{
@@ -612,9 +701,24 @@ int main(int argc, char **argv) {
             }, "Completed row did not appear");
             waitFor([&]() { return named(previewRow, "downloadThumbnail")->property("status").toInt() == 1; }, "Video thumbnail did not render");
             auto *playButton = qobject_cast<QQuickItem *>(named(previewRow, "thumbnailAction"));
-            QTest::mouseMove(window, playButton->mapToScene(QPointF(playButton->width()/2, playButton->height()/2)).toPoint());
-            QTest::qWait(100);
+            const QPoint playPoint = playButton->mapToScene(QPointF(playButton->width()/2, playButton->height()/2)).toPoint();
+            check(QRect(QPoint(), window->size()).contains(playPoint), "Play hover target is outside the window");
+            check(list->contains(list->mapFromScene(playPoint)), "Play hover target is clipped by its list");
+            auto moveHover = [&](const QPoint &point) {
+                QSignalSpy rendered(window, &QQuickWindow::frameSwapped);
+                QTest::mouseMove(window, point);
+                window->update();
+                check(!rendered.isEmpty() || rendered.wait(1000), "Hover frame did not render");
+            };
+            const QPoint besidePlay = playPoint + QPoint(playButton->width(), 0);
+            moveHover(besidePlay);
+            check(!playButton->property("hovered").toBool() && window->cursor().shape() == Qt::ArrowCursor, "Play cursor baseline is not an unhovered arrow");
+            moveHover(playPoint);
+            check(playButton->property("hovered").toBool(), "Play hover event did not reach its target");
+            check(window->cursor().shape() == Qt::PointingHandCursor, "Play hover cursor did not become a pointing hand");
             capture("real-engine-complete");
+            moveHover(besidePlay);
+            check(!playButton->property("hovered").toBool() && window->cursor().shape() == Qt::ArrowCursor, "Play cursor did not reset after leaving the button");
             QApplication::clipboard()->setText(url + "?second=1");
             QTest::keyClick(window, Qt::Key_V, Qt::ControlModifier);
             waitFor([&]() { return backend->state["manual"].toObject()["state"] == "ready"; }, "Second media parsing did not reach ready");
@@ -681,7 +785,7 @@ int main(int argc, char **argv) {
             qInfo("Real Engine: theme/restart, validation, settings, local UI download, ffprobe, durable history, context copy and safe removal passed.");
         }
         check(warnings.isEmpty(), warnings.join('\n'));
-        qInfo("Appearance: themes, 5 settings tabs, 10 dialogs, standard Close, browser modes, menus, narrow window and contrast passed.");
+        qInfo("Appearance: themes, 5 settings tabs, 9 dialogs, standard Close, browser modes, menus, narrow window and contrast passed.");
         return 0;
     } catch (const std::exception &error) {
         qCritical("Appearance check failed: %s", error.what());

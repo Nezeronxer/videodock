@@ -3,3 +3,9 @@ vendor/rustypipe/src/client/channel.rs:generic-api-key:853
 vendor/rustypipe/src/client/channel.rs:generic-api-key:861
 vendor/rustypipe/testfiles/playlist/playlist_20261103_lockup.json:generic-api-key:49
 vendor/rustypipe/testfiles/playlist/playlist_20261103_lockup.json:generic-api-key:596
+# Public Google client identifier shipped by upstream BgUtils (not account credentials).
+crates/desktop/attestation/bgutils/utils/constants.ts:gcp-api-key:3
+crates/desktop/attestation/attest.js:gcp-api-key:5
+# Published aws-lc-rs cipher examples reproduced verbatim in license notices.
+LICENSES/rust/texts/8fe1baf89f5b79a68e20d86f660d20a74b9756bf8ff0c546655eaf89c85e85a4.txt:generic-api-key:1885
+LICENSES/rust/texts/8fe1baf89f5b79a68e20d86f660d20a74b9756bf8ff0c546655eaf89c85e85a4.txt:generic-api-key:1893

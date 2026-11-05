@@ -122,7 +122,7 @@ Item {
                 onTapped: function (eventPoint, button) {
                     root.app.chooseJob(row.modelData, (point.modifiers & Qt.ControlModifier) !== 0);
                     if (button === Qt.RightButton)
-                        contextMenu.popup();
+                        contextMenu.popup(row, eventPoint.position.x, eventPoint.position.y);
                 }
                 onDoubleTapped: root.openCompleted(row.modelData)
             }
@@ -264,19 +264,6 @@ Item {
                 }
 
                 ToolButton {
-                    text: qsTr("Media Tools")
-                    display: AbstractButton.IconOnly
-                    palette.button: "transparent"
-                    icon.source: "icons/audio.svg"
-                    visible: row.modelData.state === "complete" && (hover.hovered || row.current) && root.app.settings.aiProcessingAllowed !== false
-                    Accessible.name: qsTr("Media Tools")
-                    onClicked: {
-                        root.app.chooseJob(row.modelData, false);
-                        root.app.openMediaTools();
-                    }
-                }
-
-                ToolButton {
                     text: qsTr("Show in Folder")
                     visible: !!row.modelData.path && (hover.hovered || row.current)
                     display: AbstractButton.IconOnly
@@ -285,6 +272,7 @@ Item {
                     onClicked: root.app.jobs("reveal", [row.modelData.id])
                 }
                 ToolButton {
+                    id: moreButton
                     text: qsTr("More actions")
                     visible: hover.hovered || row.current
                     display: AbstractButton.IconOnly
@@ -293,7 +281,7 @@ Item {
                     Accessible.name: qsTr("More actions")
                     onClicked: {
                         root.app.chooseJob(row.modelData, false);
-                        contextMenu.popup();
+                        contextMenu.popup(moreButton, 0, moreButton.height);
                     }
                 }
             }
@@ -309,7 +297,7 @@ Item {
 
         Label {
             textFormat: Text.PlainText
-            text: root.app.search ? qsTr("No media found") : root.app.activeTab === "Subscriptions" ? qsTr("Subscribe to channels and playlists") : root.app.activeTab === "Processed" ? qsTr("Processed items appear here") : qsTr("Download your first video")
+            text: root.app.search ? qsTr("No media found") : root.app.activeTab === "Subscriptions" ? qsTr("Subscribe to channels and playlists") : qsTr("Download your first video")
             font.pixelSize: 24
             color: root.app.theme.secondary
             Layout.alignment: Qt.AlignHCenter
@@ -317,7 +305,7 @@ Item {
 
         Label {
             textFormat: Text.PlainText
-            text: root.app.activeTab === "Subscriptions" ? qsTr("Paste a channel or playlist link and choose Subscribe to automatically download new videos.") : root.app.activeTab === "Processed" ? qsTr("Apply Media Tools to a completed download to extract voice or vocals.") : qsTr("Copy a video or song link, then click Paste Link. You can also find videos in the built-in browser.")
+            text: root.app.activeTab === "Subscriptions" ? qsTr("Paste a channel or playlist link and choose Subscribe to automatically download new videos.") : qsTr("Copy a video or song link, then click Paste Link. You can also find videos in the built-in browser.")
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignHCenter
             Layout.fillWidth: true
@@ -350,7 +338,7 @@ Item {
         }
 
         MenuItem {
-            text: qsTr("Force")
+            text: qsTr("Move to Front of Queue")
             onTriggered: root.app.jobs("force")
         }
 
@@ -383,13 +371,9 @@ Item {
         }
 
         MenuItem {
-            text: qsTr("Media Tools…")
-            onTriggered: root.app.openMediaTools()
-        }
-
-        MenuItem {
             text: qsTr("Edit Subscription Settings")
             visible: root.app.activeTab === "Subscriptions"
+            height: visible ? implicitHeight : 0
             onTriggered: root.app.send({
                 "action": "subscriptions",
                 "command": "edit",
@@ -400,6 +384,7 @@ Item {
         MenuItem {
             text: qsTr("Unsubscribe")
             visible: root.app.activeTab === "Subscriptions"
+            height: visible ? implicitHeight : 0
             onTriggered: root.app.send({
                 "action": "subscriptions",
                 "command": "unsubscribe",

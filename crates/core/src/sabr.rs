@@ -92,6 +92,17 @@ impl State {
         );
         Ok(())
     }
+    fn finished(&self, track: &Track) -> Result<bool> {
+        if !track.covered() {
+            return Ok(false);
+        }
+        ensure!(
+            track.complete(),
+            "Размер SABR-потока не совпадает с метаданными"
+        );
+        // Short clips may finish while Google's verification is still pending; the stall limit bounds polling.
+        Ok(self.attested)
+    }
     fn body(&self, delivery: &Delivery, track: &Track, video: bool) -> Vec<u8> {
         let format = track.format.clone();
         let mut ranges = Vec::new();
@@ -654,18 +665,10 @@ pub async fn download(
         {
             Ok(()) => {
                 retries = 0;
-                state.progress(before, track.bytes)?;
-                if track.covered() {
-                    ensure!(
-                        track.complete(),
-                        "Размер SABR-потока не совпадает с метаданными"
-                    );
-                    ensure!(
-                        state.attested,
-                        "Google не подтвердил PO для готового потока"
-                    );
+                if state.finished(&track)? {
                     break;
                 }
+                state.progress(before, track.bytes)?;
             }
             Err(error) => {
                 track.rollback();
@@ -784,6 +787,56 @@ mod tests {
         let mut b = state();
         b.progress(0, 5).unwrap();
         assert_eq!(b.stalls, 0);
+    }
+    #[test]
+    fn complete_media_waits_for_pending_attestation_before_publication() {
+        let id = FormatId {
+            itag: Some(140),
+            last_modified: Some(1),
+            xtags: None,
+        };
+        let mut track = Track::new(id.clone(), "fixture0001".into(), 2, 1000).unwrap();
+        track
+            .initialize(FormatInit {
+                video_id: Some("fixture0001".into()),
+                format_id: Some(id.clone()),
+                end_time_ms: Some(1000),
+                end_segment_number: Some(1),
+                mime_type: None,
+            })
+            .unwrap();
+        for (init, sequence, duration) in [(true, None, 0), (false, Some(1), 1000)] {
+            track
+                .header(MediaHeader {
+                    header_id: Some(7),
+                    format_id: Some(id.clone()),
+                    is_init_seg: Some(init),
+                    sequence_number: sequence,
+                    start_ms: Some(0),
+                    duration_ms: Some(duration),
+                    content_length: Some(1),
+                    ..Default::default()
+                })
+                .unwrap();
+            track.data(7, b"x").unwrap();
+            let segment = track.finish_segment(7).unwrap();
+            track.commit(segment).unwrap();
+        }
+        assert!(track.complete());
+        let mut state = state();
+        state.last_protection = 2;
+        assert!(
+            !state.finished(&track).unwrap(),
+            "pending verification is not a rejection or success"
+        );
+        state.progress(2, 2).unwrap();
+        state.attested = true;
+        assert!(state.finished(&track).unwrap());
+        track.bytes -= 1;
+        assert!(
+            state.finished(&track).is_err(),
+            "accepted verification cannot publish a truncated track"
+        );
     }
     #[test]
     fn all_redirects_are_validated_before_another_request() {

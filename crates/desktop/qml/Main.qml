@@ -23,7 +23,6 @@ ApplicationWindow {
             "settings": {},
             "jobs": [],
             "subscriptions": [],
-            "processing": [],
             "account": {}
         })
     property var settings: state.settings || ({})
@@ -32,7 +31,7 @@ ApplicationWindow {
     property string sortKey: "date"
     property bool descending: true
     property bool browserVisible: false
-    readonly property bool hasMedia: (state.jobs || []).length + (state.subscriptions || []).length + (state.processing || []).length > 0
+    readonly property bool hasMedia: (state.jobs || []).length + (state.subscriptions || []).length > 0
     property string localNotice: ""
     property string lastNotification: ""
     property bool quitConfirmed: false
@@ -50,8 +49,7 @@ ApplicationWindow {
                 Audio: qsTr("Audio"),
                 Playlists: qsTr("Playlists"),
                 Channels: qsTr("Channels"),
-                Subscriptions: qsTr("Subscriptions"),
-                Processed: qsTr("Processed")
+                Subscriptions: qsTr("Subscriptions")
             })[key] || key;
     }
     function statusTitle(key) {
@@ -181,7 +179,7 @@ ApplicationWindow {
     }
 
     function selectedRows() {
-        return (state.jobs || []).concat(state.processing || []).filter(function (j) {
+        return (state.jobs || []).filter(function (j) {
             return selectedIds.indexOf(j.id) >= 0;
         });
     }
@@ -206,9 +204,6 @@ ApplicationWindow {
         detailsDialog.open();
     }
 
-    function openMediaTools() {
-        mediaTools.open();
-    }
     function nativePath(url) {
         var path = decodeURIComponent(String(url).replace(/^file:\/\//, ""));
         return Qt.platform.os === "windows" ? path.replace(/^\/([A-Za-z]:)/, "$1") : path;
@@ -224,9 +219,9 @@ ApplicationWindow {
     }
 
     function listRows() {
-        var rows = activeTab === "Subscriptions" ? (state.subscriptions || []) : activeTab === "Processed" ? (state.processing || []) : (state.jobs || []);
+        var rows = activeTab === "Subscriptions" ? (state.subscriptions || []) : (state.jobs || []);
         return rows.filter(function (j) {
-            var matches = activeTab === "All" || activeTab === "Subscriptions" || activeTab === "Processed" || (activeTab === "Video" && j.kind === "video") || (activeTab === "Audio" && j.kind === "audio") || (activeTab === "Playlists" && j.kind === "playlist") || (activeTab === "Channels" && j.kind === "channel");
+            var matches = activeTab === "All" || activeTab === "Subscriptions" || (activeTab === "Video" && j.kind === "video") || (activeTab === "Audio" && j.kind === "audio") || (activeTab === "Playlists" && j.kind === "playlist") || (activeTab === "Channels" && j.kind === "channel");
             return matches && (!search || ((j.title || "") + " " + (j.url || "")).toLowerCase().indexOf(search.toLowerCase()) >= 0);
         }).slice().sort(function (a, b) {
             var result = sortKey === "name" ? String(a.title || "").localeCompare(String(b.title || "")) : String(a.created_at || a.id || "").localeCompare(String(b.created_at || b.id || ""));
@@ -419,13 +414,6 @@ ApplicationWindow {
                             radius: 10
                             color: window.theme.accentText
                             Behavior on x { NumberAnimation { duration: 150 } }
-                            layer.enabled: true
-                            layer.effect: DropShadow {
-                                color: Qt.rgba(0, 0, 0, 0.1)
-                                verticalOffset: 2
-                                samples: 5
-                                radius: 5
-                            }
                             ColorImage {
                                 anchors.centerIn: parent
                                 width: 16
@@ -517,7 +505,7 @@ ApplicationWindow {
                         spacing: 0
 
                         Repeater {
-                            model: ["All", "Video", "Audio", "Playlists", "Channels", "Subscriptions", "Processed"]
+                            model: ["All", "Video", "Audio", "Playlists", "Channels", "Subscriptions"]
                             Button {
                                 id: filterTab
                                 palette.dark: window.theme.accent
@@ -747,12 +735,6 @@ ApplicationWindow {
 
     ManualDialog {
         id: manualDialog
-
-        app: window
-    }
-
-    MediaToolsDialog {
-        id: mediaTools
 
         app: window
     }
@@ -1060,7 +1042,7 @@ ApplicationWindow {
             objectName: "viewMenu"
 
             Repeater {
-                model: ["All", "Video", "Audio", "Playlists", "Channels", "Subscriptions", "Processed"]
+                model: ["All", "Video", "Audio", "Playlists", "Channels", "Subscriptions"]
 
                 MenuItem {
                     required property string modelData

@@ -12,8 +12,7 @@ AppDialog {
         { "mark": "plus", "caption": qsTr("Easy download start"), "title": qsTr("Add a video link to the app"), "body": qsTr("1. Copy the video URL from your browser.") + "<br>" + qsTr("2. Click the Paste Link button within the app.") },
         { "mark": "search", "caption": qsTr("Quick video search"), "title": qsTr("Find videos right in the app"), "body": qsTr("Select the service you want to download from.") + "<br>" + qsTr("Follow the video link and click Download.") },
         { "mark": "check", "caption": qsTr("Default settings setup"), "title": qsTr("Specify your preferences"), "body": qsTr("Enable Smart Mode to set quality, format, device, etc.") + "<br>" + qsTr("Preferences will be automatically applied to all links.") },
-        { "mark": "audio", "caption": qsTr("Media Tools"), "title": qsTr("Clean up noise, extract voice, and more"), "body": qsTr("Look for the %1Media Tools%2 icon next to any of your downloads, then pick a tool to get started.").arg("<b>").arg("</b>") },
-        { "mark": "subscribe", "caption": qsTr("Subscriptions addition"), "title": qsTr("Subscribe to channels and playlists"), "body": qsTr("Add links to favorite YouTube creators and playlists.") + "<br>" + qsTr("Grab all existing videos, auto-download new content.") }
+        { "imageStep": 5, "mark": "subscribe", "caption": qsTr("Subscriptions addition"), "title": qsTr("Subscribe to channels and playlists"), "body": qsTr("Add links to favorite YouTube creators and playlists.") + "<br>" + qsTr("Grab all existing videos, auto-download new content.") }
     ]
 
     title: qsTr("Getting Started")
@@ -106,7 +105,7 @@ AppDialog {
                     }
                     AnimatedImage {
                         anchors.fill: parent
-                        source: root.app.asset("onboarding-step-" + (root.step + 1) + ".gif", "")
+                        source: root.app.asset("onboarding-step-" + (root.steps[root.step].imageStep || (root.step + 1)) + ".gif", "")
                         visible: source.toString().length > 0
                         playing: visible && root.visible
                         fillMode: Image.Stretch

@@ -4,80 +4,70 @@
 <context>
     <name>BrowserPane</name>
     <message>
+        <location filename="../BrowserPane.qml" line="19"/>
         <source>Restart VideoDock to apply the browser proxy settings.</source>
         <translation>Перезапустите VideoDock, чтобы применить настройки прокси для браузера.</translation>
     </message>
     <message>
+        <location filename="../BrowserPane.qml" line="19"/>
         <source>The browser supports HTTP proxies and SOCKS5 without authentication. Downloads support the configured proxy.</source>
         <translation>Браузер поддерживает HTTP-прокси и SOCKS5 без авторизации. Скачивание работает с выбранным прокси.</translation>
     </message>
     <message>
-        <location filename="../BrowserPane.qml" line="124"/>
-        <location filename="../BrowserPane.qml" line="128"/>
+        <location filename="../BrowserPane.qml" line="131"/>
+        <location filename="../BrowserPane.qml" line="137"/>
         <source>Home</source>
         <translation>Главная</translation>
     </message>
     <message>
-        <location filename="../BrowserPane.qml" line="142"/>
-        <location filename="../BrowserPane.qml" line="148"/>
+        <location filename="../BrowserPane.qml" line="151"/>
+        <location filename="../BrowserPane.qml" line="159"/>
         <source>Back</source>
         <translation>Назад</translation>
     </message>
     <message>
-        <location filename="../BrowserPane.qml" line="156"/>
-        <location filename="../BrowserPane.qml" line="162"/>
+        <location filename="../BrowserPane.qml" line="167"/>
+        <location filename="../BrowserPane.qml" line="175"/>
         <source>Forward</source>
         <translation>Вперёд</translation>
     </message>
     <message>
-        <source>Reload</source>
-        <translation type="vanished">Обновить</translation>
-    </message>
-    <message>
-        <source>Search by keywords or enter a URL</source>
-        <translation type="vanished">Поиск по словам или ссылка</translation>
-    </message>
-    <message>
-        <location filename="../BrowserPane.qml" line="173"/>
+        <location filename="../BrowserPane.qml" line="188"/>
         <source>Click to show browser</source>
         <translation>Нажмите для показа браузера</translation>
     </message>
     <message>
-        <location filename="../BrowserPane.qml" line="173"/>
+        <location filename="../BrowserPane.qml" line="188"/>
         <source>Search by keywords</source>
         <translation>Поиск по ключевым словам</translation>
     </message>
     <message>
-        <location filename="../BrowserPane.qml" line="188"/>
+        <location filename="../BrowserPane.qml" line="213"/>
         <source>Go</source>
         <translation>Перейти</translation>
     </message>
     <message>
-        <location filename="../BrowserPane.qml" line="188"/>
+        <location filename="../BrowserPane.qml" line="213"/>
         <source>Search</source>
         <translation>Найти</translation>
     </message>
     <message>
-        <location filename="../BrowserPane.qml" line="349"/>
+        <location filename="../BrowserPane.qml" line="385"/>
         <source>Download</source>
         <translation>Скачать</translation>
     </message>
     <message>
-        <location filename="../BrowserPane.qml" line="338"/>
+        <location filename="../BrowserPane.qml" line="374"/>
         <source>Hide Browser</source>
         <translation>Скрыть браузер</translation>
     </message>
     <message>
-        <location filename="../BrowserPane.qml" line="219"/>
+        <location filename="../BrowserPane.qml" line="244"/>
         <source>Select the service below and enter your search query</source>
         <translation>Выберите сервис ниже и введите ваш поисковой запрос</translation>
     </message>
     <message>
-        <source>Find videos to download right in the app</source>
-        <translation type="vanished">Ищите видео прямо в приложении</translation>
-    </message>
-    <message>
-        <location filename="../BrowserPane.qml" line="228"/>
+        <location filename="../BrowserPane.qml" line="253"/>
         <source>Select a service and start searching</source>
         <translation>Выберите сервис и начните поиск</translation>
     </message>
@@ -182,163 +172,134 @@
 <context>
     <name>JobList</name>
     <message>
-        <source>Select %1</source>
-        <translation type="vanished">Выбрать %1</translation>
-    </message>
-    <message>
-        <location filename="../JobList.qml" line="203"/>
+        <location filename="../JobList.qml" line="249"/>
         <source>Untitled</source>
         <translation>Без названия</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="295"/>
+        <location filename="../JobList.qml" line="330"/>
         <source>Resume</source>
         <translation>Возобновить</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="300"/>
+        <location filename="../JobList.qml" line="335"/>
         <source>Pause</source>
         <translation>Приостановить</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="220"/>
-        <location filename="../JobList.qml" line="225"/>
-        <source>Media Tools</source>
-        <translation>Медиа-инструменты</translation>
-    </message>
-    <message>
-        <location filename="../JobList.qml" line="24"/>
+        <location filename="../JobList.qml" line="49"/>
         <source>retrieving information</source>
         <translation>получение информации</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="26"/>
+        <location filename="../JobList.qml" line="51"/>
         <source>%1% converted</source>
         <translation>%1% конвертировано</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="26"/>
+        <location filename="../JobList.qml" line="51"/>
         <source>%1% downloaded</source>
         <translation>%1% скачано</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="28"/>
+        <location filename="../JobList.qml" line="53"/>
         <source>%1 left</source>
         <translation>осталось %1</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="161"/>
+        <location filename="../JobList.qml" line="196"/>
         <source>Stop Download</source>
         <translation>Остановить скачивание</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="161"/>
+        <location filename="../JobList.qml" line="196"/>
         <source>Resume Download</source>
         <translation>Продолжить скачивание</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="161"/>
+        <location filename="../JobList.qml" line="196"/>
         <source>Play</source>
         <translation>Воспроизвести</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="241"/>
-        <location filename="../JobList.qml" line="246"/>
+        <location filename="../JobList.qml" line="275"/>
+        <location filename="../JobList.qml" line="280"/>
         <source>More actions</source>
         <translation>Другие действия</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="264"/>
+        <location filename="../JobList.qml" line="299"/>
         <source>No media found</source>
         <translation>Ничего не найдено</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="264"/>
+        <location filename="../JobList.qml" line="299"/>
         <source>Subscribe to channels and playlists</source>
         <translation>Подписывайтесь на каналы и плейлисты</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="264"/>
-        <source>Processed items appear here</source>
-        <translation>Здесь появятся обработанные файлы</translation>
-    </message>
-    <message>
-        <location filename="../JobList.qml" line="264"/>
+        <location filename="../JobList.qml" line="299"/>
         <source>Download your first video</source>
         <translation>Скачайте первое видео</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="272"/>
+        <location filename="../JobList.qml" line="307"/>
         <source>Paste a channel or playlist link and choose Subscribe to automatically download new videos.</source>
         <translation>Вставьте ссылку на канал или плейлист и выберите «Подписаться», чтобы автоматически скачивать новые видео.</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="272"/>
-        <source>Apply Media Tools to a completed download to extract voice or vocals.</source>
-        <translation>Примените медиаинструменты к скачанному файлу, чтобы выделить голос или вокал.</translation>
-    </message>
-    <message>
-        <location filename="../JobList.qml" line="272"/>
+        <location filename="../JobList.qml" line="307"/>
         <source>Copy a video or song link, then click Paste Link. You can also find videos in the built-in browser.</source>
         <translation>Скопируйте ссылку на видео или песню и нажмите «Вставить ссылку». Искать видео можно и во встроенном браузере.</translation>
     </message>
     <message>
-        <source>Paste Link</source>
-        <translation type="vanished">Вставить ссылку</translation>
-    </message>
-    <message>
-        <location filename="../JobList.qml" line="288"/>
+        <location filename="../JobList.qml" line="323"/>
         <source>Show Details</source>
-        <translation>Показать детали</translation>
+        <translation>Показать сведения</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="305"/>
-        <source>Force</source>
-        <translation>Принудительно</translation>
+        <location filename="../JobList.qml" line="340"/>
+        <source>Move to Front of Queue</source>
+        <translation>В начало очереди</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="310"/>
+        <location filename="../JobList.qml" line="345"/>
         <source>Redownload</source>
         <translation>Скачать заново</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="233"/>
-        <location filename="../JobList.qml" line="315"/>
+        <location filename="../JobList.qml" line="267"/>
+        <location filename="../JobList.qml" line="350"/>
         <source>Show in Folder</source>
         <translation>Показать в папке</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="320"/>
+        <location filename="../JobList.qml" line="355"/>
         <source>Open File</source>
         <translation>Открыть файл</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="328"/>
+        <location filename="../JobList.qml" line="363"/>
         <source>Copy Link Address</source>
         <translation>Скопировать адрес ссылки</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="333"/>
+        <location filename="../JobList.qml" line="368"/>
         <source>Open Links in Browser</source>
         <translation>Открыть ссылки в браузере</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="338"/>
-        <source>Media Tools…</source>
-        <translation>Медиаинструменты…</translation>
-    </message>
-    <message>
-        <location filename="../JobList.qml" line="343"/>
+        <location filename="../JobList.qml" line="373"/>
         <source>Edit Subscription Settings</source>
         <translation>Настройки подписки</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="353"/>
+        <location filename="../JobList.qml" line="383"/>
         <source>Unsubscribe</source>
         <translation>Отписаться</translation>
     </message>
     <message>
-        <location filename="../JobList.qml" line="366"/>
+        <location filename="../JobList.qml" line="396"/>
         <source>Delete…</source>
         <translation>Удалить…</translation>
     </message>
@@ -352,13 +313,13 @@
     </message>
     <message>
         <location filename="../Main.qml" line="48"/>
-        <location filename="../Main.qml" line="106"/>
+        <location filename="../Main.qml" line="105"/>
         <source>Video</source>
         <translation>Видео</translation>
     </message>
     <message>
         <location filename="../Main.qml" line="49"/>
-        <location filename="../Main.qml" line="106"/>
+        <location filename="../Main.qml" line="105"/>
         <source>Audio</source>
         <translation>Аудио</translation>
     </message>
@@ -378,206 +339,153 @@
         <translation>Подписки</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="53"/>
-        <source>Processed</source>
-        <translation>Обработано</translation>
-    </message>
-    <message>
-        <location filename="../Main.qml" line="58"/>
+        <location filename="../Main.qml" line="57"/>
         <source>Queued</source>
         <translation>В очереди</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="59"/>
+        <location filename="../Main.qml" line="58"/>
         <source>Retrieving information</source>
         <translation>Получение информации</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="60"/>
+        <location filename="../Main.qml" line="59"/>
         <source>Downloading</source>
         <translation>Загрузка</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="61"/>
+        <location filename="../Main.qml" line="60"/>
         <source>Processing</source>
         <translation>Обработка</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="62"/>
+        <location filename="../Main.qml" line="61"/>
         <source>Paused</source>
         <translation>Приостановлено</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="63"/>
+        <location filename="../Main.qml" line="62"/>
         <source>Complete</source>
         <translation>Готово</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="64"/>
+        <location filename="../Main.qml" line="63"/>
         <source>Error</source>
         <translation>Ошибка</translation>
     </message>
     <message>
-        <source>＋  Paste Link</source>
-        <translation type="vanished">＋  Вставить ссылку</translation>
-    </message>
-    <message>
-        <location filename="../Main.qml" line="435"/>
-        <location filename="../Main.qml" line="436"/>
+        <location filename="../Main.qml" line="438"/>
+        <location filename="../Main.qml" line="439"/>
         <source>Smart Mode</source>
-        <translation>Умный Режим</translation>
+        <translation>Умный режим</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="571"/>
-        <location filename="../Main.qml" line="580"/>
+        <location filename="../Main.qml" line="574"/>
+        <location filename="../Main.qml" line="583"/>
         <source>Search downloads</source>
         <translation>Поиск в загрузках</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1100"/>
+        <location filename="../Main.qml" line="1099"/>
         <source>Show Browser</source>
         <translation>Показать браузер</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="463"/>
+        <location filename="../Main.qml" line="466"/>
         <source>Preferences</source>
         <translation>Настройки</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="477"/>
+        <location filename="../Main.qml" line="480"/>
         <source>Control Panel</source>
         <translation>Панель управления</translation>
     </message>
     <message>
-        <source>Download</source>
-        <translation type="vanished">Скачать</translation>
-    </message>
-    <message>
-        <source>Quality</source>
-        <translation type="vanished">Качество</translation>
-    </message>
-    <message>
-        <source>Format</source>
-        <translation type="vanished">Формат</translation>
-    </message>
-    <message>
-        <location filename="../Main.qml" line="729"/>
+        <location filename="../Main.qml" line="733"/>
         <source>Save To</source>
         <translation>Сохранить в</translation>
     </message>
     <message>
-        <source>Choose Folder…</source>
-        <translation type="vanished">Выбрать папку…</translation>
-    </message>
-    <message>
-        <source>All Preferences…</source>
-        <translation type="vanished">Все настройки…</translation>
-    </message>
-    <message>
-        <location filename="../Main.qml" line="606"/>
-        <location filename="../Main.qml" line="1073"/>
+        <location filename="../Main.qml" line="609"/>
+        <location filename="../Main.qml" line="1072"/>
         <source>Date Added</source>
         <translation>По дате добавления</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="612"/>
-        <location filename="../Main.qml" line="1080"/>
+        <location filename="../Main.qml" line="615"/>
+        <location filename="../Main.qml" line="1079"/>
         <source>Name</source>
         <translation>По имени</translation>
     </message>
     <message>
-        <source>Reverse sort direction</source>
-        <translation type="vanished">Изменить порядок сортировки</translation>
-    </message>
-    <message>
-        <location filename="../Main.qml" line="561"/>
+        <location filename="../Main.qml" line="564"/>
         <source> items</source>
         <translation> элементов</translation>
     </message>
     <message>
-        <source> selected</source>
-        <translation type="vanished"> выбрано</translation>
-    </message>
-    <message>
-        <location filename="../Main.qml" line="382"/>
-        <location filename="../Main.qml" line="774"/>
-        <location filename="../Main.qml" line="974"/>
+        <location filename="../Main.qml" line="385"/>
+        <location filename="../Main.qml" line="772"/>
+        <location filename="../Main.qml" line="972"/>
         <source>Paste Link</source>
         <translation>Вставить ссылку</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="453"/>
+        <location filename="../Main.qml" line="456"/>
         <source>Enable Smart Mode to download links in one click</source>
-        <translation>Включите режим умного управления, чтобы скачивать ссылки одним нажатием</translation>
+        <translation>Включите умный режим, чтобы скачивать по ссылке одним нажатием</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="580"/>
+        <location filename="../Main.qml" line="583"/>
         <source>Close search</source>
         <translation>Закрыть поиск</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="661"/>
+        <location filename="../Main.qml" line="665"/>
         <source>Find videos to download right in the app</source>
         <translation>Находите видео для скачивания прямо в приложении</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="668"/>
+        <location filename="../Main.qml" line="672"/>
         <source>Click the service icon below and start searching</source>
         <translation>Нажмите иконку сервиса ниже и начните поиск</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="710"/>
+        <location filename="../Main.qml" line="714"/>
         <source>Close</source>
         <translation>Закрыть</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="800"/>
+        <location filename="../Main.qml" line="798"/>
         <source>Delete Selected Items</source>
         <translation>Удалить выбранные элементы</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="822"/>
+        <location filename="../Main.qml" line="820"/>
         <source>Remove %1 item(s) from the list?</source>
         <translation>Удалить %1 элемент(ов) из списка?</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="831"/>
+        <location filename="../Main.qml" line="829"/>
         <source>Also delete files from device</source>
         <translation>Также удалить файлы с устройства</translation>
     </message>
     <message>
-        <source>YouTube account</source>
-        <translation type="vanished">Аккаунт YouTube</translation>
-    </message>
-    <message>
-        <source>Log Out</source>
-        <translation type="vanished">Выйти</translation>
-    </message>
-    <message>
-        <source>Log In</source>
-        <translation type="vanished">Войти</translation>
-    </message>
-    <message>
-        <source>Sign in through Google to access your private playlists.</source>
-        <translation type="vanished">Войдите через Google для доступа к личным плейлистам.</translation>
-    </message>
-    <message>
-        <location filename="../Main.qml" line="981"/>
+        <location filename="../Main.qml" line="979"/>
         <source>Download &quot;Liked&quot;</source>
         <translation>Скачать «Понравившиеся»</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1004"/>
+        <location filename="../Main.qml" line="1002"/>
         <source>Download &quot;Watch Later&quot;</source>
         <translation>Скачать «Смотреть позже»</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="848"/>
+        <location filename="../Main.qml" line="846"/>
         <source>About VideoDock</source>
         <translation>О VideoDock</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="856"/>
+        <location filename="../Main.qml" line="854"/>
         <source>VideoDock
 Rust download engine · Qt interface
 Independent implementation.</source>
@@ -586,250 +494,250 @@ Independent implementation.</source>
 Независимая реализация.</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="867"/>
+        <location filename="../Main.qml" line="865"/>
         <source>Downloads are still running</source>
         <translation>Загрузки ещё выполняются</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="879"/>
+        <location filename="../Main.qml" line="877"/>
         <source>Quit with incomplete downloads?</source>
         <translation>Выйти с незавершёнными загрузками?</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="898"/>
+        <location filename="../Main.qml" line="896"/>
         <source>Show VideoDock</source>
         <translation>Показать VideoDock</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="903"/>
-        <location filename="../Main.qml" line="1027"/>
+        <location filename="../Main.qml" line="901"/>
+        <location filename="../Main.qml" line="1025"/>
         <source>Pause All</source>
         <translation>Приостановить все</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="908"/>
-        <location filename="../Main.qml" line="1032"/>
+        <location filename="../Main.qml" line="906"/>
+        <location filename="../Main.qml" line="1030"/>
         <source>Resume All</source>
         <translation>Возобновить все</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="913"/>
-        <location filename="../Main.qml" line="963"/>
+        <location filename="../Main.qml" line="911"/>
+        <location filename="../Main.qml" line="961"/>
         <source>Quit</source>
         <translation>Выйти</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="933"/>
+        <location filename="../Main.qml" line="931"/>
         <source>File</source>
         <translation>Файл</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="936"/>
+        <location filename="../Main.qml" line="934"/>
         <source>Open Directory</source>
         <translation>Открыть папку для загрузок</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="946"/>
+        <location filename="../Main.qml" line="944"/>
         <source>Import Downloads…</source>
         <translation>Импортировать загрузки…</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="951"/>
+        <location filename="../Main.qml" line="949"/>
         <source>Export Downloads…</source>
         <translation>Экспортировать загрузки…</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="956"/>
+        <location filename="../Main.qml" line="954"/>
         <source>Export Subscriptions…</source>
         <translation>Экспортировать подписки…</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="971"/>
+        <location filename="../Main.qml" line="969"/>
         <source>Edit</source>
         <translation>Изменить</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="984"/>
-        <location filename="../Main.qml" line="1007"/>
+        <location filename="../Main.qml" line="982"/>
+        <location filename="../Main.qml" line="1005"/>
         <source>Download Playlist</source>
         <translation>Скачать плейлист</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="992"/>
-        <location filename="../Main.qml" line="1015"/>
+        <location filename="../Main.qml" line="990"/>
+        <location filename="../Main.qml" line="1013"/>
         <source>Subscribe to Playlist</source>
         <translation>Подписаться на плейлист</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1037"/>
+        <location filename="../Main.qml" line="1035"/>
         <source>Remove All…</source>
         <translation>Удалить всё…</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1050"/>
+        <location filename="../Main.qml" line="1048"/>
         <source>View</source>
         <translation>Вид</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="595"/>
-        <location filename="../Main.qml" line="1070"/>
+        <location filename="../Main.qml" line="598"/>
+        <location filename="../Main.qml" line="1069"/>
         <source>Sort</source>
         <translation>Сортировать</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="106"/>
+        <location filename="../Main.qml" line="105"/>
         <source>Best</source>
         <translation>Лучшее</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="106"/>
+        <location filename="../Main.qml" line="105"/>
         <source>Playlist</source>
         <translation>Плейлист</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="106"/>
+        <location filename="../Main.qml" line="105"/>
         <source>Channel</source>
-        <translation>канал</translation>
+        <translation>Канал</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="107"/>
+        <location filename="../Main.qml" line="106"/>
         <source>Any</source>
         <translation>Любой</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="107"/>
+        <location filename="../Main.qml" line="106"/>
         <source>Unlimited</source>
-        <translation>Безлимитный</translation>
+        <translation>Без ограничений</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="108"/>
+        <location filename="../Main.qml" line="107"/>
         <source>Original</source>
         <translation>Оригинал</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="108"/>
+        <location filename="../Main.qml" line="107"/>
         <source>Unknown</source>
         <translation>Неизвестно</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="108"/>
+        <location filename="../Main.qml" line="107"/>
         <source>Default</source>
         <translation>По умолчанию</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="109"/>
+        <location filename="../Main.qml" line="108"/>
         <source>Highest</source>
         <translation>Самая высокая</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="110"/>
+        <location filename="../Main.qml" line="109"/>
         <source>Every 5 minutes</source>
         <translation>Каждые 5 минут</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="110"/>
+        <location filename="../Main.qml" line="109"/>
         <source>Every 15 minutes</source>
         <translation>Каждые 15 минут</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="111"/>
+        <location filename="../Main.qml" line="110"/>
         <source>Every 30 minutes</source>
         <translation>Каждые 30 минут</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="111"/>
+        <location filename="../Main.qml" line="110"/>
         <source>Every hour</source>
         <translation>Каждый час</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="112"/>
+        <location filename="../Main.qml" line="111"/>
         <source>Every 3 hours</source>
         <translation>Каждые 3 часа</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="112"/>
+        <location filename="../Main.qml" line="111"/>
         <source>Every 6 hours</source>
         <translation>Каждые 6 часов</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="113"/>
+        <location filename="../Main.qml" line="112"/>
         <source>Every 12 hours</source>
         <translation>Каждые 12 часов</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="113"/>
+        <location filename="../Main.qml" line="112"/>
         <source>Every day</source>
         <translation>Каждый день</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="619"/>
-        <location filename="../Main.qml" line="1089"/>
+        <location filename="../Main.qml" line="622"/>
+        <location filename="../Main.qml" line="1088"/>
         <source>Ascending</source>
         <translation>По возрастанию</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="625"/>
-        <location filename="../Main.qml" line="1094"/>
+        <location filename="../Main.qml" line="628"/>
+        <location filename="../Main.qml" line="1093"/>
         <source>Descending</source>
         <translation>По убыванию</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1108"/>
+        <location filename="../Main.qml" line="1107"/>
         <source>Appearance</source>
         <translation>Оформление</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1114"/>
+        <location filename="../Main.qml" line="1113"/>
         <source>Dark</source>
         <translation>Тёмное</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1115"/>
+        <location filename="../Main.qml" line="1120"/>
         <source>Light</source>
         <translation>Светлое</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1116"/>
+        <location filename="../Main.qml" line="1127"/>
         <source>System</source>
         <translation>Как в системе</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1134"/>
+        <location filename="../Main.qml" line="1138"/>
         <source>Tools</source>
         <translation>Инструменты</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1137"/>
+        <location filename="../Main.qml" line="1141"/>
         <source>Control Panel…</source>
         <translation>Панель управления…</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1142"/>
+        <location filename="../Main.qml" line="1146"/>
         <source>Preferences…</source>
         <translation>Настройки…</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1147"/>
+        <location filename="../Main.qml" line="1151"/>
         <source>Check For Updates…</source>
         <translation>Проверить обновления…</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1158"/>
+        <location filename="../Main.qml" line="1162"/>
         <source>Help</source>
         <translation>Помощь</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1161"/>
+        <location filename="../Main.qml" line="1165"/>
         <source>Getting Started</source>
         <translation>Начало работы</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1166"/>
+        <location filename="../Main.qml" line="1170"/>
         <source>Open Logs Folder</source>
         <translation>Открыть папку с лог-файлами</translation>
     </message>
     <message>
-        <location filename="../Main.qml" line="1174"/>
+        <location filename="../Main.qml" line="1178"/>
         <source>About</source>
         <translation>О программе</translation>
     </message>
@@ -857,12 +765,12 @@ Independent implementation.</source>
     <message>
         <location filename="../ManualDialog.qml" line="154"/>
         <source>Search Results</source>
-        <translation>результаты поиска</translation>
+        <translation>Результаты поиска</translation>
     </message>
     <message>
         <location filename="../ManualDialog.qml" line="154"/>
         <source>Channel</source>
-        <translation>канал</translation>
+        <translation>Канал</translation>
     </message>
     <message>
         <location filename="../ManualDialog.qml" line="154"/>
@@ -872,12 +780,12 @@ Independent implementation.</source>
     <message>
         <location filename="../ManualDialog.qml" line="154"/>
         <source>Download Video</source>
-        <translation>Загрузить видео</translation>
+        <translation>Скачать видео</translation>
     </message>
     <message>
         <location filename="../ManualDialog.qml" line="154"/>
         <source>Download Audio</source>
-        <translation>Скачивайте аудио</translation>
+        <translation>Скачать аудио</translation>
     </message>
     <message>
         <location filename="../ManualDialog.qml" line="203"/>
@@ -897,10 +805,6 @@ Independent implementation.</source>
         <location filename="../ManualDialog.qml" line="332"/>
         <source>Retrieving information…</source>
         <translation>Получение информации…</translation>
-    </message>
-    <message>
-        <source>%1 / %2</source>
-        <translation type="vanished">%1 / %2</translation>
     </message>
     <message>
         <location filename="../ManualDialog.qml" line="386"/>
@@ -936,16 +840,12 @@ Independent implementation.</source>
     <message>
         <location filename="../ManualDialog.qml" line="494"/>
         <source>Frame Rate</source>
-        <translation>Кадровая частота</translation>
+        <translation>Частота кадров</translation>
     </message>
     <message>
         <location filename="../ManualDialog.qml" line="501"/>
         <source>VR</source>
         <translation>VR</translation>
-    </message>
-    <message>
-        <source>Available Format</source>
-        <translation type="vanished">Доступный формат</translation>
     </message>
     <message>
         <location filename="../ManualDialog.qml" line="689"/>
@@ -956,10 +856,6 @@ Independent implementation.</source>
         <location filename="../ManualDialog.qml" line="691"/>
         <source>Reset Filters</source>
         <translation>Сбросить фильтры</translation>
-    </message>
-    <message>
-        <source>Items (%1)</source>
-        <translation type="vanished">Элементы (%1)</translation>
     </message>
     <message>
         <location filename="../ManualDialog.qml" line="551"/>
@@ -1067,14 +963,6 @@ Independent implementation.</source>
         <translation>Обзор…</translation>
     </message>
     <message>
-        <source>File Name</source>
-        <translation type="vanished">Имя файла</translation>
-    </message>
-    <message>
-        <source>Keep source title</source>
-        <translation type="vanished">Сохранить исходное название</translation>
-    </message>
-    <message>
         <location filename="../ManualDialog.qml" line="750"/>
         <source>Subscribe to updates</source>
         <translation>Подписаться на обновления</translation>
@@ -1091,193 +979,7 @@ Independent implementation.</source>
     </message>
 </context>
 <context>
-    <name>MediaToolsDialog</name>
-    <message>
-        <location filename="../MediaToolsDialog.qml" line="15"/>
-        <source>Remove Vocals</source>
-        <translation>Удалить вокал</translation>
-    </message>
-    <message>
-        <location filename="../MediaToolsDialog.qml" line="16"/>
-        <source>Creates a backing track by removing the vocal part.</source>
-        <translation>Создаёт инструментальную версию путём удаления вокальной партии.</translation>
-    </message>
-    <message>
-        <location filename="../MediaToolsDialog.qml" line="22"/>
-        <source>Isolates clear vocals by removing the backing track.</source>
-        <translation>Изолирует чистый вокал, удаляя фоновую дорожку.</translation>
-    </message>
-    <message>
-        <location filename="../MediaToolsDialog.qml" line="28"/>
-        <source>Isolates voice from all background sounds.</source>
-        <translation>Изолирует голос от всех фоновых звуков.</translation>
-    </message>
-    <message>
-        <location filename="../MediaToolsDialog.qml" line="34"/>
-        <source>Eliminates echo and reverb from voice and vocals.</source>
-        <translation>Устраняет эхо и реверберацию из голоса и вокала.</translation>
-    </message>
-    <message>
-        <location filename="../MediaToolsDialog.qml" line="129"/>
-        <location filename="../MediaToolsDialog.qml" line="130"/>
-        <source>Close</source>
-        <translation>Закрыть</translation>
-    </message>
-    <message>
-        <source>Create a backing track by removing vocals.</source>
-        <translation type="vanished">Создать минусовку, удалив вокал.</translation>
-    </message>
-    <message>
-        <location filename="../MediaToolsDialog.qml" line="21"/>
-        <source>Extract Vocals</source>
-        <translation>Извлечь вокал</translation>
-    </message>
-    <message>
-        <source>Separate vocals from the backing track.</source>
-        <translation type="vanished">Отделить вокал от инструментальной части.</translation>
-    </message>
-    <message>
-        <location filename="../MediaToolsDialog.qml" line="27"/>
-        <source>Extract Voice</source>
-        <translation>Извлечь голос</translation>
-    </message>
-    <message>
-        <source>Isolate voice from background sounds.</source>
-        <translation type="vanished">Отделить голос от фоновых звуков.</translation>
-    </message>
-    <message>
-        <location filename="../MediaToolsDialog.qml" line="33"/>
-        <source>Remove Echo</source>
-        <translation>Удалить эхо</translation>
-    </message>
-    <message>
-        <source>Reduce echo and reverberation.</source>
-        <translation type="vanished">Уменьшить эхо и реверберацию.</translation>
-    </message>
-    <message>
-        <source>Burn In Captions</source>
-        <translation type="vanished">Встроенные субтитры</translation>
-    </message>
-    <message>
-        <source>Transcribe Speech</source>
-        <translation type="vanished">Транскрибировать речь</translation>
-    </message>
-    <message>
-        <source>Remove Background Music</source>
-        <translation type="vanished">Убрать фоновую музыку</translation>
-    </message>
-    <message>
-        <source>Remove Noise</source>
-        <translation type="vanished">Удалить шум</translation>
-    </message>
-    <message>
-        <source>Extract Instruments</source>
-        <translation type="vanished">Извлечь инструменты</translation>
-    </message>
-    <message>
-        <source>Make Karaoke</source>
-        <translation type="vanished">Создать караоке</translation>
-    </message>
-    <message>
-        <source>Create Highlights</source>
-        <translation type="vanished">Создать &quot;лучшие моменты&quot;</translation>
-    </message>
-    <message>
-        <source>Balance Loudness</source>
-        <translation type="vanished">Сбалансировать громкость</translation>
-    </message>
-    <message>
-        <source>Upscale Audio</source>
-        <translation type="vanished">Улучшить качество аудио</translation>
-    </message>
-    <message>
-        <source>Change Voice</source>
-        <translation type="vanished">Изменить голос</translation>
-    </message>
-    <message>
-        <source>Extract Lead Vocal</source>
-        <translation type="vanished">Извлечь основной вокал</translation>
-    </message>
-    <message>
-        <source>Extract Back Vocal</source>
-        <translation type="vanished">Извлечь бэк вокал</translation>
-    </message>
-    <message>
-        <source>Reframe Video</source>
-        <translation type="vanished">Перекадрировать видео</translation>
-    </message>
-    <message>
-        <source>Upscale Video</source>
-        <translation type="vanished">Улучшить качество видео</translation>
-    </message>
-    <message>
-        <location filename="../MediaToolsDialog.qml" line="69"/>
-        <source>Media Tools</source>
-        <translation>Медиа-инструменты</translation>
-    </message>
-    <message>
-        <source>Choose a tool for %1 selected download(s)</source>
-        <translation type="vanished">Выберите инструмент для %1 загрузок</translation>
-    </message>
-    <message>
-        <source>Processing runs locally. Availability depends on the source audio and installed models.</source>
-        <translation type="vanished">Обработка выполняется локально. Доступность зависит от исходного аудио и установленных моделей.</translation>
-    </message>
-    <message>
-        <source>Not available yet</source>
-        <translation type="vanished">Пока недоступно</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation type="vanished">Отмена</translation>
-    </message>
-    <message>
-        <source>Process</source>
-        <translation type="vanished">Обработать</translation>
-    </message>
-</context>
-<context>
     <name>OnboardingDialog</name>
-    <message>
-        <source>Add a video link</source>
-        <translation type="vanished">Добавьте ссылку на видео</translation>
-    </message>
-    <message>
-        <source>Copy a video or song URL from your browser and click Paste Link.</source>
-        <translation type="vanished">Скопируйте ссылку на видео или песню из браузера и нажмите «Вставить ссылку».</translation>
-    </message>
-    <message>
-        <source>Find videos in the app</source>
-        <translation type="vanished">Ищите видео в приложении</translation>
-    </message>
-    <message>
-        <source>Open the browser, choose a service and search. Click Download on a video page.</source>
-        <translation type="vanished">Откройте браузер, выберите сервис и найдите видео. На странице видео нажмите «Скачать».</translation>
-    </message>
-    <message>
-        <source>Choose your preferences</source>
-        <translation type="vanished">Выберите настройки</translation>
-    </message>
-    <message>
-        <source>Enable Smart Mode to use the same quality, format, subtitles and output folder for new links.</source>
-        <translation type="vanished">Включите умный режим, чтобы новые ссылки использовали одинаковое качество, формат, субтитры и папку.</translation>
-    </message>
-    <message>
-        <source>Try Media Tools</source>
-        <translation type="vanished">Попробуйте Медиа-инструменты</translation>
-    </message>
-    <message>
-        <source>Select a completed download to extract vocals, isolate voice or remove echo.</source>
-        <translation type="vanished">Выберите скачанный файл, чтобы выделить вокал, отделить голос или убрать эхо.</translation>
-    </message>
-    <message>
-        <source>Subscribe to channels</source>
-        <translation type="vanished">Подпишитесь на каналы</translation>
-    </message>
-    <message>
-        <source>Paste a channel or playlist link and choose Subscribe. Download existing videos or only new releases.</source>
-        <translation type="vanished">Вставьте ссылку на канал или плейлист и нажмите «Подписаться». Скачайте всё имеющееся или только новые видео.</translation>
-    </message>
     <message>
         <location filename="../OnboardingDialog.qml" line="12"/>
         <source>Easy download start</source>
@@ -1331,7 +1033,7 @@ Independent implementation.</source>
     <message>
         <location filename="../OnboardingDialog.qml" line="14"/>
         <source>Enable Smart Mode to set quality, format, device, etc.</source>
-        <translation>Включите Умный Режим для выбора качества, формата, устройства и т.д.</translation>
+        <translation>Включите умный режим, чтобы выбрать качество и формат для новых загрузок.</translation>
     </message>
     <message>
         <location filename="../OnboardingDialog.qml" line="14"/>
@@ -1340,71 +1042,52 @@ Independent implementation.</source>
     </message>
     <message>
         <location filename="../OnboardingDialog.qml" line="15"/>
-        <source>Media Tools</source>
-        <translation>Медиа-инструменты</translation>
-    </message>
-    <message>
-        <location filename="../OnboardingDialog.qml" line="15"/>
-        <source>Clean up noise, extract voice, and more</source>
-        <translation>Устраните шум, извлеките голос и многое другое</translation>
-    </message>
-    <message>
-        <location filename="../OnboardingDialog.qml" line="15"/>
-        <source>Look for the %1Media Tools%2 icon next to any of your downloads, then pick a tool to get started.</source>
-        <translation>Найдите значок %1Медиа-инструменты%2 рядом с любой из загрузок и выберите инструмент, чтобы начать.</translation>
-    </message>
-    <message>
-        <location filename="../OnboardingDialog.qml" line="16"/>
         <source>Subscriptions addition</source>
         <translation>Добавление подписок</translation>
     </message>
     <message>
-        <location filename="../OnboardingDialog.qml" line="16"/>
+        <location filename="../OnboardingDialog.qml" line="15"/>
         <source>Subscribe to channels and playlists</source>
         <translation>Подписывайтесь на каналы и плейлисты</translation>
     </message>
     <message>
-        <location filename="../OnboardingDialog.qml" line="16"/>
+        <location filename="../OnboardingDialog.qml" line="15"/>
         <source>Add links to favorite YouTube creators and playlists.</source>
         <translation>Добавляйте ссылки на любимые YouTube-каналы и плейлисты.</translation>
     </message>
     <message>
-        <location filename="../OnboardingDialog.qml" line="16"/>
+        <location filename="../OnboardingDialog.qml" line="15"/>
         <source>Grab all existing videos, auto-download new content.</source>
         <translation>Скачивайте все существующие видео, автоматически сохраняйте новый контент.</translation>
     </message>
     <message>
-        <location filename="../OnboardingDialog.qml" line="19"/>
+        <location filename="../OnboardingDialog.qml" line="18"/>
         <source>Getting Started</source>
         <translation>Начало работы</translation>
     </message>
     <message>
-        <location filename="../OnboardingDialog.qml" line="138"/>
+        <location filename="../OnboardingDialog.qml" line="137"/>
         <source>Skip</source>
         <translation>Пропустить</translation>
     </message>
     <message>
-        <location filename="../OnboardingDialog.qml" line="138"/>
+        <location filename="../OnboardingDialog.qml" line="137"/>
         <source>Back</source>
         <translation>Назад</translation>
     </message>
     <message>
-        <location filename="../OnboardingDialog.qml" line="147"/>
+        <location filename="../OnboardingDialog.qml" line="146"/>
         <source>Finish</source>
         <translation>Завершить</translation>
     </message>
     <message>
-        <location filename="../OnboardingDialog.qml" line="147"/>
+        <location filename="../OnboardingDialog.qml" line="146"/>
         <source>Next</source>
         <translation>Далее</translation>
     </message>
 </context>
 <context>
     <name>SettingsDialog</name>
-    <message>
-        <source>Preferences</source>
-        <translation type="vanished">Настройки</translation>
-    </message>
     <message>
         <location filename="../SettingsDialog.qml" line="48"/>
         <source>Save To</source>
@@ -1431,33 +1114,9 @@ Independent implementation.</source>
         <translation>Уведомления</translation>
     </message>
     <message>
-        <source>Account</source>
-        <translation type="vanished">Аккаунт</translation>
-    </message>
-    <message>
         <location filename="../SettingsDialog.qml" line="332"/>
         <source>Language</source>
         <translation>Язык</translation>
-    </message>
-    <message>
-        <source>Appearance</source>
-        <translation type="vanished">Оформление</translation>
-    </message>
-    <message>
-        <source>Dark</source>
-        <translation type="vanished">Тёмное</translation>
-    </message>
-    <message>
-        <source>Light</source>
-        <translation type="vanished">Светлое</translation>
-    </message>
-    <message>
-        <source>System</source>
-        <translation type="vanished">Как в системе</translation>
-    </message>
-    <message>
-        <source>Restart the application after changing the interface language.</source>
-        <translation type="vanished">После смены языка перезапустите приложение.</translation>
     </message>
     <message>
         <location filename="../SettingsDialog.qml" line="347"/>
@@ -1480,22 +1139,10 @@ Independent implementation.</source>
         <translation>Устанавливать бета-версии</translation>
     </message>
     <message>
-        <source>Beta versions may be less stable and offer early access to new features.</source>
-        <translation type="vanished">Бета-версии дают ранний доступ к новым функциям, но могут работать нестабильно.</translation>
-    </message>
-    <message>
-        <source>Download Preferences</source>
-        <translation type="vanished">Настройки загрузки</translation>
-    </message>
-    <message>
         <location filename="../SettingsDialog.qml" line="395"/>
         <location filename="../SettingsDialog.qml" line="411"/>
         <source>Simultaneous Downloads</source>
         <translation>Одновременные скачивания</translation>
-    </message>
-    <message>
-        <source>High intensity can lead to a temporary rate limit from the service.</source>
-        <translation type="vanished">Большое число загрузок может привести к временным ограничениям сервиса.</translation>
     </message>
     <message>
         <location filename="../SettingsDialog.qml" line="478"/>
@@ -1508,10 +1155,6 @@ Independent implementation.</source>
         <translation>Предотвращать вход в спящий режим, пока все загрузки не завершатся</translation>
     </message>
     <message>
-        <source>Create subdirectories for playlists, channels and search results</source>
-        <translation type="vanished">Создавать подпапки для плейлистов, каналов и результатов поиска</translation>
-    </message>
-    <message>
         <location filename="../SettingsDialog.qml" line="502"/>
         <source>Numerate files in playlists, channels and search results</source>
         <translation>Нумеровать файлы в плейлистах, каналах и результатах поиска</translation>
@@ -1520,18 +1163,6 @@ Independent implementation.</source>
         <location filename="../SettingsDialog.qml" line="506"/>
         <source>Skip duplicates in playlists and search results</source>
         <translation>Пропускать дубликаты в плейлистах и результатах поиска</translation>
-    </message>
-    <message>
-        <source>Generate .m3u files for playlists and search results</source>
-        <translation type="vanished">Создавать файлы .m3u для плейлистов и результатов поиска</translation>
-    </message>
-    <message>
-        <source>Embed subtitles in the video file if possible</source>
-        <translation type="vanished">По возможности встраивать субтитры в видеофайл</translation>
-    </message>
-    <message>
-        <source>Search audio tags from the track title</source>
-        <translation type="vanished">Искать аудиотеги по названию трека</translation>
     </message>
     <message>
         <location filename="../SettingsDialog.qml" line="522"/>
@@ -1544,69 +1175,9 @@ Independent implementation.</source>
         <translation>Отправлять статистику скачиваний</translation>
     </message>
     <message>
-        <source>Show Media Tools in the downloads list</source>
-        <translation type="vanished">Показывать медиаинструменты в списке загрузок</translation>
-    </message>
-    <message>
-        <source>Display AV1/VP9 even when a more compatible codec is available</source>
-        <translation type="vanished">Показывать AV1/VP9 даже при наличии более совместимого кодека</translation>
-    </message>
-    <message>
-        <source>Smart Mode</source>
-        <translation type="vanished">Умный режим</translation>
-    </message>
-    <message>
-        <source>Download</source>
-        <translation type="vanished">Скачать</translation>
-    </message>
-    <message>
-        <source>Quality</source>
-        <translation type="vanished">Качество</translation>
-    </message>
-    <message>
-        <source>Container</source>
-        <translation type="vanished">Контейнер</translation>
-    </message>
-    <message>
-        <source>Video codec</source>
-        <translation type="vanished">Видеокодек</translation>
-    </message>
-    <message>
-        <source>Audio codec</source>
-        <translation type="vanished">Аудиокодек</translation>
-    </message>
-    <message>
-        <source>Frame Rate</source>
-        <translation type="vanished">Кадровая частота</translation>
-    </message>
-    <message>
-        <source>VR</source>
-        <translation type="vanished">VR</translation>
-    </message>
-    <message>
-        <source>Subtitle languages (comma separated)</source>
-        <translation type="vanished">Языки субтитров через запятую</translation>
-    </message>
-    <message>
-        <source>Audio track languages (comma separated)</source>
-        <translation type="vanished">Языки аудиодорожек через запятую</translation>
-    </message>
-    <message>
-        <source>Save To: </source>
-        <translation type="vanished">Сохранить в: </translation>
-    </message>
-    <message>
-        <source>Choose Folder…</source>
-        <translation type="vanished">Выбрать папку…</translation>
-    </message>
-    <message>
-        <location filename="../SettingsDialog.qml" line="553"/>
+        <location filename="../SettingsDialog.qml" line="548"/>
         <source>Speed</source>
         <translation>Скорость</translation>
-    </message>
-    <message>
-        <source>Limit download speed on a slow connection. This temporary limit resets on relaunch.</source>
-        <translation type="vanished">Ограничьте скорость при медленном соединении. Временный лимит сбрасывается при перезапуске.</translation>
     </message>
     <message>
         <location filename="../SettingsDialog.qml" line="13"/>
@@ -1663,7 +1234,7 @@ Independent implementation.</source>
     <message>
         <location filename="../SettingsDialog.qml" line="467"/>
         <source>High intensity might increase overall download performance but it may also lead to temporary IP address ban by YouTube.</source>
-        <translation>Высокая интенсивность может повысить общую скорость скачивания, но это также может привести к временной блокировке IP- адреса со стороны YouTube.</translation>
+        <translation>Высокая интенсивность может повысить общую скорость скачивания, но это также может привести к временной блокировке IP-адреса со стороны YouTube.</translation>
     </message>
     <message>
         <location filename="../SettingsDialog.qml" line="494"/>
@@ -1691,77 +1262,73 @@ Independent implementation.</source>
         <translation>Искать аудио-теги по названию трека</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="530"/>
-        <source>Show Media Tools in downloads list</source>
-        <translation>Показывать Медиа-инструменты в списке загрузок</translation>
-    </message>
-    <message>
-        <location filename="../SettingsDialog.qml" line="564"/>
+        <location filename="../SettingsDialog.qml" line="559"/>
         <source>You can limit the download speed if you have a slow Internet connection. Please note this setting will be reset with the app relaunch.</source>
         <translation>Вы можете ограничить скорость загрузки, если у вас медленное соединение. Выбор этой настройки сбрасывается при каждом запуске приложения.</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="594"/>
-        <location filename="../SettingsDialog.qml" line="617"/>
+        <location filename="../SettingsDialog.qml" line="589"/>
+        <location filename="../SettingsDialog.qml" line="612"/>
         <source>Set proxy manually</source>
         <translation>Указать прокси вручную</translation>
     </message>
     <message>
+        <location filename="../SettingsDialog.qml" line="644"/>
         <source>Automatic: system and VPN settings</source>
         <translation>Автоматически: настройки системы и VPN</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="601"/>
+        <location filename="../SettingsDialog.qml" line="596"/>
         <source>Edit</source>
         <translation>Изменить</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="661"/>
+        <location filename="../SettingsDialog.qml" line="666"/>
         <source>Proxy Type</source>
         <translation>Тип прокси</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="676"/>
+        <location filename="../SettingsDialog.qml" line="681"/>
         <source>Host</source>
         <translation>Сервер</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="692"/>
+        <location filename="../SettingsDialog.qml" line="697"/>
         <source>Port</source>
         <translation>Порт</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="712"/>
+        <location filename="../SettingsDialog.qml" line="717"/>
         <source>Login</source>
         <translation>Логин</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="726"/>
+        <location filename="../SettingsDialog.qml" line="731"/>
         <source>Password</source>
         <translation>Пароль</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="735"/>
+        <location filename="../SettingsDialog.qml" line="740"/>
         <source>Password saved</source>
         <translation>Пароль сохранён</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="744"/>
+        <location filename="../SettingsDialog.qml" line="749"/>
         <source>Cancel</source>
         <translation>Отмена</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="753"/>
+        <location filename="../SettingsDialog.qml" line="758"/>
         <source>Save</source>
         <translation>Сохранить</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="817"/>
+        <location filename="../SettingsDialog.qml" line="818"/>
         <source>Ask to confirm the app exit if there are incomplete downloads</source>
         <translation>Запрашивать подтверждение выхода из приложения при незаконченных загрузках</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="821"/>
+        <location filename="../SettingsDialog.qml" line="822"/>
         <source>Ask to download channel if multiple videos were downloaded from it</source>
         <translation>Предлагать скачивание целого канала после скачивания нескольких видео с него</translation>
     </message>
@@ -1801,58 +1368,29 @@ Independent implementation.</source>
         <translation>Данные для входа остаются у Google</translation>
     </message>
     <message>
-        <source>Save Proxy Settings</source>
-        <translation type="vanished">Сохранить настройки прокси</translation>
-    </message>
-    <message>
-        <location filename="../SettingsDialog.qml" line="801"/>
+        <location filename="../SettingsDialog.qml" line="806"/>
         <source>Show notification when downloading finished</source>
         <translation>Показывать уведомление о завершении скачивания</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="805"/>
-        <source>Show notification when processing completes</source>
-        <translation>Показывать уведомление о завершении обработки</translation>
-    </message>
-    <message>
-        <location filename="../SettingsDialog.qml" line="809"/>
+        <location filename="../SettingsDialog.qml" line="810"/>
         <source>Show reminders to download new content</source>
         <translation>Показывать напоминания скачать новый контент</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="813"/>
+        <location filename="../SettingsDialog.qml" line="814"/>
         <source>Show similar video recommendations</source>
         <translation>Показать похожие видеорекомендации</translation>
     </message>
     <message>
-        <source>Ask to confirm exit with incomplete downloads</source>
-        <translation type="vanished">Подтверждать выход при незавершённых загрузках</translation>
-    </message>
-    <message>
-        <source>Suggest the channel after downloading several videos</source>
-        <translation type="vanished">Предлагать загрузить канал после нескольких видео</translation>
-    </message>
-    <message>
-        <location filename="../SettingsDialog.qml" line="825"/>
+        <location filename="../SettingsDialog.qml" line="826"/>
         <source>Show in Notification Center</source>
         <translation>Показывать в Центре уведомлений</translation>
     </message>
     <message>
-        <location filename="../SettingsDialog.qml" line="829"/>
+        <location filename="../SettingsDialog.qml" line="830"/>
         <source>Play notification sound</source>
         <translation>Проигрывать звук оповещений</translation>
-    </message>
-    <message>
-        <source>Signed in as %1</source>
-        <translation type="vanished">Выполнен вход: %1</translation>
-    </message>
-    <message>
-        <source>Sign in to access your Watch Later, Liked and other private playlists.</source>
-        <translation type="vanished">Войдите для доступа к плейлистам «Смотреть позже», «Понравившиеся» и другим личным плейлистам.</translation>
-    </message>
-    <message>
-        <source>Google sign-in opens in the built-in browser. Your Google password is entered only on Google&apos;s page.</source>
-        <translation type="vanished">Вход в Google открывается во встроенном браузере. Пароль вводится только на странице Google.</translation>
     </message>
     <message>
         <location filename="../SettingsDialog.qml" line="893"/>
@@ -1863,10 +1401,6 @@ Independent implementation.</source>
         <location filename="../SettingsDialog.qml" line="893"/>
         <source>Log In</source>
         <translation>Войти</translation>
-    </message>
-    <message>
-        <source>Private content · YouTube library · Premium audio where available</source>
-        <translation type="vanished">Личный контент · Библиотека YouTube · Аудио Premium, где доступно</translation>
     </message>
 </context>
 <context>
@@ -1937,7 +1471,7 @@ Independent implementation.</source>
     <message>
         <location filename="../SmartModeBar.qml" line="324"/>
         <source>Frame Rate</source>
-        <translation>Кадровая частота</translation>
+        <translation>Частота кадров</translation>
     </message>
     <message>
         <location filename="../SmartModeBar.qml" line="326"/>
@@ -2034,37 +1568,9 @@ Independent implementation.</source>
         <translation>Папка назначения</translation>
     </message>
     <message>
-        <source>Import links, download settings and subscriptions from a JSON file.</source>
-        <translation type="vanished">Импортируйте ссылки, настройки загрузки и подписки из JSON-файла.</translation>
-    </message>
-    <message>
-        <source>Save links and download preferences as a JSON file.</source>
-        <translation type="vanished">Сохраните ссылки и настройки загрузки в JSON-файл.</translation>
-    </message>
-    <message>
         <location filename="../TransferDialog.qml" line="237"/>
         <source>Upload File</source>
-        <translation>Загрузить файл</translation>
-    </message>
-    <message>
-        <source>Export To</source>
-        <translation type="vanished">Экспортировать в</translation>
-    </message>
-    <message>
-        <source>Browse…</source>
-        <translation type="vanished">Обзор…</translation>
-    </message>
-    <message>
-        <source>Use download settings from file</source>
-        <translation type="vanished">Использовать настройки из файла</translation>
-    </message>
-    <message>
-        <source>Use current application settings</source>
-        <translation type="vanished">Использовать текущие настройки приложения</translation>
-    </message>
-    <message>
-        <source>Download complete playlists and channels</source>
-        <translation type="vanished">Скачивать плейлисты и каналы целиком</translation>
+        <translation>Выбрать файл</translation>
     </message>
     <message>
         <location filename="../TransferDialog.qml" line="366"/>
@@ -2075,10 +1581,6 @@ Independent implementation.</source>
         <location filename="../TransferDialog.qml" line="356"/>
         <source>Import</source>
         <translation>Импортировать</translation>
-    </message>
-    <message>
-        <source>Export</source>
-        <translation type="vanished">Экспортировать</translation>
     </message>
 </context>
 </TS>

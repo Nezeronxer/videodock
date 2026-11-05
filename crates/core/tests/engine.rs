@@ -155,7 +155,7 @@ fn import_validates_before_mutating_and_round_trips_original_schema() {
 }
 
 #[test]
-fn malformed_actions_and_unavailable_processing_are_explicit_errors() {
+fn malformed_actions_and_removed_media_tools_are_explicit_errors() {
     let data = TempDir::new().unwrap();
     let engine = Engine::new(data.path().to_owned()).unwrap();
     assert!(
@@ -173,7 +173,7 @@ fn malformed_actions_and_unavailable_processing_are_explicit_errors() {
             .dispatch(json!({"action":"process","ids":["missing"],"effect":"remove_vocals"}))
             .is_err()
     );
-    assert_eq!(engine.snapshot()["processing"], json!([]));
+    assert!(engine.snapshot().get("processing").is_none());
 }
 
 #[test]

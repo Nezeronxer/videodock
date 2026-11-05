@@ -136,6 +136,7 @@ impl Engine {
         let secrets = secrets::load(&directory)?;
         let mut state = store.read()?.unwrap_or_else(initial_state);
         ensure!(state.is_object(), "Повреждено состояние приложения");
+        let retired_media_tools = retire_media_tools(&mut state);
         let mut settings = defaults();
         if let Some(saved) = state["settings"].as_object() {
             for (key, value) in saved {
@@ -151,7 +152,7 @@ impl Engine {
         settings["speedLimit"] = json!(0);
         settings["proxyPasswordSet"] = json!(!secrets.proxy_password.is_empty());
         state["settings"] = settings;
-        for key in ["jobs", "subscriptions", "processing"] {
+        for key in ["jobs", "subscriptions"] {
             if !state[key].is_array() {
                 state[key] = json!([]);
             }
@@ -180,7 +181,10 @@ impl Engine {
         }
         state["manual"] = Value::Null;
         state["account"] = json!({"logged_in":false,"user_name":"","avatar_url":""});
-        state["capabilities"] = json!({"browser":true,"tray":true,"processing":crate::processing::available(&directory),"auto_start":true});
+        state["capabilities"] = json!({"browser":true,"tray":true,"auto_start":true});
+        if retired_media_tools {
+            store.save(&persisted(&state))?;
+        }
         let shutdown = CancellationToken::new();
         let inner = Arc::new(Inner {
             dispatch_gate: Mutex::new(()),
@@ -235,7 +239,7 @@ impl Engine {
             "manual_pause" | "manual_resume" => queue::parsing_control(&self.inner, &action),
             "jobs" => queue::jobs(&self.inner, &action),
             "subscriptions" => queue::subscriptions(&self.inner, &action),
-            "process" => queue::process(&self.inner, &action),
+            "process" => anyhow::bail!("Медиаинструменты удалены из VideoDock"),
             "account" => secrets::account(&self.inner, &action),
             "import" => {
                 exchange::import(&self.inner, &action)?;
@@ -260,8 +264,37 @@ impl Engine {
     }
 }
 
+// Preserve former output/history records privately; they must never become executable download jobs.
+fn retire_media_tools(state: &mut Value) -> bool {
+    let object = state.as_object_mut().expect("validated state object");
+    let Some(legacy) = object.remove("processing") else {
+        return false;
+    };
+    if legacy.as_array().is_some_and(Vec::is_empty) {
+        return true;
+    }
+    match object.entry("_legacy_processing") {
+        serde_json::map::Entry::Vacant(entry) => {
+            entry.insert(legacy);
+        }
+        serde_json::map::Entry::Occupied(mut entry) => {
+            let archive = entry.get_mut();
+            match legacy {
+                Value::Array(mut rows) if archive.is_array() => {
+                    archive.as_array_mut().unwrap().append(&mut rows)
+                }
+                value => {
+                    let previous = archive.take();
+                    *archive = json!([previous, value]);
+                }
+            }
+        }
+    }
+    true
+}
+
 fn initial_state() -> Value {
-    json!({"settings":defaults(),"jobs":[],"subscriptions":[],"processing":[],"manual":null,
+    json!({"settings":defaults(),"jobs":[],"subscriptions":[],"manual":null,
         "account":{"logged_in":false,"user_name":"","avatar_url":""},"notice":"","notification":null,"onboarding_completed":false})
 }
 fn persisted(state: &Value) -> Value {
