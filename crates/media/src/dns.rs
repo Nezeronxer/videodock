@@ -345,6 +345,8 @@ mod tests {
             let start = std::time::Instant::now();
             while start.elapsed() < DOH_TIMEOUT + Duration::from_secs(1) {
                 if let Ok((mut socket, _)) = listener.accept() {
+                    // Windows/BSD accept inherits the listener's nonblocking mode.
+                    socket.set_nonblocking(false).unwrap();
                     reads.fetch_add(1, Ordering::SeqCst);
                     socket.set_read_timeout(Some(DOH_TIMEOUT)).unwrap();
                     let mut request = Vec::new();
@@ -509,6 +511,31 @@ mod tests {
         );
         thread.join().unwrap();
         assert_eq!(count.load(Ordering::SeqCst), 1);
+    }
+    #[tokio::test]
+    async fn fixture_waits_for_request_headers_after_accept() {
+        let body = answer("142.250.74.206");
+        let (resolver, count, thread) =
+            fixture("200 OK", "application/dns-json", body.clone(), None);
+        let endpoint = url::Url::parse(&resolver.endpoint).unwrap();
+        let mut client =
+            std::net::TcpStream::connect(("127.0.0.1", endpoint.port().unwrap())).unwrap();
+        client.set_read_timeout(Some(DOH_TIMEOUT)).unwrap();
+        let deadline = std::time::Instant::now();
+        while count.load(Ordering::SeqCst) == 0 && deadline.elapsed() < Duration::from_secs(1) {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        std::thread::sleep(Duration::from_millis(30));
+        client.write_all(b"GET /dns-query?name=www.youtube.com&type=A HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").unwrap();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).unwrap();
+        drop(client);
+        thread.join().unwrap();
+        assert!(
+            response.ends_with(&body),
+            "Fixture closed before delivering the response"
+        );
     }
     #[tokio::test]
     async fn fixture_outlives_delayed_client_start() {
