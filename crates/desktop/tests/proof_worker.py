@@ -72,7 +72,8 @@ def main():
                     f"stdout_bytes={len(result.stdout)}, stderr_bytes={len(result.stderr)}")
                 reply = json.loads(result.stdout)
                 assert requests and any(requests), "worker did not use the selected HTTP proxy"
-                assert reply["ok"] is False and reply["stage"] == "homepage"
+                assert reply["ok"] is False and reply["stage"] == "homepage", (
+                    f"Proxy refusal returned ok={reply.get('ok')} stage={reply.get('stage')}")
             finally:
                 stopped.set()
                 thread.join()

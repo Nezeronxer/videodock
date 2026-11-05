@@ -240,6 +240,9 @@ impl Resolver {
                         error.is_timeout(),
                         error.is_connect()
                     );
+                    #[cfg(test)]
+                    eprintln!("DoH send source: {:?}", error.without_url());
+                    #[cfg(not(test))]
                     let _ = error;
                     failure()
                 })?;

@@ -16,10 +16,16 @@ with tempfile.TemporaryDirectory(prefix='videodock-worker-debug-') as directory:
     request = Path(directory) / 'request.json'
     request.write_text(json.dumps({'version': 1, 'request_id': '12345678-1234-1234-1234-123456789abc',
                                    'video_id': 'aqz-KE-bpKQ', 'proxy': 'http://127.0.0.1:9'}))
+    environment = {**os.environ, 'QT_QPA_PLATFORM': 'cocoa',
+                   'QTWEBENGINE_CHROMIUM_FLAGS': '--disable-quic --disable-background-networking --force-webrtc-ip-handling-policy=disable_non_proxied_udp'}
+    environment.pop('QTWEBENGINE_DISABLE_SANDBOX', None)
     with (output / 'worker-backtrace.txt').open('w') as log:
+        # Only this closed-proxy debugger request exposes Qt startup diagnostics.
         child = subprocess.Popen(['lldb', '--batch', '-o', f'settings set target.input-path "{request}"',
-                                  '-o', 'run', '-o', 'thread backtrace all', '--', str(binary), '--youtube-proof'],
-                                 env={**os.environ, 'QT_QPA_PLATFORM': 'cocoa'},
+                                  '-o', 'breakpoint set -n initialize_proof_runtime', '-o', 'run',
+                                  '-o', 'thread return', '-o', 'continue', '-o', 'thread backtrace all',
+                                  '--', str(binary), '--youtube-proof'],
+                                 env=environment,
                                  stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             child.wait(timeout=60)

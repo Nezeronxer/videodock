@@ -165,14 +165,24 @@ jobs:
             ~/.cargo/registry
           key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}
       - name: Test and build Windows package
+        id: windows-tests
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b 1
           cargo test --workspace --locked
           if errorlevel 1 exit /b 1
+      - name: Build Windows QA candidate
+        id: windows-candidate
+        if: always() && steps.windows-cache.outcome == 'success'
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b 1
           powershell -NoProfile -File scripts/rust/build-windows.ps1
       - name: Verify installed worker with clean PATH
+        id: windows-worker
+        if: always() && steps.windows-candidate.outcome == 'success'
         shell: pwsh
         run: |
           $python = (Get-Command python).Source
@@ -187,11 +197,14 @@ jobs:
           $test = Get-ChildItem "$env:CARGO_TARGET_DIR/debug/deps/videodock_media-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if ($test) { & $test.FullName dns::tests::anonymous_worker_bootstrap_is_pinned_and_never_bypasses_a_proxy --exact --nocapture }
       - name: Build Windows installer
+        id: windows-installer
+        if: always() && steps.windows-worker.outcome == 'success'
         shell: pwsh
         run: |
           & scripts/rust/package-windows.ps1 -SourceDirectory "$env:CARGO_TARGET_DIR/package/VideoDock" -OutputDirectory "$env:RUNNER_TEMP"
           if ($LASTEXITCODE -ne 0) { throw 'Installer packaging failed' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && steps.windows-installer.outcome == 'success'
         with:
           name: VideoDock-windows-x64
           path: |
