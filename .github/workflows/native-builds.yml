@@ -87,6 +87,10 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/macos-diagnostics"
           find "$HOME/Library/Logs/DiagnosticReports" -maxdepth 1 -type f \( -name '*VideoDock*' -o -name '*videodock*' -o -name '*QtWebEngineProcess*' \) -exec cp {} "$RUNNER_TEMP/macos-diagnostics/" \; 2>/dev/null || true
+      - name: Diagnose packaged worker abort
+        if: failure()
+        run: |
+          python3 scripts/rust/diagnose-macos-worker.py "$RUNNER_TEMP/VideoDock.app/Contents/MacOS/VideoDock" "$RUNNER_TEMP/macos-diagnostics"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:

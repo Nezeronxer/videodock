@@ -14,6 +14,7 @@ import threading
 
 def main():
     executable = str(Path(sys.argv[1]).resolve())
+    qpa = "cocoa" if sys.platform == "darwin" else "offscreen"
     request = {"version": 1, "request_id": "12345678-1234-1234-1234-123456789abc",
                "video_id": "aqz-KE-bpKQ", "proxy": None}
     invalid = [b"{}\n", b"x" * (32 * 1024 + 1),
@@ -25,7 +26,7 @@ def main():
                json.dumps({**request, "unexpected": True}).encode()]
     with tempfile.TemporaryDirectory(prefix="videodock-proof-contract-") as directory:
         profile = Path(directory) / "must-not-exist"
-        environment = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "VIDEODOCK_DATA_DIR": str(profile)}
+        environment = {**os.environ, "QT_QPA_PLATFORM": qpa, "VIDEODOCK_DATA_DIR": str(profile)}
         for data in invalid:
             result = subprocess.run([executable, "--youtube-proof"], input=data,
                                     capture_output=True, env=environment, timeout=5)
@@ -61,7 +62,7 @@ def main():
 
             thread = threading.Thread(target=reject_proxy)
             thread.start()
-            environment = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
+            environment = {**os.environ, "QT_QPA_PLATFORM": qpa}
             routed = {**request, "proxy": f"http://127.0.0.1:{listener.getsockname()[1]}"}
             try:
                 result = subprocess.run([executable, "--youtube-proof"], input=json.dumps(routed).encode(),
@@ -79,7 +80,7 @@ def main():
 
     if "--startup" in sys.argv[2:]:
         with tempfile.TemporaryDirectory(prefix="videodock-proxy-startup-") as directory:
-            environment = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_QUICK_BACKEND": "software",
+            environment = {**os.environ, "QT_QPA_PLATFORM": qpa, "QT_QUICK_BACKEND": "software",
                            "VIDEODOCK_DATA_DIR": str(Path(directory) / "profile"),
                            "https_proxy": "unsupported://invalid", "HTTPS_PROXY": "unsupported://invalid"}
             process = subprocess.Popen([executable], env=environment, stdout=subprocess.DEVNULL,
