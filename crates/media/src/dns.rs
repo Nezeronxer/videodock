@@ -317,12 +317,10 @@ mod tests {
         let mime = mime.to_owned();
         let thread = std::thread::spawn(move || {
             let start = std::time::Instant::now();
-            while start.elapsed() < Duration::from_secs(1) {
+            while start.elapsed() < DOH_TIMEOUT + Duration::from_secs(1) {
                 if let Ok((mut socket, _)) = listener.accept() {
                     reads.fetch_add(1, Ordering::SeqCst);
-                    socket
-                        .set_read_timeout(Some(Duration::from_secs(1)))
-                        .unwrap();
+                    socket.set_read_timeout(Some(DOH_TIMEOUT)).unwrap();
                     let mut request = Vec::new();
                     let mut byte = [0];
                     while !request.ends_with(b"\r\n\r\n") && request.len() < 16384 {
@@ -480,6 +478,25 @@ mod tests {
                 .unwrap()
                 .as_ref(),
             b"adapter-ok"
+        );
+        thread.join().unwrap();
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+    }
+    #[tokio::test]
+    async fn fixture_outlives_delayed_client_start() {
+        let (resolver, count, thread) = fixture(
+            "200 OK",
+            "application/dns-json",
+            answer("142.250.74.206"),
+            None,
+        );
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        assert!(
+            resolver
+                .bootstrap_after_system("www.youtube.com", Err(failure()))
+                .await
+                .unwrap()
+                .is_some()
         );
         thread.join().unwrap();
         assert_eq!(count.load(Ordering::SeqCst), 1);

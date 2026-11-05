@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: native-${{ github.ref }}
+  group: native-${{ github.ref }}-${{ inputs.platform || 'all' }}
   cancel-in-progress: true
 
 env:
@@ -146,7 +146,8 @@ jobs:
           "LIBCLANG_PATH=$clang" >> $env:GITHUB_ENV
           rustup toolchain install 1.99.1 --profile minimal
           rustup override set 1.99.1
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: windows-cache
         with:
           path: |
             ${{ github.workspace }}/target
@@ -180,3 +181,10 @@ jobs:
             ${{ runner.temp }}/VideoDock-windows-x64.zip
             ${{ runner.temp }}/VideoDock-*-windows-x64-Setup.exe
           if-no-files-found: error
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: always() && steps.windows-cache.outcome == 'success' && steps.windows-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ github.workspace }}/target
+            ~/.cargo/registry
+          key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}

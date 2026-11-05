@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import plistlib
 import subprocess
+import sys
 import tempfile
 
 project = Path(__file__).resolve().parents[2]
@@ -53,4 +54,8 @@ with tempfile.TemporaryDirectory() as directory:
     env['VIDEODOCK_MAC_APP'] = str(root / 'not-an-app')
     result = subprocess.run(['sh', str(project / 'scripts/rust/install.sh')], env=env, capture_output=True)
     assert result.returncode != 0 and b'absolute .app destination' in result.stderr, 'Invalid staging destination accepted'
+    diagnostics = root / 'diagnostics'
+    subprocess.run([sys.executable, str(project / 'scripts/rust/diagnose-macos-worker.py'),
+                    str(root / 'missing-binary'), str(diagnostics)], check=True)
+    assert not list(diagnostics.iterdir()), 'Missing bundle unexpectedly started the debugger'
 print('macOS packaging contract passed: current build, isolated destination, media tools, Qt deployment and plist')

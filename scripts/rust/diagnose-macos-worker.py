@@ -24,6 +24,9 @@ with tempfile.TemporaryDirectory(prefix='videodock-worker-debug-') as directory:
         try:
             child.wait(timeout=60)
         except subprocess.TimeoutExpired:
-            os.killpg(child.pid, signal.SIGKILL)
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             child.wait()
             log.write('\nDebugger deadline exceeded.\n')
