@@ -362,8 +362,10 @@ mod tests {
                     let headers = format!(
                         "HTTP/1.1 {status}\r\nContent-Type: {mime}\r\n{length}Connection: close\r\n\r\n"
                     );
-                    socket.write_all(headers.as_bytes()).ok();
-                    socket.write_all(&body).ok();
+                    let response = [headers.as_bytes(), body.as_slice()].concat();
+                    socket.write_all(&response).ok();
+                    socket.shutdown(std::net::Shutdown::Write).ok();
+                    socket.read(&mut [0]).ok();
                     return;
                 }
                 std::thread::sleep(Duration::from_millis(5));
