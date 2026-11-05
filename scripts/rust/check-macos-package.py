@@ -23,7 +23,7 @@ with tempfile.TemporaryDirectory() as directory:
         'ffprobe': '#!/bin/sh\necho bundled-ffprobe\n',
         'macdeployqt': '#!/bin/sh\nmkdir -p "$1/Contents/Frameworks"\n: > "$1/Contents/Frameworks/libdependency.dylib"\nprintf "%s\\n" "$@" > "$PACKAGE_CALLS"\n',
         'plutil': '#!/bin/sh\nexit 0\n',
-        'codesign': '#!/bin/sh\nexit 0\n',
+        'codesign': '#!/bin/sh\nprintf "%s\\n" "$*" >> "$PACKAGE_SIGN_CALLS"\n',
         'install_name_tool': '#!/bin/sh\nexit 0\n',
         'otool': '#!/bin/sh\nprintf "%s:\\n\\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\\n" "$2"\n',
     }
@@ -31,10 +31,13 @@ with tempfile.TemporaryDirectory() as directory:
         path = tools / name
         path.write_text(code)
         path.chmod(0o755)
-    env = dict(os.environ, HOME=str(home), CARGO_TARGET_DIR=str(target), VIDEODOCK_MAC_APP=str(app), PACKAGE_CALLS=str(root / 'calls'), PATH=str(tools) + os.pathsep + os.environ['PATH'])
+    env = dict(os.environ, HOME=str(home), CARGO_TARGET_DIR=str(target), VIDEODOCK_MAC_APP=str(app), PACKAGE_CALLS=str(root / 'calls'), PACKAGE_SIGN_CALLS=str(root / 'sign-calls'), PATH=str(tools) + os.pathsep + os.environ['PATH'])
     subprocess.run(['sh', str(project / 'scripts/rust/install.sh')], env=env, check=True, capture_output=True)
     assert app.is_dir(), 'Installer ignored its isolated staging destination'
     assert not (home / 'Applications').exists(), 'Verification modified the installed application location'
+    assert '-codesign=VideoDock Self-Signed' in (root / 'calls').read_text(), 'Qt deployment uses an unrelated or ad-hoc identity'
+    assert '--sign VideoDock Self-Signed' in (root / 'sign-calls').read_text(), 'Bundle does not use its own named certificate'
+    assert '--sign - ' not in (root / 'sign-calls').read_text(), 'Ad-hoc re-signing replaced the stable identity'
     assert (app / 'Contents/MacOS/VideoDock').read_text() == 'fresh binary', 'Installer reused an old build'
     for name in ('ffmpeg', 'ffprobe'):
         assert (app / 'Contents/MacOS' / name).is_file(), f'{name} was not bundled'
@@ -58,4 +61,11 @@ with tempfile.TemporaryDirectory() as directory:
     subprocess.run([sys.executable, str(project / 'scripts/rust/diagnose-macos-worker.py'),
                     str(root / 'missing-binary'), str(diagnostics)], check=True)
     assert not list(diagnostics.iterdir()), 'Missing bundle unexpectedly started the debugger'
+    no_identity = {key: value for key, value in os.environ.items()
+                   if key not in ('VIDEODOCK_MACOS_CERTIFICATE', 'VIDEODOCK_MACOS_CERT_PASSWORD')}
+    no_identity['RUNNER_TEMP'] = str(root)
+    result = subprocess.run([sys.executable, str(project / 'scripts/rust/import-macos-signing.py')],
+                            env=no_identity, capture_output=True)
+    assert result.returncode != 0 and b'identity: missing' in result.stderr
+    assert not (root / 'videodock-signing.keychain-db').exists(), 'Missing credentials created a keychain'
 print('macOS packaging contract passed: current build, isolated destination, media tools, Qt deployment and plist')

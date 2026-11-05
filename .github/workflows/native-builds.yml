@@ -73,6 +73,13 @@ jobs:
             ~/.cargo/registry
           key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}
       - run: cargo test --workspace --locked
+      - name: Build native release before importing signing identity
+        run: sh scripts/rust/build.sh
+      - name: Import VideoDock signing identity
+        env:
+          VIDEODOCK_MACOS_CERTIFICATE: ${{ secrets.VIDEODOCK_MACOS_CERTIFICATE }}
+          VIDEODOCK_MACOS_CERT_PASSWORD: ${{ secrets.VIDEODOCK_MACOS_CERT_PASSWORD }}
+        run: python3 scripts/rust/import-macos-signing.py
       - name: Build and verify application bundle
         env:
           VIDEODOCK_MAC_APP: ${{ runner.temp }}/VideoDock.app
@@ -109,6 +116,10 @@ jobs:
             ${{ github.workspace }}/target
             ~/.cargo/registry
           key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}
+
+      - name: Remove ephemeral signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/videodock-signing.keychain-db" || true
 
   windows:
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'windows'
@@ -169,6 +180,12 @@ jobs:
           & $python crates/desktop/tests/proof_worker.py "$env:CARGO_TARGET_DIR/package/VideoDock/VideoDock.exe" --proxy --startup
           if ($LASTEXITCODE -ne 0) { throw 'Installed proof worker failed' }
           Compress-Archive -Path "$env:CARGO_TARGET_DIR/package/VideoDock/*" -DestinationPath "$env:RUNNER_TEMP/VideoDock-windows-x64.zip"
+      - name: Diagnose Windows DNS test in isolation
+        if: failure()
+        shell: pwsh
+        run: |
+          $test = Get-ChildItem "$env:CARGO_TARGET_DIR/debug/deps/videodock_media-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if ($test) { & $test.FullName dns::tests::anonymous_worker_bootstrap_is_pinned_and_never_bypasses_a_proxy --exact --nocapture }
       - name: Build Windows installer
         shell: pwsh
         run: |

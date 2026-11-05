@@ -233,7 +233,16 @@ impl Resolver {
                 .query(&[("name", normalized(host)), ("type", "A".into())])
                 .send()
                 .await
-                .map_err(|_| failure())?;
+                .map_err(|error| {
+                    #[cfg(test)]
+                    eprintln!(
+                        "DoH send failure: timeout={} connect={}",
+                        error.is_timeout(),
+                        error.is_connect()
+                    );
+                    let _ = error;
+                    failure()
+                })?;
             let mime = response
                 .headers()
                 .get(reqwest::header::CONTENT_TYPE)
@@ -252,13 +261,27 @@ impl Resolver {
                 return Err(failure());
             }
             let mut bytes = Vec::new();
-            while let Some(chunk) = response.chunk().await.map_err(|_| failure())? {
+            while let Some(chunk) = response.chunk().await.map_err(|error| {
+                #[cfg(test)]
+                eprintln!(
+                    "DoH body failure: timeout={} body={}",
+                    error.is_timeout(),
+                    error.is_body()
+                );
+                let _ = error;
+                failure()
+            })? {
                 if chunk.len() > BODY_LIMIT - bytes.len() {
                     return Err(failure());
                 }
                 bytes.extend_from_slice(&chunk);
             }
-            parse(&bytes, host)
+            let result = parse(&bytes, host);
+            #[cfg(test)]
+            if result.is_err() {
+                eprintln!("DoH parse failure: bytes={}", bytes.len());
+            }
+            result
         };
         tokio::time::timeout(DOH_TIMEOUT, request)
             .await
@@ -524,11 +547,16 @@ mod tests {
                 .await
                 .is_err()
         );
+        let result = resolver
+            .bootstrap_after_system("www.youtube.com", Err(failure()))
+            .await;
+        assert!(
+            result.is_ok(),
+            "Bootstrap fixture requests={}",
+            count.load(Ordering::SeqCst)
+        );
         assert_eq!(
-            resolver
-                .bootstrap_after_system("www.youtube.com", Err(failure()))
-                .await
-                .unwrap(),
+            result.unwrap(),
             Some(("www.youtube.com".into(), IpAddr::from([142, 250, 74, 206])))
         );
         thread.join().unwrap();
