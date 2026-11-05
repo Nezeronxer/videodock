@@ -48,7 +48,7 @@ def main():
                 while not stopped.is_set():
                     try:
                         connection, _ = listener.accept()
-                    except TimeoutError:
+                    except socket.timeout:
                         continue
                     with connection:
                         connection.settimeout(1)
@@ -66,6 +66,9 @@ def main():
             try:
                 result = subprocess.run([executable, "--youtube-proof"], input=json.dumps(routed).encode(),
                                         capture_output=True, env=environment, timeout=15)
+                assert result.returncode == 0 and result.stdout, (
+                    f"Packaged proof worker exited without a response: code={result.returncode}, "
+                    f"stdout_bytes={len(result.stdout)}, stderr_bytes={len(result.stderr)}")
                 reply = json.loads(result.stdout)
                 assert requests and any(requests), "worker did not use the selected HTTP proxy"
                 assert reply["ok"] is False and reply["stage"] == "homepage"

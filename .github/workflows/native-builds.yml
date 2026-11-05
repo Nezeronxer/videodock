@@ -81,6 +81,17 @@ jobs:
           "$VIDEODOCK_MAC_APP/Contents/MacOS/ffprobe" -version
           PATH=/usr/bin:/bin:/usr/sbin:/sbin /usr/bin/python3 crates/desktop/tests/proof_worker.py "$VIDEODOCK_MAC_APP/Contents/MacOS/VideoDock" --proxy --startup
           ditto -c -k --sequesterRsrc --keepParent "$VIDEODOCK_MAC_APP" "$RUNNER_TEMP/VideoDock-macos-x64.zip"
+      - name: Preserve macOS crash diagnostics
+        if: failure()
+        run: |
+          mkdir -p "$RUNNER_TEMP/macos-diagnostics"
+          find "$HOME/Library/Logs/DiagnosticReports" -maxdepth 1 -type f \( -name '*VideoDock*' -o -name '*videodock*' -o -name '*QtWebEngineProcess*' \) -exec cp {} "$RUNNER_TEMP/macos-diagnostics/" \; 2>/dev/null || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: macos-crash-diagnostics
+          path: ${{ runner.temp }}/macos-diagnostics
+          if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: VideoDock-macos-x64
