@@ -175,6 +175,7 @@ int main(int argc, char **argv) {
             return result;
         };
         auto capture = [&](const QString &name) {
+            qInfo("Appearance checkpoint: %s", qPrintable(name));
             QTest::qWait(150);
             auto image = window->grabWindow();
             check(!image.isNull(), "Empty render");
