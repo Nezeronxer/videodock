@@ -144,25 +144,28 @@ int main(int argc, char **argv) {
     QtWebEngineQuick::initialize();
     QApplication application(argc, argv);
     qInfo("Appearance startup: application initialized");
-    if (argc > 6 && !QString::fromLocal8Bit(argv[6]).isEmpty())
-        check(QResource::registerResource(QString::fromLocal8Bit(argv[6])), "Reference appearance pack failed to load");
-    QQuickStyle::setStyle("Basic");
-    QTranslator translator, qtTranslator, declarativeTranslator;
-    if (argc > 3 && QString::fromLocal8Bit(argv[3]) == "ru") {
-        check(translator.load(QFileInfo(QString::fromLocal8Bit(argv[1])).dir().filePath("translations/videodock_ru.qm")), "Russian translations missing");
-        check(qtTranslator.load(QStringLiteral("qtbase_ru"), QLibraryInfo::path(QLibraryInfo::TranslationsPath)), "Qt base translations missing");
-        check(declarativeTranslator.load(QStringLiteral("qtdeclarative_ru"), QLibraryInfo::path(QLibraryInfo::TranslationsPath)), "Qt Quick translations missing");
-        application.installTranslator(&qtTranslator);
-        application.installTranslator(&declarativeTranslator);
-        application.installTranslator(&translator);
-    }
-    qmlRegisterType<FixtureBackend>("VideoDock", 1, 0, "Backend");
-    QQmlApplicationEngine engine;
-    QStringList warnings;
-    QObject::connect(&engine, &QQmlEngine::warnings, [&warnings](const QList<QQmlError> &errors) {
-        for (const auto &error : errors) warnings << error.toString();
-    });
     try {
+        if (argc > 6 && !QString::fromLocal8Bit(argv[6]).isEmpty())
+            check(QResource::registerResource(QString::fromLocal8Bit(argv[6])), "Reference appearance pack failed to load");
+        QQuickStyle::setStyle("Basic");
+        QTranslator translator, qtTranslator, declarativeTranslator;
+        if (argc > 3 && QString::fromLocal8Bit(argv[3]) == "ru") {
+            check(translator.load(QFileInfo(QString::fromLocal8Bit(argv[1])).dir().filePath("translations/videodock_ru.qm")), "Russian translations missing");
+            const auto translations = QLibraryInfo::path(QLibraryInfo::TranslationsPath);
+            if (!qtTranslator.load(QStringLiteral("qt_ru"), translations)) {
+                check(qtTranslator.load(QStringLiteral("qtbase_ru"), translations), "Qt base translations missing");
+                check(declarativeTranslator.load(QStringLiteral("qtdeclarative_ru"), translations), "Qt Quick translations missing");
+                application.installTranslator(&declarativeTranslator);
+            }
+            application.installTranslator(&qtTranslator);
+            application.installTranslator(&translator);
+        }
+        qmlRegisterType<FixtureBackend>("VideoDock", 1, 0, "Backend");
+        QQmlApplicationEngine engine;
+        QStringList warnings;
+        QObject::connect(&engine, &QQmlEngine::warnings, [&warnings](const QList<QQmlError> &errors) {
+            for (const auto &error : errors) warnings << error.toString();
+        });
         check(argc >= 3, "Expected Main.qml and screenshot directory");
         engine.load(QUrl::fromLocalFile(QString::fromLocal8Bit(argv[1])));
         qInfo("Appearance startup: QML load returned");
@@ -211,15 +214,32 @@ int main(int argc, char **argv) {
         auto *appearance = named(window, "appearanceMenu");
         auto checkSwitchThumb = [&]() {
             auto *control = qobject_cast<QQuickItem *>(named(window, "smartModeSwitch"));
+            check(control != nullptr, "Smart Mode control is not a visual item");
+            auto *indicator = qvariant_cast<QQuickItem *>(control->property("indicator"));
+            check(indicator && !indicator->childItems().isEmpty(), "Smart Mode indicator missing");
+            auto *thumbItem = indicator->childItems().first();
             for (const bool enabled : {false, true}) {
                 auto settings = backend->state["settings"].toObject();
                 settings["smartMode"] = enabled;
                 backend->state["settings"] = settings;
                 backend->publish();
-                QTest::qWait(200);
-                const QPoint pixel = control->mapToScene(QPointF(enabled ? 28 : 12, 3)).toPoint();
-                const QColor thumb = window->grabWindow().pixelColor(pixel);
-                check(thumb.red() > 220 && thumb.green() > 220 && thumb.blue() > 220, "Smart Mode thumb is invisible");
+                const int left = enabled ? 18 : 2;
+                QElapsedTimer animation;
+                animation.start();
+                while (std::abs(thumbItem->x() - left) > 0.5 && animation.elapsed() < 2000) QTest::qWait(20);
+                check(std::abs(thumbItem->x() - left) <= 0.5, "Smart Mode thumb did not settle after toggling");
+                QTest::qWait(50);
+                const QImage frame = window->grabWindow();
+                check(!frame.isNull(), "Smart Mode frame unavailable");
+                int whitePixels = 0;
+                // Sample the painted thumb area rather than one antialiased edge pixel.
+                for (int y = 0; y < 20; ++y) for (int x = 0; x < 20; ++x) {
+                    const auto pixel = (indicator->mapToScene(QPointF(left + x + 0.5, 2 + y + 0.5)) * window->devicePixelRatio()).toPoint();
+                    const auto color = frame.pixelColor(pixel);
+                    if (color.red() > 245 && color.green() > 245 && color.blue() > 245) ++whitePixels;
+                }
+                if (whitePixels < 100) frame.save(QDir(QString::fromLocal8Bit(argv[2])).filePath(enabled ? "smart-mode-on-failure.png" : "smart-mode-off-failure.png"));
+                check(whitePixels >= 100, QString("Smart Mode thumb is invisible: enabled=%1 whitePixels=%2").arg(enabled).arg(whitePixels));
             }
         };
         checkSwitchThumb();
