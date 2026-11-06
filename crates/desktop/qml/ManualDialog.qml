@@ -190,7 +190,7 @@ AppDialog {
     }
 
     objectName: "manualDownloadDialog"
-    title: manual.editing ? qsTr("Edit Subscription") : subscribe ? (existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : batch ? qsTr("Download %1").arg(manual.kind === "search" ? qsTr("Search Results") : manual.kind === "channel" ? qsTr("Channel") : qsTr("Playlist")) : mediaType.currentText === "audio" ? qsTr("Download Audio") : qsTr("Download Video")
+    title: manual.editing ? qsTranslate("JobList", "Edit Subscription Settings") : subscribe ? (existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : batch ? qsTr("Download %1").arg(manual.kind === "search" ? qsTr("Search Results") : manual.kind === "channel" ? qsTr("Channel") : qsTr("Playlist")) : mediaType.currentText === "audio" ? qsTr("Download Audio") : qsTr("Download Video")
     modal: true
     anchors.centerIn: parent
     width: Math.min(800, parent.width - 40)
@@ -206,8 +206,8 @@ AppDialog {
         modeTouched = false;
         vrTouched = false;
         editedFormat = {};
-        operatingSystem = "Any";
-        operatingSystemChoice.currentIndex = 0;
+        operatingSystem = !manual.editing && batch ? app.settings.containerOSAlias || "Any" : "Any";
+        operatingSystemChoice.currentIndex = Math.max(0, operatingSystemChoice.model.indexOf(operatingSystem));
         selectedFormatId = "";
         var saved = manual.editing ? manual.preferences || {} : {};
         existing = !manual.editing && manual.download_existing === true;
@@ -234,6 +234,7 @@ AppDialog {
             codec.currentIndex = Math.max(0, codec.model.indexOf(mediaType.currentText === "audio" ? chosen.audio_codec : chosen.video_codec));
             fps.currentIndex = Math.max(0, fps.model.indexOf(String(saved.fps || "Any")));
         }
+        if (operatingSystem !== "Any") applyOperatingSystem(operatingSystem);
         itemSearch = "";
         Qt.callLater(function () { root.previewReady = true; root.refreshPreview(); });
     }
@@ -246,6 +247,7 @@ AppDialog {
                 preferencesInitialized = true;
                 if (manual.kind === "audio" && !editedFormat.media_type)
                     mediaType.currentIndex = 1;
+                if (operatingSystem !== "Any") applyOperatingSystem(operatingSystem);
             }
         }
         if (visible && !userSelection) {
@@ -566,7 +568,7 @@ AppDialog {
                                 visible: root.batch
                                 Layout.fillWidth: true
                                 spacing: 8
-                                Label { text: qsTr("For") }
+                                Label { text: qsTranslate("SmartModeBar", "For") }
                                 FilterChoice {
                                     id: operatingSystemChoice
                                     objectName: "manualOperatingSystem"
@@ -875,7 +877,7 @@ AppDialog {
                     palette.dark: root.app.theme.accent
                     Layout.preferredWidth: 176
                     Layout.preferredHeight: 40
-                    text: root.manual.editing ? qsTr("Save") : root.subscribe ? (root.existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : root.batch ? qsTr("Download %1").arg(root.selectedItems.length) : qsTr("Download")
+                    text: root.manual.editing ? qsTranslate("SettingsDialog", "Save") : root.subscribe ? (root.existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : root.batch ? qsTr("Download %1").arg(root.selectedItems.length) : qsTr("Download")
                     highlighted: true
                     enabled: root.manual.state === "ready" && !root.manual.error && (root.formats.length > 0 || (root.manual.editing && Object.keys(root.editedFormat).length === 0)) && (!root.batch || root.selectedItems.length > 0 || root.subscribe)
                     onClicked: root.submit()
