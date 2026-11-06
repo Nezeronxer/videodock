@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 import QtQuick.Layouts
+import QtQml.Models
 
 AppDialog {
     id: root
@@ -19,6 +20,11 @@ AppDialog {
     property bool collapsed: false
     property bool previewReady: false
     property bool vrTouched: false
+    property var editedFormat: ({})
+    property string operatingSystem: "Any"
+    property bool preferencesInitialized: false
+    readonly property var savedPreferences: manual.editing ? manual.preferences || {} : ({})
+    readonly property var requestedVR: vrTouched ? vr.currentText : manual.editing ? (savedPreferences.vr === true ? true : savedPreferences.vr_mode || "Any") : app.settings.videoVR
     property string outputDirectory: ""
     property string outputFilename: ""
     property bool batch: ["playlist", "channel", "search"].indexOf(manual.kind) >= 0
@@ -27,7 +33,7 @@ AppDialog {
     })
 
     function matchesVR(format) {
-        var requested = vrTouched ? vr.currentText : app.settings.videoVR;
+        var requested = requestedVR;
         if (requested === true)
             return format.vr === true || (typeof format.vr === "string" && ["None", "Any", "2D"].indexOf(format.vr) < 0);
         return requested === undefined || requested === false || requested === "Any" || String(format.vr) === requested;
@@ -124,7 +130,39 @@ AppDialog {
         };
         if (vrTouched)
             action.format.vr = vr.currentText;
+        if (manual.editing) {
+            var saved = manual.preferences || {};
+            ["media_type", "container", "quality", "video_codec", "audio_codec", "audio_bitrate", "fps", "vr", "vr_mode"].forEach(function (key) {
+                if (!root.editedFormat[key] && saved[key] !== undefined)
+                    action.format[key] = saved[key];
+            });
+            if (!editedFormat.format_id)
+                action.format_id = saved.format_id || "";
+        }
+        if (operatingSystem !== "Any") {
+            action.format.video_codec = "Any";
+            action.format.audio_codec = "Any";
+            action.format_id = "";
+        }
         return action;
+    }
+    function editFormat(keys) {
+        var next = Object.assign({}, editedFormat);
+        keys.forEach(function (key) { next[key] = true; });
+        editedFormat = next;
+    }
+    function applyOperatingSystem(value) {
+        operatingSystem = value;
+        if (value === "Any") return;
+        var audio = mediaType.currentText === "audio";
+        var valueContainer = audio ? (value === "Linux" ? "OGG" : value === "Mac OS" || value === "iOS" ? "M4A" : "MP3") : value === "Linux" ? "MKV" : "MP4";
+        container.currentIndex = container.model.indexOf(valueContainer);
+        codec.currentIndex = 0;
+        root.editFormat(["container", "video_codec", "audio_codec", "format_id"]);
+    }
+    function chooseFolder(path) {
+        outputDirectory = path;
+        outputPath.text = path + (outputFilename ? "/" + outputFilename : "");
     }
     function refreshPreview() {
         if (!previewReady || !visible || batch || outputPath.edited || manual.state !== "ready" || !selectedFormat.id)
@@ -151,7 +189,7 @@ AppDialog {
     }
 
     objectName: "manualDownloadDialog"
-    title: subscribe ? (existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : batch ? qsTr("Download %1").arg(manual.kind === "search" ? qsTr("Search Results") : manual.kind === "channel" ? qsTr("Channel") : qsTr("Playlist")) : mediaType.currentText === "audio" ? qsTr("Download Audio") : qsTr("Download Video")
+    title: manual.editing ? qsTr("Edit Subscription") : subscribe ? (existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : batch ? qsTr("Download %1").arg(manual.kind === "search" ? qsTr("Search Results") : manual.kind === "channel" ? qsTr("Channel") : qsTr("Playlist")) : mediaType.currentText === "audio" ? qsTr("Download Audio") : qsTr("Download Video")
     modal: true
     anchors.centerIn: parent
     width: Math.min(800, parent.width - 40)
@@ -160,16 +198,22 @@ AppDialog {
     header: null
     footer: null
     closePolicy: Popup.CloseOnEscape
-    onOpened: {
+    onOpened: initializeSelection()
+    function initializeSelection() {
+        preferencesInitialized = manual.state === "ready";
         previewReady = false;
         vrTouched = false;
+        editedFormat = {};
+        operatingSystem = "Any";
+        operatingSystemChoice.currentIndex = 0;
         selectedFormatId = "";
-        existing = manual.download_existing === true;
+        var saved = manual.editing ? manual.preferences || {} : {};
+        existing = !manual.editing && manual.download_existing === true;
         selectedItems = (manual.items || []).map(function (item) {
             return item.id;
         });
-        selectedSubtitles = [];
-        selectedAudio = [];
+        selectedSubtitles = (saved.subtitles || []).slice();
+        selectedAudio = (saved.audio_tracks || []).slice();
         userSelection = false;
         subscribe = manual.mode === "subscribe";
         outputDirectory = manual.output_dir || app.settings.path || "";
@@ -177,13 +221,31 @@ AppDialog {
         outputPath.text = manual.download_path || outputDirectory + (outputFilename ? "/" + outputFilename : "");
         outputPath.edited = false;
         collapsed = false;
-        mediaType.currentIndex = manual.kind === "audio" || app.settings.mediaType === "audio" ? 1 : 0;
-        container.currentIndex = Math.max(0, container.model.indexOf(app.optionText("container", app.settings.container)));
-        vr.currentIndex = Math.max(0, vr.model.indexOf(typeof app.settings.videoVR === "string" ? app.settings.videoVR : "Any"));
+        mediaType.currentIndex = manual.kind === "audio" || (saved.media_type || app.settings.mediaType) === "audio" ? 1 : 0;
+        container.currentIndex = Math.max(0, container.model.indexOf(app.optionText("container", saved.container || app.settings.container)));
+        codec.currentIndex = 0;
+        fps.currentIndex = 0;
+        vr.currentIndex = Math.max(0, vr.model.indexOf(saved.vr_mode || (typeof app.settings.videoVR === "string" ? app.settings.videoVR : "Any")));
+        selectedFormatId = manual.selected_format_id || saved.format_id || "";
+        if (manual.editing) {
+            var chosen = selectedFormat;
+            codec.currentIndex = Math.max(0, codec.model.indexOf(mediaType.currentText === "audio" ? chosen.audio_codec : chosen.video_codec));
+            fps.currentIndex = Math.max(0, fps.model.indexOf(String(saved.fps || "Any")));
+        }
         itemSearch = "";
         Qt.callLater(function () { root.previewReady = true; root.refreshPreview(); });
     }
     onManualChanged: {
+        if (visible && manual.state === "ready" && !preferencesInitialized) {
+            if (manual.editing)
+                initializeSelection();
+            else {
+                subscribe = manual.mode === "subscribe";
+                preferencesInitialized = true;
+                if (manual.kind === "audio" && !editedFormat.media_type)
+                    mediaType.currentIndex = 1;
+            }
+        }
         if (visible && !userSelection) {
             selectedItems = (manual.items || []).map(function (item) {
                 return item.id;
@@ -202,9 +264,24 @@ AppDialog {
 
         title: qsTr("Save To")
         onAccepted: {
-            root.outputDirectory = root.app.nativePath(selectedFolder);
-            outputPath.text = root.outputDirectory + (root.outputFilename ? "/" + root.outputFilename : "");
+            root.chooseFolder(root.app.nativePath(selectedFolder));
         }
+    }
+    Menu {
+        id: outputHistory
+        objectName: "manualFolderHistory"
+        Instantiator {
+            model: root.app.settings.paths || []
+            delegate: MenuItem {
+                required property string modelData
+                text: modelData
+                onTriggered: root.chooseFolder(modelData)
+            }
+            onObjectAdded: (index, object) => outputHistory.insertItem(index, object)
+            onObjectRemoved: (index, object) => outputHistory.removeItem(object)
+        }
+        MenuSeparator {}
+        MenuItem { text: qsTr("Browse…"); onTriggered: folder.open() }
     }
 
     function applyOutputPath(path) {
@@ -459,10 +536,15 @@ AppDialog {
                                 Label { text: qsTr("Download") }
                                 FilterChoice {
                                     id: mediaType
+                                    objectName: "manualMediaType"
                                     model: ["video", "audio"]
                                     Layout.fillWidth: true
                                     implicitHeight: 40
-                                    onActivated: { container.currentIndex = 0; codec.currentIndex = 0; }
+                                    onActivated: {
+                                        container.currentIndex = 0; codec.currentIndex = 0;
+                                        root.editFormat(["media_type", "container", "quality", "video_codec", "audio_codec", "audio_bitrate", "fps", "vr", "vr_mode", "format_id"]);
+                                        if (root.operatingSystem !== "Any") root.applyOperatingSystem(root.operatingSystem);
+                                    }
                                 }
                             }
                             ColumnLayout {
@@ -475,7 +557,21 @@ AppDialog {
                                     model: mediaType.currentText === "audio" ? ["Any", "M4A", "MP3", "OGG", "FLAC", "WAV"] : ["Any", "MKV", "MP4"]
                                     Layout.fillWidth: true
                                     implicitHeight: 40
-                                    onActivated: Qt.callLater(root.refreshPreview)
+                                    onActivated: { root.operatingSystem = "Any"; operatingSystemChoice.currentIndex = 0; root.editFormat(["container"]); Qt.callLater(root.refreshPreview); }
+                                }
+                            }
+                            ColumnLayout {
+                                visible: root.batch
+                                Layout.fillWidth: true
+                                spacing: 8
+                                Label { text: qsTr("For") }
+                                FilterChoice {
+                                    id: operatingSystemChoice
+                                    objectName: "manualOperatingSystem"
+                                    model: ["Any", "Windows", "Mac OS", "Linux", "iOS", "Android"]
+                                    Layout.fillWidth: true
+                                    implicitHeight: 40
+                                    onActivated: root.applyOperatingSystem(currentText)
                                 }
                             }
                         }
@@ -488,8 +584,10 @@ AppDialog {
                             Label { text: qsTr("Codec"); color: root.app.theme.secondary }
                             CompactFilter {
                                 id: codec
+                                objectName: "manualCodec"
                                 emptyLabel: qsTr("Auto")
                                 model: root.choices("video_codec").concat(root.choices("audio_codec").slice(1)).filter(function (value, index, values) { return values.indexOf(value) === index; })
+                                onActivated: root.editFormat([mediaType.currentText === "audio" ? "audio_codec" : "video_codec", "format_id"])
                             }
                             Label { text: qsTr("Frame Rate"); visible: fps.visible; color: root.app.theme.secondary; Layout.leftMargin: 16 }
                             CompactFilter {
@@ -497,20 +595,22 @@ AppDialog {
                                 emptyLabel: qsTr("Highest")
                                 model: root.choices("fps")
                                 visible: mediaType.currentText !== "audio" && model.length > 1
+                                onActivated: root.editFormat(["fps", "format_id"])
                             }
                             Label { text: qsTr("VR"); visible: vr.visible; color: root.app.theme.secondary; Layout.leftMargin: 16 }
                             CompactFilter {
                                 id: vr
                                 objectName: "manualVR"
                                 model: root.choices("vr")
-                                displayText: !root.vrTouched && root.app.settings.videoVR === true ? "VR" : !root.vrTouched && typeof root.app.settings.videoVR === "string" ? root.app.settings.videoVR : root.app.optionLabel(currentText)
-                                visible: mediaType.currentText !== "audio" && (model.length > 2 || (root.app.settings.videoVR !== undefined && root.app.settings.videoVR !== false && root.app.settings.videoVR !== "Any"))
-                                onActivated: { root.vrTouched = true; Qt.callLater(root.refreshPreview); }
+                                displayText: root.requestedVR === true ? "VR" : typeof root.requestedVR === "string" ? root.app.optionLabel(root.requestedVR) : root.app.optionLabel(currentText)
+                                visible: mediaType.currentText !== "audio" && (model.length > 2 || (root.requestedVR !== undefined && root.requestedVR !== false && root.requestedVR !== "Any"))
+                                onActivated: { root.vrTouched = true; root.editFormat(["vr", "vr_mode", "format_id"]); Qt.callLater(root.refreshPreview); }
                             }
                             Item { Layout.fillWidth: true }
                             ToolButton {
                                 id: audioLanguages
-                                visible: mediaType.currentText !== "audio"
+                                objectName: "manualAudioTracks"
+                                visible: mediaType.currentText !== "audio" || (root.manual.audio_tracks || []).length > 0
                                 text: qsTr("Audio Tracks (%1)").arg(root.selectedAudio.length)
                                 font.pixelSize: 14
                                 padding: 0
@@ -624,7 +724,7 @@ AppDialog {
                                 height: 40
                                 text: [modelData.quality, modelData.video_codec || modelData.audio_codec, modelData.container].filter(Boolean).map(function (value) { return root.app.optionLabel(value); }).join(" · ")
                                 checked: root.selectedFormat.id === modelData.id
-                                onClicked: root.selectedFormatId = modelData.id
+                                onClicked: { root.selectedFormatId = modelData.id; root.editFormat(["quality", "audio_bitrate", "video_codec", "audio_codec", "fps", "format_id"]); }
                                 indicator: Rectangle {
                                     x: 0
                                     y: 10
@@ -670,7 +770,7 @@ AppDialog {
                                 snapMode: Slider.SnapAlways
                                 enabled: root.formats.length > 0
                                 value: Math.max(0, root.formats.findIndex(function (format) { return format.id === root.selectedFormatId; }))
-                                onMoved: root.selectedFormatId = root.formats[Math.round(value)].id
+                                onMoved: { root.selectedFormatId = root.formats[Math.round(value)].id; root.editFormat(["quality", "audio_bitrate", "video_codec", "audio_codec", "fps", "format_id"]); }
                             }
                             RowLayout {
                                 Layout.fillWidth: true
@@ -691,7 +791,7 @@ AppDialog {
                                 text: qsTr("Reset Filters")
                                 flat: true
                                 Layout.alignment: Qt.AlignHCenter
-                                onClicked: { container.currentIndex = 0; codec.currentIndex = 0; fps.currentIndex = 0; vr.currentIndex = 0; }
+                                onClicked: { container.currentIndex = 0; codec.currentIndex = 0; fps.currentIndex = 0; vr.currentIndex = 0; root.vrTouched = true; root.operatingSystem = "Any"; operatingSystemChoice.currentIndex = 0; root.editFormat(["container", "video_codec", "audio_codec", "fps", "vr", "vr_mode", "format_id"]); }
                             }
                             Item { Layout.fillHeight: true }
                         }
@@ -739,22 +839,25 @@ AppDialog {
                 }
                 ToolButton {
                     visible: root.batch
+                    id: outputFolder
+                    objectName: "manualOutputFolder"
                     text: qsTr("Save To") + ": " + root.outputDirectory
                     ToolTip.visible: hovered
                     ToolTip.text: root.outputDirectory
-                    onClicked: folder.open()
+                    onClicked: (root.app.settings.paths || []).length ? outputHistory.popup(outputFolder, 0, outputFolder.height) : folder.open()
                     Layout.fillWidth: true
                     contentItem: Label { text: parent.text; elide: Text.ElideLeft; verticalAlignment: Text.AlignVCenter }
                 }
                 CheckBox {
                     text: qsTr("Subscribe to updates")
-                    visible: root.batch && ["channel", "playlist"].indexOf(root.manual.kind) >= 0
+                    visible: !root.manual.editing && root.batch && ["channel", "playlist"].indexOf(root.manual.kind) >= 0
                     checked: root.subscribe
                     onClicked: root.subscribe = checked
                 }
                 Switch {
+                    objectName: "manualDownloadExisting"
                     text: qsTr("Download Existing")
-                    visible: root.subscribe
+                    visible: root.subscribe && !root.manual.editing
                     checked: root.existing
                     onToggled: root.existing = checked
                 }
@@ -770,9 +873,9 @@ AppDialog {
                     palette.dark: root.app.theme.accent
                     Layout.preferredWidth: 176
                     Layout.preferredHeight: 40
-                    text: root.subscribe ? (root.existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : root.batch ? qsTr("Download %1").arg(root.selectedItems.length) : qsTr("Download")
+                    text: root.manual.editing ? qsTr("Save") : root.subscribe ? (root.existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : root.batch ? qsTr("Download %1").arg(root.selectedItems.length) : qsTr("Download")
                     highlighted: true
-                    enabled: root.manual.state === "ready" && !root.manual.error && root.formats.length > 0 && (!root.batch || root.selectedItems.length > 0 || root.subscribe)
+                    enabled: root.manual.state === "ready" && !root.manual.error && (root.formats.length > 0 || (root.manual.editing && Object.keys(root.editedFormat).length === 0)) && (!root.batch || root.selectedItems.length > 0 || root.subscribe)
                     onClicked: root.submit()
                 }
             }
