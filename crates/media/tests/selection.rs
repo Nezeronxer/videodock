@@ -18,6 +18,17 @@ fn format(
 }
 
 #[test]
+fn portrait_quality_limit_does_not_discard_full_hd_video() {
+    let mut full_hd = format("portrait-1080", 1920, Some("avc1"), Some("aac"), None);
+    full_hd.width = Some(1080);
+    let mut hd = format("portrait-720", 1280, Some("avc1"), Some("aac"), None);
+    hd.width = Some(720);
+    let selected = choose_formats(&[full_hd, hd], &Selection { quality: 1080, ..Default::default() }).unwrap();
+    assert_eq!(selected[0].id, "portrait-1080");
+    assert_eq!(selected[0].height, Some(1920));
+}
+
+#[test]
 fn ceiling_and_audio_language_are_obeyed() {
     let formats = vec![
         format("720", 720, Some("avc1"), None, None),

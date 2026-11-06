@@ -100,14 +100,14 @@ pub fn choose_formats(formats: &[Format], settings: &Selection) -> Result<Vec<Fo
                     f.has_video()
                         && settings.vr_mode.matches(f, settings.vr)
                         && (settings.quality == 0
-                            || f.height.is_none_or(|height| height <= settings.quality))
+                            || f.video_quality().is_none_or(|height| height <= settings.quality))
                         && (settings.fps == 0
                             || f.fps.is_none_or(|fps| fps <= f64::from(settings.fps)))
                         && matches_codec(&f.video_codec, &settings.video_codec)
                 })
                 .max_by_key(|f| {
                     (
-                        f.height.unwrap_or_default(),
+                        f.video_quality().unwrap_or_default(),
                         (f.fps.unwrap_or_default() * 100.0) as u64,
                         f.bitrate.unwrap_or_default(),
                     )

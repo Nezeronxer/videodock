@@ -122,6 +122,57 @@ jobs:
         if: always()
         run: security delete-keychain "$RUNNER_TEMP/videodock-signing.keychain-db" || true
 
+  macos-downloads:
+    needs: macos
+    if: needs.macos.result == 'success'
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: VideoDock-macos-x64
+          path: ${{ runner.temp }}/macos-artifact
+      - name: Prepare standalone bundle and Rust tests
+        run: |
+          ditto -x -k "$RUNNER_TEMP/macos-artifact/VideoDock-macos-x64.zip" "$RUNNER_TEMP/native-app"
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup override set 1.99.1
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ${{ github.workspace }}/target
+            ~/.cargo/registry
+          key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}
+      - name: Complete public downloads with the packaged worker
+        env:
+          QT_QPA_PLATFORM: cocoa
+        run: |
+          export PATH="$RUNNER_TEMP/native-app/VideoDock.app/Contents/MacOS:$PATH"
+          export VIDEODOCK_TEST_PROOF_WORKER="$RUNNER_TEMP/native-app/VideoDock.app/Contents/MacOS/VideoDock"
+          export VIDEODOCK_TEST_OUTPUT_DIR="$RUNNER_TEMP/native-downloads/files"
+          mkdir -p "$RUNNER_TEMP/native-downloads"
+          set +e
+          cargo test -p videodock-core --test catalog_downloads tiktok_adaptive_audio --locked -- --ignored --exact --nocapture > "$RUNNER_TEMP/native-downloads/tiktok.log" 2>&1
+          tiktok_status=$?
+          cargo test -p videodock-core --test youtube_downloads zoo_complete_240p --locked -- --ignored --exact --nocapture > "$RUNNER_TEMP/native-downloads/youtube.log" 2>&1
+          youtube_status=$?
+          python3 - "$tiktok_status" "$youtube_status" "$RUNNER_TEMP/native-downloads/result.json" <<'PY'
+          import json, pathlib, sys
+          pathlib.Path(sys.argv[3]).write_text(json.dumps({"tiktok_exit":int(sys.argv[1]),"youtube_exit":int(sys.argv[2])}) + "\n")
+          PY
+          test "$tiktok_status" -eq 0 && test "$youtube_status" -eq 0
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: macos-public-downloads
+          path: ${{ runner.temp }}/native-downloads
+          if-no-files-found: warn
+
   windows:
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'windows'
     runs-on: windows-2022

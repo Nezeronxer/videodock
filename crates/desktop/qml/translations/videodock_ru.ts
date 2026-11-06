@@ -417,10 +417,18 @@
         <source>Name</source>
         <translation>По имени</translation>
     </message>
-    <message>
+    <message numerus="yes">
         <location filename="../Main.qml" line="564"/>
-        <source> items</source>
-        <translation> элементов</translation>
+        <source>%n items</source>
+        <translation>
+            <numerusform>%n элемент</numerusform>
+            <numerusform>%n элемента</numerusform>
+            <numerusform>%n элементов</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>1 item</source>
+        <translation>1 элемент</translation>
     </message>
     <message>
         <location filename="../Main.qml" line="385"/>

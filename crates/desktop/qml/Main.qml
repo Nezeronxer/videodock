@@ -11,6 +11,18 @@ import Qt5Compat.GraphicalEffects
 ApplicationWindow {
     id: window
 
+    component AppMenu: Menu {
+        implicitWidth: {
+            var widest = 200;
+            for (var i = 0; i < count; ++i) {
+                var entry = itemAt(i);
+                if (entry && entry.contentItem)
+                    widest = Math.max(widest, entry.contentItem.implicitWidth + (entry.leftPadding || 0) + (entry.rightPadding || 0) + 24);
+            }
+            return Math.ceil(widest + leftPadding + rightPadding);
+        }
+    }
+
     readonly property alias theme: colors
     readonly property color green: colors.accent
     property bool searchVisible: false
@@ -138,6 +150,7 @@ ApplicationWindow {
             clipboardField.text = response.clipboard;
             clipboardField.selectAll();
             clipboardField.copy();
+            clipboardField.clear();
         }
         return response;
     }
@@ -163,10 +176,14 @@ ApplicationWindow {
     function pasteLink() {
         clipboardField.clear();
         clipboardField.paste();
-        if (clipboardField.text.trim())
-            parse(clipboardField.text.trim());
-        else
+        var value = clipboardField.text.trim();
+        clipboardField.clear();
+        if (/^https?:\/\//i.test(value))
+            parse(value);
+        else {
+            urlInput.text = "";
             urlDialog.open();
+        }
     }
 
     function parse(url) {
@@ -338,7 +355,8 @@ ApplicationWindow {
 
     TextEdit {
         id: clipboardField
-
+        objectName: "clipboardBuffer"
+        Accessible.ignored: true
         visible: false
     }
 
@@ -564,7 +582,8 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                         Label {
-                            text: window.listRows().length + qsTr(" items")
+                            readonly property int count: window.listRows().length
+                            text: count === 1 ? qsTr("1 item") : qsTr("%n items", "", count)
                             color: window.theme.secondary
                             visible: !window.searchVisible
                             font.pixelSize: 12
@@ -604,7 +623,7 @@ ApplicationWindow {
                             icon.source: "icons/sort.svg"
                             Accessible.name: text
                             onClicked: sortMenu.popup()
-                            Menu {
+                            AppMenu {
                                 id: sortMenu
                                 palette.window: window.theme.popup
                                 objectName: "sortMenu"
@@ -929,7 +948,7 @@ ApplicationWindow {
             rightPadding: 8
             font.pixelSize: 14
         }
-        Menu {
+        AppMenu {
             palette.window: window.theme.popup
             title: qsTr("File")
 
@@ -966,7 +985,7 @@ ApplicationWindow {
             }
         }
 
-        Menu {
+        AppMenu {
 
             palette.window: window.theme.popup
             title: qsTr("Edit")
@@ -976,7 +995,7 @@ ApplicationWindow {
                 onTriggered: window.pasteLink()
             }
 
-            Menu {
+            AppMenu {
 
                 palette.window: window.theme.popup
                 title: qsTr('Download "Liked"')
@@ -999,7 +1018,7 @@ ApplicationWindow {
                 }
             }
 
-            Menu {
+            AppMenu {
 
                 palette.window: window.theme.popup
                 title: qsTr('Download "Watch Later"')
@@ -1045,7 +1064,7 @@ ApplicationWindow {
             }
         }
 
-        Menu {
+        AppMenu {
 
             palette.window: window.theme.popup
             title: qsTr("View")
@@ -1066,7 +1085,7 @@ ApplicationWindow {
 
             MenuSeparator {}
 
-            Menu {
+            AppMenu {
 
                 palette.window: window.theme.popup
                 title: qsTr("Sort")
@@ -1105,7 +1124,7 @@ ApplicationWindow {
                 onTriggered: window.browserVisible = !window.browserVisible
             }
 
-            Menu {
+            AppMenu {
                 objectName: "appearanceMenu"
                 title: qsTr("Appearance")
                 icon.source: "icons/appearance.svg"
@@ -1135,7 +1154,7 @@ ApplicationWindow {
             }
         }
 
-        Menu {
+        AppMenu {
 
             palette.window: window.theme.popup
             title: qsTr("Tools")
@@ -1159,7 +1178,7 @@ ApplicationWindow {
             }
         }
 
-        Menu {
+        AppMenu {
 
             palette.window: window.theme.popup
             title: qsTr("Help")

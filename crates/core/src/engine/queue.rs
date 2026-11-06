@@ -603,7 +603,7 @@ fn manual_view(media: &Media, settings: &Value, errors: &HashMap<String, String>
             }
             let quality = if video {
                 format
-                    .height
+                    .video_quality()
                     .map(|height| format!("{height}p"))
                     .unwrap_or_else(|| "Original".into())
             } else if format.has_video() {
@@ -740,7 +740,8 @@ fn actual_info(item: &mut Value, info: &Value) {
         .find(|stream| stream["codec_type"] == "audio");
     if let Some(video) = video {
         if let Some(height) = video["height"].as_u64() {
-            item["quality"] = json!(format!("{height}p"));
+            let quality = video["width"].as_u64().filter(|width| *width > 0).map_or(height, |width| width.min(height));
+            item["quality"] = json!(format!("{quality}p"));
             item["height"] = json!(height);
         }
         item["width"] = video["width"].clone();
@@ -993,7 +994,7 @@ if item["_parent"]==replacement{item["_parent"]=json!(id);}}
         if spec.smart&&selection.media_type=="video"&&!media.formats.iter().any(Format::has_video)&&media.formats.iter().any(Format::has_audio){selection.media_type="audio".into();if ["mp4","mkv","webm"].contains(&selection.container.as_str()){selection.container="m4a".into();}change(&inner,|state|{if let Some(item)=job_mut(state,&id){item["kind"]=json!("audio");item["media_type"]=json!("audio");item["_spec"]["selection"]=json!(selection);item["format"]=json!(selection.container.to_ascii_uppercase());}Ok(())})?;}
         if spec.smart&&videodock_media::choose_formats(&media.formats,&selection).is_err(){
             selection.format_id=None;selection.video_codec="any".into();selection.audio_codec="any".into();selection.fps=0;
-            if videodock_media::choose_formats(&media.formats,&selection).is_err(){selection.quality=media.formats.iter().filter_map(|format|format.height).min().unwrap_or(0);}
+            if videodock_media::choose_formats(&media.formats,&selection).is_err(){selection.quality=media.formats.iter().filter_map(videodock_media::Format::video_quality).min().unwrap_or(0);}
             notice(&inner,"Для одного из источников выбрано ближайшее доступное качество к настройкам умного режима.");
         }
         let callback={let weak=Arc::downgrade(&inner);let id=id.clone();let cancel=cancel.clone();Arc::new(move|progress:crate::pipeline::PipelineProgress|{
@@ -1716,6 +1717,22 @@ if let Some(paths)=item["files"].as_array(){for path in paths.iter().filter_map(
 #[cfg(test)]
 mod user_error_tests {
     use super::*;
+    #[test]
+    fn portrait_labels_preserve_dimensions_and_use_nominal_quality() {
+        let media = Media { formats: vec![videodock_media::Format {
+            id: "portrait".into(), width: Some(720), height: Some(1280),
+            video_codec: Some("avc1".into()), audio_codec: Some("aac".into()),
+            ..Default::default()
+        }], ..Default::default() };
+        let settings = json!({"mediaType":"video","container":"mp4","path":std::env::temp_dir(),"displayAllCodecs":true});
+        let manual = manual_view(&media, &settings, &HashMap::new());
+        assert_eq!(manual["formats"][0]["quality"], "720p");
+        let mut item = json!({});
+        actual_info(&mut item, &json!({"streams":[{"codec_type":"video","width":720,"height":1280}]}));
+        assert_eq!(item["quality"], "720p");
+        assert_eq!(item["width"], 720);
+        assert_eq!(item["height"], 1280);
+    }
     #[test]
     fn transient_errors_are_readable_and_normal_errors_are_preserved() {
         let state = json!({"jobs":[],"manual":{"error":"YouTube требует актуальный PO token"},"notice":"Нет конфигурации SABR","other":{"error":"Недостаточно места на диске"}});

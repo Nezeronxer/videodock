@@ -300,6 +300,48 @@ int main(int argc, char **argv) {
         check(named(window, "manualContainer")->property("displayText").toString() == (russian ? QString::fromUtf8("Любой") : QStringLiteral("Any")), "Manual filters expose untranslated protocol values");
         invoke(named(window, "manualDownloadDialog"), "close");
 
+        // Every menu label must fit, including translated labels and shortcuts.
+        QObject *fileMenu = nullptr;
+        for (auto *object : window->findChildren<QObject *>())
+            if (object->property("title").toString() == (russian ? QString::fromUtf8("Файл") : QStringLiteral("File")) && object->metaObject()->indexOfProperty("count") >= 0)
+                fileMenu = object;
+        check(fileMenu, "File menu missing");
+        invoke(fileMenu, "open");
+        auto fileMenuApi = engine.newQObject(fileMenu);
+        for (int index = 0; index < fileMenu->property("count").toInt(); ++index) {
+            auto *entry = fileMenuApi.property("itemAt").call({index}).toQObject();
+            auto *content = entry ? qvariant_cast<QQuickItem *>(entry->property("contentItem")) : nullptr;
+            if (content && !entry->property("text").toString().isEmpty())
+                check(content->width() + 1 >= content->implicitWidth(), "File menu truncates a label");
+        }
+        invoke(fileMenu, "close");
+
+        QApplication::clipboard()->setText("private-fixture-marker");
+        backend->lastAction = {};
+        click(window, named(window, "pasteButton"));
+        check(named(window, "urlDialog")->property("visible").toBool(), "Non-URL clipboard did not open manual link entry");
+        check(backend->lastAction["action"] != "parse", "Non-URL clipboard was dispatched to the engine");
+        check(named(window, "clipboardBuffer")->property("text").toString().isEmpty(), "Hidden clipboard buffer retained private input");
+        invoke(named(window, "urlDialog"), "close");
+
+        QObject *countLabel = nullptr;
+        for (auto *object : window->findChildren<QObject *>())
+            if (object->property("text").toString() == (russian ? QString::fromUtf8("0 элементов") : QStringLiteral("0 items")))
+                countLabel = object;
+        check(countLabel, "Item count label missing");
+        for (const auto &expected : {qMakePair(1, QString::fromUtf8("1 элемент")), qMakePair(2, QString::fromUtf8("2 элемента")), qMakePair(5, QString::fromUtf8("5 элементов")), qMakePair(21, QString::fromUtf8("21 элемент"))}) {
+            QJsonArray counted;
+            for (int index = 0; index < expected.first; ++index)
+                counted.append(QJsonObject{{"id", QString::number(index)}, {"kind", "video"}});
+            backend->state["jobs"] = counted;
+            backend->publish();
+            QTest::qWait(100);
+            const auto english = QString::number(expected.first) + (expected.first == 1 ? " item" : " items");
+            check(countLabel->property("text").toString() == (russian ? expected.second : english), "Item count uses the wrong plural form");
+        }
+        backend->state["jobs"] = QJsonArray{};
+        backend->publish();
+
         // Paste reads the real Qt clipboard through the shipped Main.qml.
         {
             const auto saved = backend->state["jobs"];

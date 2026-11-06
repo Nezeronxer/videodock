@@ -112,6 +112,13 @@ impl std::fmt::Debug for Format {
 }
 
 impl Format {
+    pub fn video_quality(&self) -> Option<u32> {
+        // Portrait formats use the short side for their advertised p-quality.
+        self.height.map(|height| {
+            self.width.filter(|width| *width > 0).map_or(height, |width| width.min(height))
+        })
+    }
+
     pub fn is_vr(&self) -> bool {
         self.vr
             || self

@@ -98,7 +98,8 @@ pub fn validate_url(value: &str) -> anyhow::Result<url::Url> {
         !value.chars().any(char::is_control) && value.len() <= 16384,
         "Недопустимые символы в ссылке"
     );
-    let url = url::Url::parse(value.trim())?;
+    let url = url::Url::parse(value.trim())
+        .map_err(|_| anyhow::anyhow!("Введите полную ссылку HTTP(S), начинающуюся с https:// или http://"))?;
     anyhow::ensure!(
         matches!(url.scheme(), "http" | "https") && url.host_str().is_some(),
         "Нужна ссылка HTTP(S)"
