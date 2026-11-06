@@ -752,9 +752,6 @@ Independent implementation.</source>
 </context>
 <context>
     <name>ManualDialog</name>
-    <message><source>For</source><translation>Для</translation></message>
-    <message><source>Save</source><translation>Сохранить</translation></message>
-    <message><source>Edit Subscription</source><translation>Изменить подписку</translation></message>
     <message>
         <location filename="../ManualDialog.qml" line="154"/>
         <location filename="../ManualDialog.qml" line="773"/>
