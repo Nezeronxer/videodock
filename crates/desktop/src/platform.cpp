@@ -115,7 +115,7 @@ void install_translation(const QString &language) {
     static QTranslator translator;
     if (language.startsWith(QStringLiteral("ru"))) {
         const auto directory = QLibraryInfo::path(QLibraryInfo::TranslationsPath);
-        if (qtTranslator.load(QStringLiteral("qtbase_ru"), directory))
+        if (qtTranslator.load(QStringLiteral("qt_ru"), directory) || qtTranslator.load(QStringLiteral("qtbase_ru"), directory))
             QCoreApplication::installTranslator(&qtTranslator);
         if (declarativeTranslator.load(QStringLiteral("qtdeclarative_ru"), directory))
             QCoreApplication::installTranslator(&declarativeTranslator);
