@@ -255,6 +255,37 @@ jobs:
         run: |
           & scripts/rust/package-windows.ps1 -SourceDirectory "$env:CARGO_TARGET_DIR/package/VideoDock" -OutputDirectory "$env:RUNNER_TEMP"
           if ($LASTEXITCODE -ne 0) { throw 'Installer packaging failed' }
+      - name: Complete public Windows downloads with the packaged worker
+        if: always() && steps.windows-worker.outcome == 'success'
+        shell: pwsh
+        run: |
+          $package = "$env:CARGO_TARGET_DIR/package/VideoDock"
+          $report = "$env:RUNNER_TEMP/windows-downloads"
+          New-Item -ItemType Directory -Force $report | Out-Null
+          $env:PATH = "$package;$env:PATH"
+          $env:VIDEODOCK_TEST_PROOF_WORKER = "$package/VideoDock.exe"
+          $env:VIDEODOCK_TEST_OUTPUT_DIR = "$report/files"
+          $env:VIDEODOCK_DATA_DIR = "$report/profile"
+          $results = [ordered]@{}
+          $cases = @(
+            @('tiktok', 'catalog_downloads', 'tiktok_adaptive_audio'),
+            @('youtube', 'youtube_downloads', 'zoo_complete_240p'),
+            @('shorts', 'youtube_downloads', 'reported_shorts_complete_1080p')
+          )
+          foreach ($case in $cases) {
+            & cargo test -p videodock-core --test $case[1] $case[2] --locked -- --ignored --exact --nocapture *> "$report/$($case[0]).log"
+            $status = $LASTEXITCODE
+            if ($status -eq 0 -and !(Select-String -Quiet -Path "$report/$($case[0]).log" -Pattern 'test result: ok\. 1 passed; 0 failed;')) { $status = 1 }
+            $results[$case[0]] = $status
+          }
+          $results | ConvertTo-Json | Set-Content -Encoding utf8 "$report/result.json"
+          if (@($results.Values | Where-Object { $_ -ne 0 }).Count) { throw 'Public Windows download/decode failed; inspect windows-public-downloads' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: windows-public-downloads
+          path: ${{ runner.temp }}/windows-downloads
+          if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && steps.windows-installer.outcome == 'success'
         with:
