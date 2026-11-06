@@ -791,7 +791,7 @@ int main(int argc, char **argv) {
             waitFor([&]() { const auto jobs = backend->state["jobs"].toArray(); return !jobs.isEmpty() && jobs.first().toObject()["state"] == "complete"; }, "Real UI download did not complete");
             const auto job = backend->state["jobs"].toArray().first().toObject();
             const QString path = job["path"].toString();
-            check(path.startsWith(profile.path() + "/downloads/") && QFileInfo(path).size() > 0, "Download escaped isolated output or is empty");
+            check(QDir::fromNativeSeparators(path).startsWith(profile.path() + "/downloads/") && QFileInfo(path).size() > 0, "Download escaped isolated output or is empty");
             QProcess probe;
             probe.start("ffprobe", {"-v", "error", "-show_entries", "stream=codec_type", "-of", "json", path});
             check(probe.waitForFinished(10000) && probe.exitCode() == 0, "Downloaded file failed ffprobe");
