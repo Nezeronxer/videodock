@@ -255,6 +255,13 @@ jobs:
         run: |
           & scripts/rust/package-windows.ps1 -SourceDirectory "$env:CARGO_TARGET_DIR/package/VideoDock" -OutputDirectory "$env:RUNNER_TEMP"
           if ($LASTEXITCODE -ne 0) { throw 'Installer packaging failed' }
+      - name: Verify native Windows interface and real Engine in English and Russian
+        if: always() && steps.windows-worker.outcome == 'success'
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b 1
+          pwsh -NoProfile -File crates/desktop/tests/check-appearance.ps1 "%RUNNER_TEMP%/windows-appearance"
       - name: Complete public Windows downloads with the packaged worker
         if: always() && steps.windows-worker.outcome == 'success'
         shell: pwsh
@@ -285,6 +292,12 @@ jobs:
         with:
           name: windows-public-downloads
           path: ${{ runner.temp }}/windows-downloads
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: windows-interface
+          path: ${{ runner.temp }}/windows-appearance
           if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && steps.windows-installer.outcome == 'success'
