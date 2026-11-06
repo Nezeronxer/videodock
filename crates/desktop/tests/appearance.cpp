@@ -139,9 +139,11 @@ static double luminance(QColor color) {
 }
 
 int main(int argc, char **argv) {
+    qInfo("Appearance startup: entering Qt initialization");
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
     QtWebEngineQuick::initialize();
     QApplication application(argc, argv);
+    qInfo("Appearance startup: application initialized");
     if (argc > 6 && !QString::fromLocal8Bit(argv[6]).isEmpty())
         check(QResource::registerResource(QString::fromLocal8Bit(argv[6])), "Reference appearance pack failed to load");
     QQuickStyle::setStyle("Basic");
@@ -163,6 +165,7 @@ int main(int argc, char **argv) {
     try {
         check(argc >= 3, "Expected Main.qml and screenshot directory");
         engine.load(QUrl::fromLocalFile(QString::fromLocal8Bit(argv[1])));
+        qInfo("Appearance startup: QML load returned");
         check(!engine.rootObjects().isEmpty(), "QML failed to load");
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
         check(window != nullptr, "Main is not a window");
