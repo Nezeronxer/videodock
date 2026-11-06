@@ -13,6 +13,30 @@ fn integer(value: &Value) -> Option<u64> {
 fn text(value: &Value) -> Option<String> {
     value.as_str().filter(|v| !v.is_empty()).map(str::to_owned)
 }
+fn format_tags(format: &Value) -> Option<String> {
+    text(&format["xtags"]).or_else(|| {
+        let source = format["url"]
+            .as_str()
+            .filter(|value| value.len() <= 64 * 1024)
+            .map(str::to_owned)
+            .or_else(|| {
+                let cipher = format["signatureCipher"]
+                    .as_str()
+                    .or_else(|| format["cipher"].as_str())?;
+                if cipher.len() > 64 * 1024 {
+                    return None;
+                }
+                url::form_urlencoded::parse(cipher.as_bytes())
+                    .find(|(key, _)| key == "url")
+                    .map(|(_, value)| value.into_owned())
+            })?;
+        url::Url::parse(&source)
+            .ok()?
+            .query_pairs()
+            .find(|(key, value)| key == "xtags" && !value.is_empty())
+            .map(|(_, value)| value.into_owned())
+    })
+}
 fn binary(value: &str) -> Result<Vec<u8>> {
     ensure!(value.len() <= 128 * 1024, "Параметры SABR слишком велики");
     data_encoding::BASE64URL_NOPAD
@@ -111,7 +135,7 @@ pub(super) fn map(
             "video/webm" | "audio/webm" => "webm",
             _ => continue,
         };
-        let xtags = text(&f["xtags"]);
+        let xtags = format_tags(f);
         ensure!(
             xtags
                 .as_ref()
@@ -237,6 +261,29 @@ pub(super) fn map(
 mod tests {
     use super::*;
     #[test]
+    fn format_identity_reads_nested_cipher_tags_without_using_the_signature() {
+        let source = "https://r.googlevideo.com/videoplayback?xtags=fixture%3Dvariant";
+        let cipher = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("url", source)
+            .append_pair("s", "synthetic-secret")
+            .finish();
+        for key in ["signatureCipher", "cipher"] {
+            let mut format = serde_json::json!({});
+            format[key] = Value::String(cipher.clone());
+            assert_eq!(format_tags(&format).as_deref(), Some("fixture=variant"));
+        }
+        assert_eq!(
+            format_tags(&serde_json::json!({"xtags":"direct=1","url":source})).as_deref(),
+            Some("direct=1")
+        );
+        assert!(format_tags(&serde_json::json!({"url":"not a URL"})).is_none());
+        assert!(
+            format_tags(&serde_json::json!({"signatureCipher":"url=not-a-url&s=synthetic-secret"}))
+                .is_none()
+        );
+        assert!(format_tags(&serde_json::json!({"url":"x".repeat(64 * 1024 + 1)})).is_none());
+    }
+    #[test]
     fn player_refusal_is_reported_before_looking_for_stream_url() {
         for (status, expected) in [
             ("LOGIN_REQUIRED", "подтвердить"),
@@ -261,7 +308,7 @@ mod tests {
     #[tokio::test]
     async fn native_metadata_preserves_quality_and_keeps_proof_and_signed_url_out_of_serialization()
     {
-        let data = serde_json::json!({"playabilityStatus":{"status":"OK"},"videoDetails":{"videoId":"fixture0001","lengthSeconds":"2","title":"Fixture"},"streamingData":{"adaptiveFormats":[{"itag":136,"lastModified":"1","contentLength":"9","approxDurationMs":"2000","mimeType":"video/mp4; codecs=\"avc1.4d401f\"","width":1280,"height":720,"fps":30}]},"playerConfig":{"mediaCommonConfig":{"mediaUstreamerRequestConfig":{"videoPlaybackUstreamerConfig":"YWJj"}}}});
+        let data = serde_json::json!({"playabilityStatus":{"status":"OK"},"videoDetails":{"videoId":"fixture0001","lengthSeconds":"2","title":"Fixture"},"streamingData":{"adaptiveFormats":[{"itag":136,"url":"https://r.googlevideo.com/videoplayback?token=synthetic-signed-secret&xtags=fixture%3Dvariant","lastModified":"1","contentLength":"9","approxDurationMs":"2000","mimeType":"video/mp4; codecs=\"avc1.4d401f\"","width":1280,"height":720,"fps":30}]},"playerConfig":{"mediaCommonConfig":{"mediaUstreamerRequestConfig":{"videoPlaybackUstreamerConfig":"YWJj"}}}});
         let media = map(
             data,
             "fixture0001",
@@ -281,6 +328,10 @@ mod tests {
         .unwrap();
         assert_eq!(media.formats[0].height, Some(720));
         assert_eq!(media.formats[0].sabr.as_ref().unwrap().duration_ms, 2000);
+        assert_eq!(
+            media.formats[0].sabr.as_ref().unwrap().xtags.as_deref(),
+            Some("fixture=variant")
+        );
         let serialized = serde_json::to_string(&media).unwrap();
         assert!(!serialized.contains("synthetic-signed-secret"));
         assert!(!serialized.contains("c3ludGhldGljLXBvLXNlY3JldA"));
