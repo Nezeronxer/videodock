@@ -23,6 +23,7 @@ AppDialog {
     property var editedFormat: ({})
     property string operatingSystem: "Any"
     property bool preferencesInitialized: false
+    property bool modeTouched: false
     readonly property var savedPreferences: manual.editing ? manual.preferences || {} : ({})
     readonly property var requestedVR: vrTouched ? vr.currentText : manual.editing ? (savedPreferences.vr === true ? true : savedPreferences.vr_mode || "Any") : app.settings.videoVR
     property string outputDirectory: ""
@@ -202,6 +203,7 @@ AppDialog {
     function initializeSelection() {
         preferencesInitialized = manual.state === "ready";
         previewReady = false;
+        modeTouched = false;
         vrTouched = false;
         editedFormat = {};
         operatingSystem = "Any";
@@ -240,7 +242,7 @@ AppDialog {
             if (manual.editing)
                 initializeSelection();
             else {
-                subscribe = manual.mode === "subscribe";
+                if (!modeTouched) subscribe = manual.mode === "subscribe";
                 preferencesInitialized = true;
                 if (manual.kind === "audio" && !editedFormat.media_type)
                     mediaType.currentIndex = 1;
@@ -852,7 +854,7 @@ AppDialog {
                     text: qsTr("Subscribe to updates")
                     visible: !root.manual.editing && root.batch && ["channel", "playlist"].indexOf(root.manual.kind) >= 0
                     checked: root.subscribe
-                    onClicked: root.subscribe = checked
+                    onClicked: { root.subscribe = checked; root.modeTouched = true; }
                 }
                 Switch {
                     objectName: "manualDownloadExisting"
