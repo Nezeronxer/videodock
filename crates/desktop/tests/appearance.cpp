@@ -654,6 +654,23 @@ int main(int argc, char **argv) {
                     manualPath->setProperty("edited", true);
                     click(window, named(window, "downloadButton"));
                     check(backend->lastAction["output_dir"] == "/tmp/out" && backend->lastAction["filename"] == "renamed.mp4", "Edited file path did not preserve separate output directory and filename");
+#ifdef Q_OS_WIN
+                    const char *windowsPaths[][2] = {
+                        {R"(C:\Videos\renamed.mp4)", "C:/Videos"},
+                        {"C:/renamed.mp4", "C:/"},
+                        {R"(C:\renamed.mp4)", "C:/"},
+                        {R"(\\server\share\renamed.mp4)", "//server/share"},
+                        {R"(C:\Videos/sub\renamed.mp4)", "C:/Videos/sub"}
+                    };
+                    for (const auto &path : windowsPaths) {
+                        invoke(dialog, "open");
+                        manualPath->setProperty("text", QString::fromLatin1(path[0]));
+                        manualPath->setProperty("edited", true);
+                        click(window, named(window, "downloadButton"));
+                        check(backend->lastAction["output_dir"].toString() == QString::fromLatin1(path[1]), "Windows output path changed its destination: " + QString::fromLatin1(path[0]));
+                        check(backend->lastAction["filename"] == "renamed.mp4", "Windows output path changed its filename");
+                    }
+#endif
                     invoke(dialog, "open");
                     manualPath->setProperty("text", "invalid-file-name");
                     manualPath->setProperty("edited", true);
