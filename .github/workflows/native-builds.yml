@@ -257,6 +257,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Installer packaging failed' }
       - name: Verify native Windows interface and real Engine in English and Russian
         if: always() && steps.windows-worker.outcome == 'success'
+        timeout-minutes: 15
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
