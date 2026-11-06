@@ -669,6 +669,96 @@ int main(int argc, char **argv) {
                     invoke(dialog, "open");
                     capture(mode + "-manual-batch");
                     invoke(dialog, "close");
+                    const auto savedSettings = backend->state["settings"].toObject();
+                    auto historySettings = savedSettings;
+                    historySettings["paths"] = QJsonArray{"/fixture/first", "/fixture/second"};
+                    historySettings["mediaType"] = "video";
+                    historySettings["container"] = "mp4";
+                    historySettings["videoVR"] = "Any";
+                    backend->state["settings"] = historySettings;
+                    backend->publish();
+                    invoke(dialog, "open");
+                    auto *system = named(window, "manualOperatingSystem");
+                    check(system->property("visible").toBool(), "Batch OS presets are missing");
+                    auto actionForDialog = [&]() { return QJsonObject::fromVariantMap(engine.newQObject(dialog).property("downloadAction").call().toVariant().toMap()); };
+                    auto *type = named(window, "manualMediaType");
+                    for (int audio = 0; audio < 2; ++audio) {
+                        type->setProperty("currentIndex", audio);
+                        check(QMetaObject::invokeMethod(type, "activated", Q_ARG(int, audio)), "Manual media choice missing");
+                        const QStringList containers = audio ? QStringList{"MP3", "M4A", "OGG", "M4A", "MP3"} : QStringList{"MP4", "MP4", "MKV", "MP4", "MP4"};
+                        for (int alias = 1; alias <= 5; ++alias) {
+                            system->setProperty("currentIndex", alias);
+                            check(QMetaObject::invokeMethod(system, "activated", Q_ARG(int, alias)), "OS preset activation missing");
+                            const auto action = actionForDialog();
+                            check(action["format"].toObject()["container"] == containers[alias - 1], "OS preset produced the wrong container");
+                            check(action["format_id"] == "" && action["format"].toObject()["video_codec"] == "Any", "OS preset retained a pinned source codec");
+                        }
+                    }
+                    click(window, named(window, "manualOutputFolder"));
+                    auto *history = named(window, "manualFolderHistory");
+                    check(history->property("visible").toBool(), "Batch folder history did not open");
+                    capture(mode + "-manual-folder-history");
+                    auto *folderEntry = engine.newQObject(history).property("itemAt").call({1}).toQObject();
+                    check(folderEntry && folderEntry->property("text").toString() == "/fixture/second", "Saved folder history is incomplete");
+                    invoke(folderEntry, "triggered");
+                    invoke(history, "close");
+                    check(dialog->property("outputDirectory").toString() == "/fixture/second", "Folder history did not select the output directory");
+                    check(backend->state["settings"] == historySettings, "Manual choices modified global preferences");
+                    invoke(dialog, "close");
+                    const QJsonObject preferences{{"media_type", "audio"}, {"container", "mp3"}, {"quality", 720}, {"video_codec", "h264"}, {"audio_codec", "aac"}, {"audio_bitrate", 192}, {"fps", 30}, {"vr", false}, {"vr_mode", "Any"}, {"subtitles", QJsonArray{"ru", "en:auto"}}, {"audio_tracks", QJsonArray{"ru"}}, {"format_id", QJsonValue::Null}};
+                    manual["kind"] = "channel";
+                    manual["mode"] = "subscribe";
+                    manual["editing"] = true;
+                    manual["download_existing"] = true;
+                    manual["preferences"] = preferences;
+                    manual["output_dir"] = "/fixture/subscription";
+                    manual["selected_format_id"] = "audio-192";
+                    manual["formats"] = QJsonArray{
+                        QJsonObject{{"id", "video"}, {"media_type", "video"}, {"quality", "1080p"}, {"container", "MP4"}},
+                        QJsonObject{{"id", "audio-320"}, {"media_type", "audio"}, {"quality", "320 kbps"}, {"audio_codec", "aac"}, {"container", "M4A"}},
+                        QJsonObject{{"id", "audio-192"}, {"media_type", "audio"}, {"quality", "192 kbps"}, {"audio_codec", "aac"}, {"container", "M4A"}}
+                    };
+                    backend->state["manual"] = QJsonObject{{"state", "parsing"}, {"kind", "video"}, {"formats", QJsonArray{}}};
+                    backend->publish();
+                    invoke(dialog, "open");
+                    backend->state["manual"] = manual;
+                    backend->publish();
+                    QTest::qWait(50);
+                    check(type->property("currentText").toString() == "audio" && container->property("currentText").toString() == "MP3", "Subscription edit inherited global format preferences");
+                    check(dialog->property("selectedFormatId").toString() == "audio-192", "Subscription edit selected the first format instead of its preference");
+                    check(!named(window, "manualDownloadExisting")->property("visible").toBool(), "Subscription edit offers Download Existing");
+                    check(named(window, "downloadButton")->property("text").toString() == (russian ? QString::fromUtf8("Сохранить") : QStringLiteral("Save")), "Subscription edit has no Save action");
+                    capture(mode + "-subscription-edit");
+                    click(window, named(window, "downloadButton"));
+                    auto verifyPreserved = [&](const QString &expectedContainer) {
+                        const auto action = backend->lastAction;
+                        check(action["mode"] == "subscribe", "Asynchronous subscription edit submitted a download instead of Save");
+                        const auto format = action["format"].toObject();
+                        for (const auto &key : {"media_type", "quality", "video_codec", "audio_codec", "audio_bitrate", "fps", "vr", "vr_mode"})
+                            check(format[key] == preferences[key], QString("Subscription preference lost: ") + key);
+                        check(format["container"] == expectedContainer && action["subtitles"] == preferences["subtitles"] && action["audio_tracks"] == preferences["audio_tracks"], "Subscription edit changed container or languages unexpectedly");
+                        check(action["output_dir"] == "/fixture/subscription" && action["download_existing"] == false && action["format_id"] == "", "Subscription edit changed destination or requested existing downloads");
+                    };
+                    verifyPreserved("mp3");
+                    invoke(dialog, "open");
+                    container->setProperty("currentIndex", 3);
+                    check(QMetaObject::invokeMethod(container, "activated", Q_ARG(int, 3)), "Container activation missing");
+                    click(window, named(window, "downloadButton"));
+                    verifyPreserved("OGG");
+                    auto vrPreferences = preferences;
+                    vrPreferences["media_type"] = "video";
+                    vrPreferences["container"] = "mp4";
+                    vrPreferences["vr_mode"] = QString::fromUtf8("3D/180°");
+                    manual["preferences"] = vrPreferences;
+                    manual["selected_format_id"] = "stereo";
+                    manual["formats"] = QJsonArray{QJsonObject{{"id", "stereo"}, {"media_type", "video"}, {"quality", "720p"}, {"container", "MP4"}, {"vr", QString::fromUtf8("3D/180°")}}};
+                    backend->state["manual"] = manual;
+                    backend->publish();
+                    invoke(dialog, "open");
+                    auto *savedVR = named(window, "manualVR");
+                    check(savedVR->property("visible").toBool() && savedVR->property("displayText").toString() == QString::fromUtf8("3D/180°"), "Subscription VR preference is hidden or displays the global value");
+                    invoke(dialog, "close");
+                    backend->state["settings"] = savedSettings;
                     backend->state.remove("manual");
                     backend->publish();
                 } else {
