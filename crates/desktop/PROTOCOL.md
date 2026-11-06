@@ -47,3 +47,5 @@ This is independently written UI informed by observed geometry and behavior; no 
 OS tray requires a system tray host. Native auto-start, sleep inhibition and sound are core/platform responsibilities. Updates/help/log actions need real core implementations; errors stay visible. Qt WebEngine must be present. Authentication/captcha/protected content and supported-service reliability require real service tests. QML/offscreen startup is not a live user-flow pass.
 
 Language support currently shipped: independently translated Russian and source English. The original's other locales are not packaged; the language chooser offers only these two. Rebuild Russian after edits using Qt6 `lupdate qml -no-obsolete -ts qml/translations/videodock_ru.ts` and `lrelease ... -qm qml/translations/videodock_ru.qm`.
+
+With `proxyEnabled=false`, every application request uses the direct OS route, ignoring ambient HTTP proxy settings. TUN/VPN routing and DPI handling remain the responsibility of the OS. An explicitly enabled app proxy applies to metadata, browser attestation, streams and subtitles; failures never fall back to a direct route.
