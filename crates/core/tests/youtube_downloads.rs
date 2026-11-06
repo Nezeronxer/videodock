@@ -27,11 +27,15 @@ async fn complete_sample(id: &str, quality: u32, expected_duration: f64) {
         http = http.proxy(reqwest::Proxy::all(proxy).expect("invalid test proxy"));
     }
     let start = Instant::now();
+    let address = if id.starts_with("https://") { id.to_owned() } else { format!("https://www.youtube.com/watch?v={id}") };
+    let auth = if id.contains("/shorts/") {
+        Auth {cookie_header:"VISITOR_INFO1_LIVE=fixture; YSC=fixture; CONSENT=YES".into()}
+    } else { Auth::default() };
     let media = tokio::time::timeout(
         Duration::from_secs(90),
         adapter.inspect(
-            &format!("https://www.youtube.com/watch?v={id}"),
-            &Auth::default(),
+            &address,
+            &auth,
         ),
     )
     .await
@@ -197,6 +201,18 @@ async fn complete_sample(id: &str, quality: u32, expected_duration: f64) {
 #[ignore = "complete public YouTube download with FFmpeg/ffprobe, up to 180 seconds"]
 async fn zoo_complete_240p() {
     complete_sample("jNQXAC9IVRw", 240, 19.0).await;
+}
+
+#[tokio::test]
+#[ignore = "complete anonymous download of the user-reported public Shorts URL"]
+async fn reported_shorts_complete_1080p() {
+    complete_sample("https://www.youtube.com/shorts/4wayF-jA2Os?feature=share", 1080, 0.0).await;
+}
+
+#[tokio::test]
+#[ignore = "complete anonymous download of the exact user-reported watch ID"]
+async fn reported_watch_complete_1080p() {
+    complete_sample("w1Pr_lXdW2A", 1080, 0.0).await;
 }
 
 #[tokio::test]

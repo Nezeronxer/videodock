@@ -172,6 +172,10 @@ ApplicationWindow {
     function parse(url) {
         browserVisible = false;
         manualDismissed = false;
+        activeTab = "All";
+        search = "";
+        sortKey = "date";
+        descending = true;
         send({
             "action": "parse",
             "url": url
@@ -223,9 +227,15 @@ ApplicationWindow {
         return rows.filter(function (j) {
             var matches = activeTab === "All" || activeTab === "Subscriptions" || (activeTab === "Video" && j.kind === "video") || (activeTab === "Audio" && j.kind === "audio") || (activeTab === "Playlists" && j.kind === "playlist") || (activeTab === "Channels" && j.kind === "channel");
             return matches && (!search || ((j.title || "") + " " + (j.url || "")).toLowerCase().indexOf(search.toLowerCase()) >= 0);
-        }).slice().sort(function (a, b) {
-            var result = sortKey === "name" ? String(a.title || "").localeCompare(String(b.title || "")) : String(a.created_at || a.id || "").localeCompare(String(b.created_at || b.id || ""));
+        }).map(function (job, order) {
+            return {job: job, order: order};
+        }).sort(function (a, b) {
+            var result = sortKey === "name" ? String(a.job.title || "").localeCompare(String(b.job.title || "")) : (Number(a.job.created_at) || 0) - (Number(b.job.created_at) || 0);
+            if (!result)
+                result = a.order - b.order;
             return descending ? -result : result;
+        }).map(function (entry) {
+            return entry.job;
         });
     }
 

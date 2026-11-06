@@ -301,13 +301,45 @@ int main(int argc, char **argv) {
         invoke(named(window, "manualDownloadDialog"), "close");
 
         // Paste reads the real Qt clipboard through the shipped Main.qml.
+        {
+            const auto saved = backend->state["jobs"];
+            backend->state["jobs"] = QJsonArray{
+                QJsonObject{{"id", "old"}, {"created_at", 100}, {"kind", "video"}},
+                QJsonObject{{"id", "recent"}, {"created_at", 101}, {"kind", "video"}},
+                QJsonObject{{"id", "newest"}, {"created_at", 101}, {"kind", "video"}},
+                QJsonObject{{"id", "zz-library"}, {"created_at", 0}, {"kind", "video"}, {"_library", true}}
+            };
+            backend->publish();
+            QTest::qWait(100);
+            check(evaluate("ui.listRows().map(function(j){return j.id}).join(',')").toString() == "newest,recent,old,zz-library", "New downloads are not above older jobs and imported library rows");
+            QJsonArray many;
+            for (int index = 0; index < 50; ++index)
+                many.append(QJsonObject{{"id", QString("older-%1").arg(index)}, {"kind", "video"}, {"created_at", 100}});
+            backend->state["jobs"] = many;
+            backend->publish();
+            QTest::qWait(100);
+            auto *orderingList = qobject_cast<QQuickItem *>(named(window, "downloadsList"));
+            orderingList->setProperty("contentY", 384);
+            QTest::qWait(50);
+            check(orderingList->property("contentY").toReal() > 300, "Ordering scroll fixture did not scroll");
+            many.append(QJsonObject{{"id", "just-pasted"}, {"kind", "video"}, {"created_at", 100}});
+            backend->state["jobs"] = many;
+            backend->publish();
+            QTest::qWait(150);
+            check(evaluate("ui.listRows()[0].id").toString() == "just-pasted", "Same-second insertion did not become the first row");
+            check(orderingList->property("contentY").toReal() <= orderingList->property("originY").toReal() + 1, "New top row is outside the visible viewport");
+            backend->state["jobs"] = saved;
+            backend->publish();
+        }
         window->requestActivate();
         QTest::qWait(100);
         for (const QString &url : {"https://youtu.be/fixture", "https://www.tiktok.com/@fixture/video/1", "https://vimeo.com/1"}) {
+            evaluate("ui.sortKey='name'; ui.descending=false; ui.activeTab='Audio'; ui.search='previous filter'");
             QApplication::clipboard()->setText(url);
             backend->lastAction = {};
             click(window, named(window, "pasteButton"));
             check(backend->lastAction["action"] == "parse" && backend->lastAction["url"] == url, "Paste Link lost the clipboard source");
+            check(evaluate("ui.sortKey==='date' && ui.descending && ui.activeTab==='All' && ui.search===''").toBool(), "Pasting did not reveal the newest download at the top");
             backend->lastAction = {};
             QTest::keyClick(window, Qt::Key_V, Qt::ControlModifier);
             QTest::qWait(150);
@@ -315,9 +347,9 @@ int main(int argc, char **argv) {
         }
 
         backend->state["jobs"] = QJsonArray{
-            QJsonObject{{"id", "fixture-video"}, {"title", "A very long video title to check clipping without hiding the controls"}, {"url", "https://example.invalid/video"}, {"kind", "video"}, {"state", "downloading"}, {"progress", 42}, {"format", "MP4"}, {"quality", "1080p"}, {"speed", "2.4 MB/s"}},
-            QJsonObject{{"id", "fixture-audio"}, {"title", "Audio fixture"}, {"kind", "audio"}, {"state", "complete"}, {"format", "MP3"}, {"quality", "192 kbps"}},
-            QJsonObject{{"id", "fixture-error"}, {"title", "Unavailable media"}, {"kind", "video"}, {"state", "error"}, {"error", "The service is unavailable. Retry later."}}
+            QJsonObject{{"id", "fixture-video"}, {"created_at", 3}, {"title", "A very long video title to check clipping without hiding the controls"}, {"url", "https://example.invalid/video"}, {"kind", "video"}, {"state", "downloading"}, {"progress", 42}, {"format", "MP4"}, {"quality", "1080p"}, {"speed", "2.4 MB/s"}},
+            QJsonObject{{"id", "fixture-audio"}, {"created_at", 1}, {"title", "Audio fixture"}, {"kind", "audio"}, {"state", "complete"}, {"format", "MP3"}, {"quality", "192 kbps"}},
+            QJsonObject{{"id", "fixture-error"}, {"created_at", 2}, {"title", "Unavailable media"}, {"kind", "video"}, {"state", "error"}, {"error", "The service is unavailable. Retry later."}}
         };
         backend->publish();
         QTest::qWait(250);

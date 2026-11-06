@@ -370,7 +370,7 @@ mod tests {
                     let response = [headers.as_bytes(), body.as_slice()].concat();
                     socket.write_all(&response).ok();
                     socket.shutdown(std::net::Shutdown::Write).ok();
-                    socket.read(&mut [0]).ok();
+                    socket.read_exact(&mut [0]).ok();
                     return;
                 }
                 std::thread::sleep(Duration::from_millis(5));

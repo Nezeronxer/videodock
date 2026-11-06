@@ -8,6 +8,13 @@ Item {
 
     required property var app
     property var rows: []
+    property string firstVisibleId: ""
+    onRowsChanged: {
+        var next = rows.length ? String(rows[0].id) : "";
+        if (next && next !== firstVisibleId && app.sortKey === "date" && app.descending)
+            Qt.callLater(function () { list.positionViewAtBeginning(); });
+        firstVisibleId = next;
+    }
 
     function platformIcon(url) {
         var match = /^https?:\/\/(?:[^/@\s]+@)?([^/:?#\s]+)/i.exec(String(url || ""));

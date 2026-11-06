@@ -87,7 +87,7 @@ impl YouTube {
                 .visitor_data(&proof.visitor_data);
         }
         let client = builder.build_with_client(http).map_err(pipe_error)?;
-        if !auth.cookie_header.trim().is_empty() {
+        if has_account_cookie(auth) {
             client
                 .user_auth_set_cookie(auth.cookie_header.clone())
                 .await
@@ -97,11 +97,7 @@ impl YouTube {
     }
 
     pub async fn inspect(&self, value: &str, auth: &Auth) -> Result<Media> {
-        let url = crate::validate_url(value)?;
-        ensure!(
-            is_youtube_host(url.host_str().unwrap_or_default()),
-            "Нужна ссылка YouTube"
-        );
+        let url = checked_video_url(value)?;
         let client = self.client(auth).await?;
         let query = query(&client, auth);
         let target = query
@@ -111,7 +107,7 @@ impl YouTube {
             .map_err(pipe_error)?;
         match target {
             UrlTarget::Video { id, .. } => {
-                if auth.cookie_header.trim().is_empty()
+                if !has_account_cookie(auth)
                     && let Some(worker) = crate::proof::registered_worker()
                 {
                     let proof =
@@ -206,7 +202,7 @@ impl YouTube {
 
     pub async fn verify_auth(&self, auth: &Auth) -> Result<()> {
         ensure!(
-            !auth.cookie_header.trim().is_empty(),
+            has_account_cookie(auth),
             "Нет данных авторизации YouTube"
         );
         self.client(auth)
@@ -218,7 +214,7 @@ impl YouTube {
 
     pub async fn account_info(&self, auth: &Auth) -> Result<AccountInfo> {
         ensure!(
-            !auth.cookie_header.trim().is_empty(),
+            has_account_cookie(auth),
             "Нет данных авторизации YouTube"
         );
         let client = self.client(auth).await?;
@@ -263,8 +259,14 @@ impl YouTube {
     }
 }
 
+fn has_account_cookie(auth: &Auth) -> bool {
+    auth.cookie_header.split(';').any(|cookie| {
+        cookie.trim().strip_prefix("SAPISID=").is_some_and(|value| !value.trim().is_empty())
+    })
+}
+
 fn query(client: &RustyPipe, auth: &Auth) -> RustyPipeQuery {
-    if auth.cookie_header.trim().is_empty() {
+    if !has_account_cookie(auth) {
         client.query().unauthenticated()
     } else {
         client.query()
@@ -484,10 +486,46 @@ fn subtitle_url(value: &str) -> Result<String> {
     Ok(url.to_string())
 }
 
+fn checked_video_url(value: &str) -> Result<url::Url> {
+    let mut url = crate::validate_url(value)?;
+    ensure!(is_youtube_host(url.host_str().unwrap_or_default()), "Нужна ссылка YouTube");
+    if let Some(path) = url.path().strip_prefix("/shorts/") {
+        let id = path.trim_end_matches('/');
+        ensure!(id.len() == 11 && id.bytes().all(|ch| ch.is_ascii_alphanumeric() || ch == b'-' || ch == b'_'), "Некорректная ссылка YouTube Shorts");
+        let id = id.to_owned();
+        url.set_path("/watch");
+        url.set_query(None);
+        url.query_pairs_mut().append_pair("v", &id);
+    }
+    Ok(url)
+}
+
 fn is_youtube_host(host: &str) -> bool {
     matches!(host, "youtube.com" | "youtu.be" | "youtube-nocookie.com")
         || host.ends_with(".youtube.com")
         || host.ends_with(".youtube-nocookie.com")
+}
+
+#[cfg(test)]
+mod input_links {
+    use super::*;
+    #[test]
+    fn anonymous_browser_cookies_do_not_select_the_account_download_path() {
+        assert!(!has_account_cookie(&Auth {cookie_header:"VISITOR_INFO1_LIVE=fixture; YSC=fixture; CONSENT=YES".into()}));
+        assert!(!has_account_cookie(&Auth {cookie_header:"XSAPISID=fixture; SAPISID= ".into()}));
+        assert!(has_account_cookie(&Auth {cookie_header:"YSC=fixture; SAPISID=fixture".into()}));
+    }
+    #[test]
+    fn shorts_link_resolves_directly_to_its_video_without_navigation_api() {
+        let url = checked_video_url("https://www.youtube.com/shorts/4wayF-jA2Os?feature=share").unwrap();
+        assert_eq!(url.path(), "/watch");
+        assert!(url.query_pairs().any(|(key,value)| key=="v" && value=="4wayF-jA2Os"));
+        assert!(checked_video_url("https://youtube.com.example.invalid/shorts/4wayF-jA2Os").is_err());
+        assert!(checked_video_url("https://www.youtube.com/shorts/not-an-id").is_err());
+        let watch = checked_video_url("https://www.youtube.com/watch?v=w1Pr_lXdW2A&t=12").unwrap();
+        assert_eq!(watch.path(), "/watch");
+        assert!(watch.query_pairs().any(|(key,value)| key=="t" && value=="12"));
+    }
 }
 
 fn pipe_error(error: PipeError) -> anyhow::Error {

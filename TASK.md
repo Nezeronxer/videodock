@@ -483,3 +483,26 @@ LinuxinstalledcurrentYouTubezooPASSсactualc901worker, realGoogleproof/SABR74236
 В дереве уже есть незакоммиченные YouTube/QML/appearance изменения; этот проход их не перезаписывает. Диагностика fc77 загружается в /tmp/videodock-macos-fc77-diagnostics, failed log /tmp/videodock-macos-fc77-failed.log.
 
 macOS причина подтверждена actual system log: dyld не находит QtWebChannel по @executable_path/../Frameworks внутри nested QtWebEngineProcess. Helper также сохраняет absolute Homebrew load commands. Реальные 4 MachO из fc77 archive: LLVM переписал23команды, все38bundledlinks разрешаются; codesign/runtime наLinux НЕ проверялись. Скрипт repair-macos-frameworks переводит load dependencies в @loader_path относительно каждого бинаря, сохраняет helper entitlements при переподписи и пересобирает nested seals. Полный offline scanner дополнительно выявил13отсутствующихQt frameworks у QMLплагинов; установщик добавляет Qt rpaths и второй macdeployqt pass для графа уже обнаруженных плагинов. Regression installer сначалаRED(skipped repair), затемGREEN; framework dependency checks/packagecontract/sh-n/diff-check PASS. Нужен nativeMacrun, release всёещё Draft. Доказательство ~/.local/share/videodock/research/macos-frameworks-2026-11-05/offline-links.json.
+
+
+## Скриншот пользователя: TikTok audio, 05.11
+
+- [x] Найдена ошибочная job553056b1; ffprobe входного stream-0-bitrate-0: HEVC720x800148.866667s БЕЗaudio.
+- [x] Публичная hydration того же ролика: bitrateInfo Format=dash video-only, отдельный bitrateAudioInfo с AACMP4 источниками. Парсер ранее помечал всеvideo какmuxed и игнорировалaudioсписок.
+- [x] RED→GREEN parser/selection regression: DASHvideo без audio; bitrateAudioInfo становится отдельными audioformats.
+- [ ] Полная загрузка именно этого ролика/ffprobe/full decode, актуальная сборка и проверка приложения. Профиль/история/готовые файлы сохраняются.
+
+
+## Расширенный аудит по просьбе пользователя, 05.11
+
+- [ ] Выбор форматов/раздельный звук/контейнеры/субтитры: regressions+реальные файлы.
+- [ ] Сеть/таймауты/HTTPиSOCKSproxy/ошибки/неполные файлы/cancel+resume.
+- [ ] Очередь/профиль/перезапуск/некорректные настройки/пути и конфликты имён.
+- [ ] UIгеометрия/ошибки/повторнаязагрузка на актуальном Linux.
+- [ ] Native Windows unit/build/installer/runtime и проблемный ролик.
+- [ ] Native macOS unit/build/codesign/worker/runtime; текущийrun42104482583.
+- [ ] Security/dependency checks и итоговая матрица PASS/FAIL/BLOCKED; не обещать отсутствие всех возможных ошибок.
+
+06.11 возобновление: TikTok userreported полный файл6947649B/148.886349s/HEVC720x800+AAC; full pipeline+decode PASS05.11, freshffprobe06.11PASS. Файл research/tiktok-audio-2026-11-05/TikTok-adaptive-audio.mp4. Исправление НЕ установлено в desktop. macOSrun42104482583FAIL доупаковки: add_rpath исчерпал MachOheader. Вdesktop/build.rs добавленmacOS-only -Wl,-headerpad_max_install_names; нуженfreshnativebuild. Core/media полный regression запущен с1GiB/noSwap/jobs1, постоянныйлог research/audit-2026-11-06/core-media-tests.log. macOSfailedlog пока/tmp/videodock-macos-dc33548-failed.log; diagnostics сохраненыresearch/macos-frameworks-2026-11-05/dc33548-diagnostics. Продолжить: закончитьlocaltests+Clippy+RU/ENQt, собратьSDKLinux/установитьатомарно сrollback ипроверитьTikTokGUI; commit/pushcurrentchanges иnativeMac/Windows, реальныеinstaller/runtimeQA, расширенныйаудит. StableDraft не выпускатьдозакрытияgates.
+
+06.11 localaudit: core/media209PASS0FAIL47ignored; Clippycore/mediaall-targets-DwarningsPASSпослеread_exactвDNSfixture (старыйClippyREDсохранён); DNS9PASS. QtappearanceEN/RU+realEnginePASS (темы,5tabs,9dialogs,menus,narrowwindow,localdownload,ffprobe,restart,history,safe removal,newjoborder). Cargo-audit0vulnerabilities, fxhash0.2.1unmaintained; gitleakscurrentdiff0. Независимыйrequesting-code-review агент: подтверждённыхважныхдефектовнет, обаPythonpackagingchecksPASS; nativeMacruntimeостаётсянепроверен. SDKLinuxbuildзапущен scripts/rust/build-flatpak.py сactualcgroup1GiB/swap0/jobs1, log research/audit-2026-11-06/linux-sdk-build.log. HostVMoff. CUA SkyработаетпослеDISPLAY=:1+userDBusenv, VideoDockwindowsсейчаснет. ДалееnativeMac/Windowscurrentcommit.

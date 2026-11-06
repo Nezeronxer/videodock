@@ -206,7 +206,9 @@ impl Catalog {
                 return Ok(media);
             }
             let mut embed = Url::parse("https://www.facebook.com/plugins/video.php")?;
-            embed.query_pairs_mut().append_pair("href", final_url.as_str());
+            embed
+                .query_pairs_mut()
+                .append_pair("href", final_url.as_str());
             let page = body(self.source_get(&embed, &embed, &Auth::default()).await?).await?;
             let mut media = parse_facebook(&final_url, &page)?;
             media.title = meta(&text, "og:title").unwrap_or(media.title);
@@ -2152,6 +2154,9 @@ fn parse_tiktok(origin: &Url, html: &str) -> Result<Media> {
             stream.width = uint(&video["width"]).map(|v| v as u32);
             stream.height = uint(&video["height"]).map(|v| v as u32);
             stream.bitrate = uint(&video["bitrate"]);
+            if key == "playAddr" && text(video, "format").eq_ignore_ascii_case("dash") {
+                stream.audio_codec = None;
+            }
             media.formats.push(stream);
         }
     }
@@ -2173,6 +2178,24 @@ fn parse_tiktok(origin: &Url, html: &str) -> Result<Media> {
                 stream.bitrate = uint(&item["Bitrate"]);
                 stream.width = uint(&item["PlayAddr"]["Width"]).map(|v| v as u32);
                 stream.height = uint(&item["PlayAddr"]["Height"]).map(|v| v as u32);
+                if text(item, "Format").eq_ignore_ascii_case("dash") {
+                    stream.audio_codec = None;
+                }
+                media.formats.push(stream);
+            }
+        }
+    }
+    if let Some(list) = video["bitrateAudioInfo"].as_array() {
+        for (index, item) in list.iter().enumerate() {
+            if let Some(value) = ["MainUrl", "BackupUrl"]
+                .iter()
+                .filter_map(|key| item["UrlList"][key].as_str())
+                .find(|value| !value.is_empty())
+            {
+                let mut stream =
+                    format(origin, &format!("audio-{index}"), value, "audio/mp4", true)?;
+                stream.bitrate = uint(&item["Bitrate"]);
+                stream.size = uint(&item["AudioDataSize"]);
                 media.formats.push(stream);
             }
         }
@@ -2271,15 +2294,22 @@ fn parse_facebook(origin: &Url, html: &str) -> Result<Media> {
     if let Some(wanted) = &wanted
         && let Some(data) = json_after(html, r#""videoData":"#)
     {
-        for item in data.as_array().into_iter().flatten()
+        for item in data
+            .as_array()
+            .into_iter()
+            .flatten()
             .filter(|item| item["video_id"].as_str() == Some(wanted))
         {
             for key in ["sd_src", "hd_src"] {
                 if let Some(value) = item[key].as_str().filter(|value| !value.is_empty()) {
                     let mut stream = format(origin, key, value, "video/mp4", false)?;
                     if key == "hd_src" {
-                        stream.width = item["original_width"].as_u64().and_then(|value| value.try_into().ok());
-                        stream.height = item["original_height"].as_u64().and_then(|value| value.try_into().ok());
+                        stream.width = item["original_width"]
+                            .as_u64()
+                            .and_then(|value| value.try_into().ok());
+                        stream.height = item["original_height"]
+                            .as_u64()
+                            .and_then(|value| value.try_into().ok());
                     }
                     media.formats.push(stream);
                 }
@@ -3094,6 +3124,36 @@ mod tests {
         assert!(parse_tiktok(&origin("www.tiktok.com"), "<title>Login</title>").is_err());
     }
     #[test]
+    fn tiktok_dash_video_selects_separate_audio() {
+        let item = json!({"id":"123456789","video":{
+            "duration":148,"width":576,"height":640,
+            "playAddr":"https://media.example/muxed.mp4",
+            "bitrateInfo":[{"Format":"dash","CodecType":"h265_hvc1","Bitrate":489724,
+                "PlayAddr":{"Width":720,"Height":800,"UrlList":["https://media.example/video.mp4"]}}],
+            "bitrateAudioInfo":[{"Bitrate":65008,"MediaType":"audio","Format":"dash",
+                "AudioDataSize":"1209583","UrlList":{"MainUrl":"https://media.example/audio.m4a"}}]
+        }});
+        let payload =
+            json!({"__DEFAULT_SCOPE__":{"webapp.video-detail":{"itemInfo":{"itemStruct":item}}}});
+        let page = format!("<script id=\"__UNIVERSAL_DATA_FOR_REHYDRATION__\">{payload}</script>");
+        let media = parse_tiktok(
+            &Url::parse("https://www.tiktok.com/@channel/video/123456789").unwrap(),
+            &page,
+        )
+        .unwrap();
+        let video = media.formats.iter().find(|f| f.id == "bitrate-0").unwrap();
+        assert!(
+            !video.has_audio(),
+            "TikTok DASH video was incorrectly marked as muxed"
+        );
+        let selected = crate::choose_formats(&media.formats, &crate::Selection::default()).unwrap();
+        assert_eq!(selected.len(), 2);
+        assert_eq!(selected[0].id, "bitrate-0");
+        assert_eq!(selected[1].url, "https://media.example/audio.m4a");
+        assert!(!selected[1].has_video());
+        assert_eq!(selected[1].size, Some(1209583));
+    }
+    #[test]
     fn facebook_native_urls_and_inline_dash() {
         let page = r#"<meta property="og:title" content="Fixture"><script type="application/json">{"browser_native_hd_url":"https://media.example/video.mp4","playable_duration_in_ms":10000}</script>"#;
         let media = parse_facebook(&origin("www.facebook.com"), page).unwrap();
@@ -3484,12 +3544,31 @@ mod facebook_selection {
         let target = Url::parse("https://www.facebook.com/watch/?v=123").unwrap();
         let media = parse_facebook(&target, html).unwrap();
         assert_eq!(media.formats.len(), 2);
-        assert!(media.formats.iter().all(|stream| stream.url.contains("wanted-")));
-        let hd = media.formats.iter().find(|stream| stream.id == "hd_src").unwrap();
+        assert!(
+            media
+                .formats
+                .iter()
+                .all(|stream| stream.url.contains("wanted-"))
+        );
+        let hd = media
+            .formats
+            .iter()
+            .find(|stream| stream.id == "hd_src")
+            .unwrap();
         assert_eq!((hd.width, hd.height), (Some(1080), Some(1080)));
-        let sd = media.formats.iter().find(|stream| stream.id == "sd_src").unwrap();
+        let sd = media
+            .formats
+            .iter()
+            .find(|stream| stream.id == "sd_src")
+            .unwrap();
         assert!(sd.url.contains("&signature=fixture"));
-        assert!(parse_facebook(&Url::parse("https://www.facebook.com/watch/?v=789").unwrap(), html).is_err());
+        assert!(
+            parse_facebook(
+                &Url::parse("https://www.facebook.com/watch/?v=789").unwrap(),
+                html
+            )
+            .is_err()
+        );
     }
     #[test]
     fn unrelated_recommended_videos_are_not_formats_of_requested_video() {

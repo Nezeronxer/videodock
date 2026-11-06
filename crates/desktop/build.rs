@@ -1,5 +1,9 @@
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        // Deployment rewrites library names and adds Homebrew framework search paths.
+        println!("cargo:rustc-link-arg=-Wl,-headerpad_max_install_names");
+    }
     let mut module = QmlModule::new("VideoDock");
     for file in [
         "Main",

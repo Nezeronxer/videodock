@@ -31,7 +31,10 @@ async fn full_sample(service: &str, address: &str, audio: bool) {
     });
     let metadata_seconds = started.elapsed().as_secs_f64();
     if service == "Facebook" {
-        assert_ne!(media.title, media.id, "public embed lost the watch-page title");
+        assert_ne!(
+            media.title, media.id,
+            "public embed lost the watch-page title"
+        );
     }
     let expected_duration = media.duration;
     println!(
@@ -219,6 +222,12 @@ sample!(
     tiktok,
     "TikTok",
     "https://www.tiktok.com/@tiktok/video/7106594312292453675",
+    false
+);
+sample!(
+    tiktok_adaptive_audio,
+    "TikTok-adaptive-audio",
+    "https://www.tiktok.com/@an1mu_official/video/7699773233578495250",
     false
 );
 sample!(
