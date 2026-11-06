@@ -1,6 +1,4 @@
 use super::*;
-#[path = "network.rs"]
-mod network;
 use anyhow::bail;
 use serde::{Deserialize, Serialize};
 use std::{fs::OpenOptions, io::Write, path::Path};
@@ -10,8 +8,6 @@ use videodock_media::Auth;
 #[serde(default)]
 pub(super) struct Secrets {
     pub(super) proxy_password: String,
-    #[serde(skip)]
-    network: Arc<Mutex<network::Cache>>,
     #[serde(skip)]
     // Qt owns cookie persistence; replay only its currently valid profile on startup.
     cookies: Vec<Cookie>,
@@ -328,13 +324,9 @@ pub(super) fn auth_in_context(inner: &Inner, target: &str, origin: &str) -> Auth
     }
 }
 pub(super) fn proxy(inner: &Inner) -> Result<Option<String>> {
-    proxy_policy(inner).map(|(proxy, _)| proxy)
-}
-pub(super) fn proxy_policy(inner: &Inner) -> Result<(Option<String>, bool)> {
     let settings = lock(&inner.state)["settings"].clone();
     if settings["proxyEnabled"] != true {
-        let cache = Arc::clone(&lock(&inner.secrets).network);
-        return lock(&cache).proxy().map(|proxy| (proxy, true));
+        return Ok(None);
     }
     let scheme = match settings["proxyType"].as_str().unwrap_or("SOCKS5") {
         "SOCKS4" => "socks4",
@@ -362,7 +354,7 @@ pub(super) fn proxy_policy(inner: &Inner) -> Result<(Option<String>, bool)> {
         url.set_password(Some(&lock(&inner.secrets).proxy_password))
             .map_err(|_| anyhow!("Недопустимые данные прокси"))?;
     }
-    Ok((Some(url.to_string()), false))
+    Ok(Some(url.to_string()))
 }
 pub(super) fn verify_debounced(inner: &Arc<Inner>) {
     let generation = inner.auth_generation.fetch_add(1, Ordering::SeqCst) + 1;

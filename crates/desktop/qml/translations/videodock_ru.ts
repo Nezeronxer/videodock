@@ -1282,8 +1282,8 @@ Independent implementation.</source>
     </message>
     <message>
         <location filename="../SettingsDialog.qml" line="644"/>
-        <source>Automatic: system and VPN settings</source>
-        <translation>Автоматически: настройки системы и VPN</translation>
+        <source>Direct connection (OS route)</source>
+        <translation>Прямое подключение (маршрут ОС)</translation>
     </message>
     <message>
         <location filename="../SettingsDialog.qml" line="596"/>

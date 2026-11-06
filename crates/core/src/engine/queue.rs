@@ -21,12 +21,8 @@ struct Spec {
     auth_origin: Option<String>,
 }
 pub(super) fn catalog(inner: &Inner) -> Result<videodock_media::catalog::Catalog> {
-    let (proxy, automatic) = secrets::proxy_policy(inner)?;
-    if automatic {
-        videodock_media::catalog::Catalog::new_automatic(proxy.as_deref())
-    } else {
-        videodock_media::catalog::Catalog::new(proxy.as_deref())
-    }
+    let proxy = secrets::proxy(inner)?;
+    videodock_media::catalog::Catalog::new(proxy.as_deref())
 }
 fn spec(settings: &Value, action: &Value) -> Result<Spec> {
     let output = action["output_dir"]

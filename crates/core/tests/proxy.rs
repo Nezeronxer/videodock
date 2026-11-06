@@ -517,7 +517,7 @@ async fn engine_proxy_routes_hls_segments_and_subtitles() {
         let mut command = tokio::process::Command::new(std::env::current_exe().unwrap());
         command.args([
             "--exact",
-            "automatic_proxy_configuration_routes_metadata_and_whole_file",
+            "direct_mode_and_explicit_proxy_configuration",
             "--nocapture",
         ]);
         for key in [
@@ -536,7 +536,7 @@ async fn engine_proxy_routes_hls_segments_and_subtitles() {
             .env("VIDEODOCK_AUTO_PROXY_CHILD", "hls")
             .env(
                 "VIDEODOCK_AUTO_SOURCE",
-                format!("{address}/entry").replace("127.0.0.1", "fixture.invalid"),
+                format!("{address}/entry"),
             )
             .output()
             .await
@@ -553,11 +553,11 @@ async fn engine_proxy_routes_hls_segments_and_subtitles() {
         assert!(routed.iter().any(|path| path.ends_with(".vtt")));
         assert_eq!(
             proxy.accepted.load(Ordering::SeqCst),
-            routed.len(),
-            "automatic HLS request bypassed proxy"
+            0,
+            "disabled proxy unexpectedly used ambient configuration"
         );
         println!(
-            "Engine automatic proxy={} auth=yes requests={} complete-HLS+captions+duration+ffprobe=pass",
+            "Engine direct route ignores ambient proxy={} requests={} complete-HLS+captions+duration+ffprobe=pass",
             if socks { "SOCKS5" } else { "HTTP" },
             routed.len()
         );
@@ -567,8 +567,8 @@ async fn engine_proxy_routes_hls_segments_and_subtitles() {
 
 // Separate processes avoid mutating the test runner's global proxy environment.
 #[tokio::test]
-async fn automatic_proxy_configuration_routes_metadata_and_whole_file() {
-    const TEST: &str = "automatic_proxy_configuration_routes_metadata_and_whole_file";
+async fn direct_mode_and_explicit_proxy_configuration() {
+    const TEST: &str = "direct_mode_and_explicit_proxy_configuration";
     if let Ok(mode) = std::env::var("VIDEODOCK_AUTO_PROXY_CHILD") {
         let temp = tempfile::tempdir().unwrap();
         let engine = videodock_core::Engine::new(temp.path().join("profile")).unwrap();
@@ -631,20 +631,18 @@ async fn automatic_proxy_configuration_routes_metadata_and_whole_file() {
             return;
         }
         if mode == "invalid" {
-            let error = engine.network_proxy().unwrap_err().to_string();
-            assert!(!error.contains("synthetic"));
+            assert!(engine.network_proxy().unwrap().is_none(), "disabled proxy inherited malformed ambient configuration");
+            assert!(!engine.snapshot().to_string().contains("synthetic"));
             return;
         }
         let selected = engine.network_proxy().unwrap();
-        assert!(
-            selected.is_some(),
-            "automatic mode ignored the configured system/environment proxy"
-        );
+        assert_eq!(selected.is_some(), mode == "manual", "disabled proxy must use the direct OS route");
         assert!(!engine.snapshot().to_string().contains("synthetic"));
         let catalog = if mode == "manual" {
             Catalog::new(selected.as_deref())
         } else {
-            Catalog::new_automatic(selected.as_deref())
+            // The library retains its explicitly requested automatic mode.
+            Catalog::new_automatic(std::env::var("HTTPS_PROXY").ok().as_deref())
         }
         .unwrap();
         let source = std::env::var("VIDEODOCK_AUTO_SOURCE").unwrap();

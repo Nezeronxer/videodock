@@ -644,7 +644,7 @@ AppDialog {
                                 }
                                 Label {
                                     visible: !proxySwitch.checked
-                                    text: qsTr("Automatic: system and VPN settings")
+                                    text: qsTr("Direct connection (OS route)")
                                     color: root.app.theme.secondary
                                     Layout.fillWidth: true
                                     Layout.leftMargin: 12

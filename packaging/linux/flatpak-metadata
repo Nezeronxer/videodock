@@ -12,7 +12,6 @@ devices=dri;
 filesystems=xdg-videos;
 
 [Session Bus Policy]
-org.freedesktop.Flatpak=talk
 org.freedesktop.Notifications=talk
 org.kde.StatusNotifierWatcher=talk
 
