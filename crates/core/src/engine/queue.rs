@@ -233,6 +233,7 @@ fn add_subscription(inner: &Inner, media: &Media, action: &Value) -> Result<Vec<
                 editing.as_deref() == existing["id"].as_str(),
                 "Вы уже подписаны на этот канал или плейлист"
             );
+            existing["media_type"] = json!(spec.selection.media_type);
             existing["_spec"] = json!(spec);
             existing["title"] = json!(media.title);
             return Ok(Vec::new());
@@ -486,7 +487,8 @@ async fn parse_async(
             !media.entries.is_empty(),
             "В списке нет доступных элементов"
         );
-        let mut formats = Vec::new();
+        let mut preview = media.clone();
+        preview.formats.clear();
         let mut keys = HashSet::new();
         for (index, entry) in media.entries.iter().enumerate() {
             await_parsing(inner, cancel).await?;
@@ -500,27 +502,7 @@ async fn parse_async(
             }
             .await;
             match result {
-                Ok(clip) => {
-                    for format in clip.formats {
-                        let key = format!(
-                            "{:?}|{}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{}|{:?}|{:?}",
-                            format.protocol,
-                            format.ext,
-                            format.height,
-                            format.fps,
-                            format.video_codec,
-                            format.audio_codec,
-                            format.bitrate,
-                            format.projection,
-                            format.vr,
-                            format.projection_type,
-                            format.stereo_layout
-                        );
-                        if keys.insert(key) {
-                            formats.push(format);
-                        }
-                    }
-                }
+                Ok(clip) => merge_batch_metadata(&mut preview, &mut keys, clip),
                 Err(error) => {
                     errors.insert(entry.id.clone(), error.to_string());
                 }
@@ -528,8 +510,6 @@ async fn parse_async(
             if inner.generation.load(Ordering::SeqCst) != generation {
                 return Ok(());
             }
-            let mut preview = media.clone();
-            preview.formats = formats.clone();
             let mut view = manual_view(&preview, &settings, &errors);
             view["parsed_count"] = json!(index + 1);
             view["total_count"] = json!(media.entries.len());
@@ -543,7 +523,8 @@ async fn parse_async(
                 Ok(())
             })?;
         }
-        media.formats = formats;
+        media.formats = preview.formats;
+        media.subtitles = preview.subtitles;
         ensure!(
             !media.formats.is_empty(),
             "Не найдено доступных форматов ни для одного элемента"
@@ -576,6 +557,21 @@ async fn parse_async(
         view["editing"] = json!(true);
         view["preferences"] = subscription["_spec"]["selection"].clone();
         view["output_dir"] = subscription["_spec"]["output_dir"].clone();
+        if let Ok(mut selection) = serde_json::from_value::<Selection>(view["preferences"].clone())
+        {
+            selection.format_id = None;
+            if let Ok(formats) = videodock_media::choose_formats(&media.formats, &selection)
+                && let Some(format) = formats.iter().find(|format| {
+                    if selection.media_type == "audio" {
+                        format.has_audio()
+                    } else {
+                        format.has_video()
+                    }
+                })
+            {
+                view["selected_format_id"] = json!(format.id);
+            }
+        }
     }
     *lock(&inner.manual) = Some(media);
     change(inner, |state| {
@@ -583,6 +579,43 @@ async fn parse_async(
         Ok(())
     })?;
     Ok(())
+}
+fn merge_batch_metadata(preview: &mut Media, keys: &mut HashSet<String>, clip: Media) {
+    for format in clip.formats {
+        let key = format!(
+            "{:?}|{}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{}|{:?}|{:?}|{:?}",
+            format.protocol,
+            format.ext,
+            format.height,
+            format.fps,
+            format.video_codec,
+            format.audio_codec,
+            format.bitrate,
+            format.projection,
+            format.vr,
+            format.projection_type,
+            format.stereo_layout,
+            (
+                &format.audio_track_id,
+                &format.audio_language,
+                &format.audio_title,
+                format.audio_default,
+                format.audio_original,
+            )
+        );
+        if keys.insert(key) {
+            preview.formats.push(format);
+        }
+    }
+    for subtitle in clip.subtitles {
+        if let Some(existing) = preview.subtitles.iter_mut().find(|existing| {
+            existing.language == subtitle.language && existing.automatic == subtitle.automatic
+        }) {
+            existing.translatable |= subtitle.translatable;
+        } else {
+            preview.subtitles.push(subtitle);
+        }
+    }
 }
 fn manual_view(media: &Media, settings: &Value, errors: &HashMap<String, String>) -> Value {
     let mut formats = Vec::new();
@@ -736,7 +769,10 @@ fn actual_info(item: &mut Value, info: &Value) {
         .find(|stream| stream["codec_type"] == "audio");
     if let Some(video) = video {
         if let Some(height) = video["height"].as_u64() {
-            let quality = video["width"].as_u64().filter(|width| *width > 0).map_or(height, |width| width.min(height));
+            let quality = video["width"]
+                .as_u64()
+                .filter(|width| *width > 0)
+                .map_or(height, |width| width.min(height));
             item["quality"] = json!(format!("{quality}p"));
             item["height"] = json!(height);
         }
@@ -1714,17 +1750,114 @@ if let Some(paths)=item["files"].as_array(){for path in paths.iter().filter_map(
 mod user_error_tests {
     use super::*;
     #[test]
-    fn portrait_labels_preserve_dimensions_and_use_nominal_quality() {
-        let media = Media { formats: vec![videodock_media::Format {
-            id: "portrait".into(), width: Some(720), height: Some(1280),
-            video_codec: Some("avc1".into()), audio_codec: Some("aac".into()),
+    fn batch_preview_preserves_child_subtitles_and_audio_languages() {
+        let clip = |language: &str| Media {
+            formats: vec![Format {
+                id: format!("140:{language}"),
+                ext: "m4a".into(),
+                audio_codec: Some("mp4a.40.2".into()),
+                bitrate: Some(128_000),
+                audio_language: Some(language.into()),
+                audio_track_id: Some(format!("{language}.0")),
+                ..Default::default()
+            }],
+            subtitles: vec![videodock_media::Subtitle {
+                language: language.into(),
+                title: language.into(),
+                url: format!("https://example.invalid/{language}.vtt"),
+                ext: "vtt".into(),
+                ..Default::default()
+            }],
             ..Default::default()
-        }], ..Default::default() };
+        };
+        let english = clip("en");
+        let russian = clip("ru");
+        let mut repeated = english.clone();
+        repeated.subtitles[0].translatable = true;
+        let mut automatic = repeated.subtitles[0].clone();
+        automatic.automatic = true;
+        repeated.subtitles.push(automatic);
+        let mut alternate = english.formats[0].clone();
+        alternate.id = "140:en-alternate".into();
+        alternate.audio_track_id = Some("en.1".into());
+        repeated.formats.push(alternate);
+        let mut playlist = Media {
+            kind: MediaKind::Playlist,
+            ..Default::default()
+        };
+        let mut keys = HashSet::new();
+        for child in [&english, &russian, &repeated] {
+            merge_batch_metadata(&mut playlist, &mut keys, child.clone());
+        }
+        let view = manual_view(&playlist, &defaults(), &HashMap::new());
+        assert_eq!(playlist.formats.len(), 3);
+        assert_eq!(
+            view["audio_tracks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|track| track["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["en", "ru"]
+        );
+        assert_eq!(
+            view["subtitles"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|track| track["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["en", "ru", "en:auto"]
+        );
+        assert_eq!(view["can_translate_subtitles"], true);
+        let all_audio = videodock_media::choose_formats(
+            &playlist.formats,
+            &Selection {
+                media_type: "audio".into(),
+                audio_tracks: vec!["all".into()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(all_audio.len(), 3);
+        for (child, language) in [(&english, "en"), (&russian, "ru")] {
+            let selected = videodock_media::choose_formats(
+                &child.formats,
+                &Selection {
+                    media_type: "audio".into(),
+                    audio_tracks: vec![language.into()],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(selected[0].audio_language.as_deref(), Some(language));
+            let (subtitle, _) = crate::subtitles::select(&child.subtitles, language).unwrap();
+            assert_eq!(subtitle.language, language);
+        }
+        let (automatic, _) = crate::subtitles::select(&playlist.subtitles, "en:auto").unwrap();
+        assert!(automatic.automatic);
+    }
+    #[test]
+    fn portrait_labels_preserve_dimensions_and_use_nominal_quality() {
+        let media = Media {
+            formats: vec![videodock_media::Format {
+                id: "portrait".into(),
+                width: Some(720),
+                height: Some(1280),
+                video_codec: Some("avc1".into()),
+                audio_codec: Some("aac".into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
         let settings = json!({"mediaType":"video","container":"mp4","path":std::env::temp_dir(),"displayAllCodecs":true});
         let manual = manual_view(&media, &settings, &HashMap::new());
         assert_eq!(manual["formats"][0]["quality"], "720p");
         let mut item = json!({});
-        actual_info(&mut item, &json!({"streams":[{"codec_type":"video","width":720,"height":1280}]}));
+        actual_info(
+            &mut item,
+            &json!({"streams":[{"codec_type":"video","width":720,"height":1280}]}),
+        );
         assert_eq!(item["quality"], "720p");
         assert_eq!(item["width"], 720);
         assert_eq!(item["height"], 1280);
@@ -1734,10 +1867,17 @@ mod user_error_tests {
         let state = json!({"jobs":[],"manual":{"error":"YouTube требует актуальный PO token"},"notice":"Нет конфигурации SABR","other":{"error":"Недостаточно места на диске"}});
         let public = public_state(&state);
         for value in [&public["manual"]["error"], &public["notice"]] {
-            let text=value.as_str().unwrap();
-            assert!(!text.contains("SABR") && !text.contains("PO token") && text.contains("Повторите"));
+            let text = value.as_str().unwrap();
+            assert!(
+                !text.contains("SABR") && !text.contains("PO token") && text.contains("Повторите")
+            );
         }
-        assert_eq!(public["other"]["error"],state["other"]["error"]);
-        assert!(state["manual"]["error"].as_str().unwrap().contains("PO token"));
+        assert_eq!(public["other"]["error"], state["other"]["error"]);
+        assert!(
+            state["manual"]["error"]
+                .as_str()
+                .unwrap()
+                .contains("PO token")
+        );
     }
 }
