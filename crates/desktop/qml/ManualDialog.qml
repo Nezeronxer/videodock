@@ -289,12 +289,16 @@ AppDialog {
     }
 
     function applyOutputPath(path) {
+        if (Qt.platform.os === "windows")
+            path = path.replace(/\\/g, "/");
         var slash = path.lastIndexOf("/");
         if (slash < 0 || slash === path.length - 1) {
             root.app.localNotice = qsTr("Enter a full file path.");
             return false;
         }
         outputDirectory = path.slice(0, slash) || "/";
+        if (Qt.platform.os === "windows" && /^[A-Za-z]:$/.test(outputDirectory))
+            outputDirectory += "/";
         outputFilename = path.slice(slash + 1);
         return true;
     }
