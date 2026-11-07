@@ -3,11 +3,15 @@ $project = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = Join-Path $env:LOCALAPPDATA 'VideoDock\build' }
 if (-not $env:CARGO_BUILD_JOBS) { $env:CARGO_BUILD_JOBS = '2' }
 Get-Command cargo, git, ffmpeg, ffprobe -ErrorAction Stop | Out-Null
+$staging = $null
+$backup = $null
+$published = Join-Path $env:CARGO_TARGET_DIR 'package\VideoDock'
 Push-Location $project
 try {
     & cargo build --locked --release -p videodock-desktop
     if ($LASTEXITCODE -ne 0) { throw 'Rust build failed' }
-    $destination = Join-Path $env:CARGO_TARGET_DIR 'package\VideoDock'
+    $staging = Join-Path (Split-Path $published) ('VideoDock-stage-' + [guid]::NewGuid().ToString('N'))
+    $destination = $staging
     New-Item -ItemType Directory -Force $destination | Out-Null
     Copy-Item (Join-Path $env:CARGO_TARGET_DIR 'release\videodock-desktop.exe') (Join-Path $destination 'VideoDock.exe') -Force
     $image = [IO.File]::ReadAllBytes((Join-Path $destination 'VideoDock.exe'))
@@ -22,7 +26,7 @@ try {
     $crt = Get-ChildItem (Join-Path $env:VCToolsRedistDir 'x64') -Directory -Filter 'Microsoft.VC*.CRT' | Sort-Object Name -Descending | Select-Object -First 1
     if (-not $crt) { throw 'Official app-local MSVC runtime absent' }
     Copy-Item (Join-Path $crt.FullName '*.dll') $destination -Force
-    foreach ($dll in @('vcruntime140.dll', 'msvcp140.dll', 'platforms\qoffscreen.dll')) {
+    foreach ($dll in @('vcruntime140.dll', 'msvcp140.dll', 'platforms\qoffscreen.dll', 'platforms\qwindows.dll', 'QtWebEngineProcess.exe')) {
         if (-not (Test-Path (Join-Path $destination $dll) -PathType Leaf)) { throw "Incomplete portable runtime: $dll" }
     }
     $licenses = Join-Path $destination 'licenses'
@@ -50,5 +54,28 @@ try {
     $qtBin = Split-Path (Get-Command windeployqt).Source
     & (Join-Path $qtBin 'qmake.exe') -query QT_VERSION | Out-File (Join-Path $licenses 'qt-version.txt') -Encoding utf8
     if ($LASTEXITCODE -ne 0) { throw 'Cannot record Qt version' }
-    Write-Output "VideoDock staged: $destination"
-} finally { Pop-Location }
+    if (Test-Path $published) {
+        $backup = Join-Path (Split-Path $published) ('VideoDock-backup-' + [guid]::NewGuid().ToString('N'))
+        [IO.Directory]::Move($published, $backup)
+    }
+    try {
+        [IO.Directory]::Move($staging, $published)
+        $staging = $null
+    } catch {
+        if ($backup -and (Test-Path $backup) -and -not (Test-Path $published)) {
+            [IO.Directory]::Move($backup, $published)
+            $backup = $null
+        }
+        throw
+    }
+    if ($backup) {
+        try { Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction Stop }
+        catch { Write-Warning "Previous package retained at $backup; the new package is complete." }
+    }
+    Write-Output "VideoDock staged: $published"
+} finally {
+    if ($staging -and (Test-Path $staging)) {
+        Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    Pop-Location
+}
