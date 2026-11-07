@@ -200,6 +200,9 @@ Rectangle {
                     if (activeFocus)
                         root.app.browserVisible = true;
                 }
+                TapHandler {
+                    onTapped: root.app.browserVisible = true
+                }
                 selectByMouse: true
                 onAccepted: root.go(text)
             }
