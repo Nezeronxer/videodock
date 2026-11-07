@@ -134,6 +134,20 @@ static void click(QQuickWindow *window, QObject *object) {
     QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, point);
     QTest::qWait(150);
 }
+static void focusGlobalPaste(QQuickWindow *window) {
+    auto *target = qobject_cast<QQuickItem *>(named(window, "downloadsList"));
+    check(target != nullptr, "Global paste list is not a visual item");
+    if (!target->isVisible()) target = qobject_cast<QQuickItem *>(named(window, "pasteButton"));
+    check(target && target->isVisible() && target->isEnabled(), "Global paste focus target unavailable");
+    const auto *previous = window->activeFocusItem();
+    qInfo("Global paste previous focus: %s", previous ? previous->metaObject()->className() : "none");
+    // Native Cocoa buttons may leave focus in an editor; its Paste override is intentional.
+    target->forceActiveFocus();
+    auto *focus = window->activeFocusItem();
+    check(focus && (focus == target || target->isAncestorOf(focus)), "Global paste focus is outside its noneditable target");
+    check(!focus->inherits("QQuickTextInput") && !focus->inherits("QQuickTextEdit"), "Global paste still targets an editor");
+    qInfo("Global paste focus: %s", focus->metaObject()->className());
+}
 static double luminance(QColor color) {
     auto linear = [](double v) { return v <= .04045 ? v / 12.92 : std::pow((v + .055)/1.055, 2.4); };
     return .2126 * linear(color.redF()) + .7152 * linear(color.greenF()) + .0722 * linear(color.blueF());
@@ -412,6 +426,7 @@ int main(int argc, char **argv) {
             check(backend->lastAction["action"] == "parse" && backend->lastAction["url"] == url, "Paste Link lost the clipboard source");
             check(evaluate("ui.sortKey==='date' && ui.descending && ui.activeTab==='All' && ui.search===''").toBool(), "Pasting did not reveal the newest download at the top");
             backend->lastAction = {};
+            focusGlobalPaste(window);
             QTest::keySequence(window, QKeySequence(QKeySequence::Paste));
             QTest::qWait(150);
             check(backend->lastAction["action"] == "parse" && backend->lastAction["url"] == url, "Ctrl+V lost the clipboard source");
@@ -968,6 +983,7 @@ int main(int argc, char **argv) {
             moveHover(besidePlay);
             check(!playButton->property("hovered").toBool() && window->cursor().shape() == Qt::ArrowCursor, "Play cursor did not reset after leaving the button");
             QApplication::clipboard()->setText(url + "?second=1");
+            focusGlobalPaste(window);
             QTest::keySequence(window, QKeySequence(QKeySequence::Paste));
             waitFor([&]() { return backend->state["manual"].toObject()["state"] == "ready"; }, "Second media parsing did not reach ready");
             click(window, named(window, "downloadButton"));
@@ -1020,6 +1036,7 @@ int main(int argc, char **argv) {
             click(window, named(window, "pasteButton"));
             check(backend->state["jobs"].toArray().size() == 2 && backend->state["manual"].isNull(), "Smart paste has no immediate queue row");
             QApplication::clipboard()->setText(url + "?smart=second");
+            focusGlobalPaste(window);
             QTest::keySequence(window, QKeySequence(QKeySequence::Paste));
             QTest::qWait(100);
             check(backend->state["jobs"].toArray().size() == 3, "Second smart clipboard paste lost a source");
