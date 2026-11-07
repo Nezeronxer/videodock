@@ -21,7 +21,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QTest>
-#include <QSignalSpy>
+#include <QScopeGuard>
 #include <QTranslator>
 #include <QLibraryInfo>
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
@@ -845,6 +845,14 @@ int main(int argc, char **argv) {
         if (argc > 5) {
             QTemporaryDir profile;
             check(profile.isValid(), "Cannot create isolated Engine profile");
+            const auto cleanupEngine = qScopeGuard([&]() {
+                if (backend->engineProcess.state() == QProcess::NotRunning) return;
+                backend->engineProcess.closeWriteChannel();
+                if (!backend->engineProcess.waitForFinished(5000)) {
+                    backend->engineProcess.kill();
+                    backend->engineProcess.waitForFinished(5000);
+                }
+            });
             const QString driver = QString::fromLocal8Bit(argv[4]);
             backend->startEngine(driver, profile.path());
             backend->dispatch(QString::fromUtf8(QJsonDocument(QJsonObject{{"action", "settings"}, {"values", QJsonObject{{"path", profile.path() + "/downloads"}, {"smartMode", false}}}}).toJson()));
@@ -941,10 +949,9 @@ int main(int argc, char **argv) {
             check(QRect(QPoint(), window->size()).contains(playPoint), "Play hover target is outside the window");
             check(list->contains(list->mapFromScene(playPoint)), "Play hover target is clipped by its list");
             auto moveHover = [&](const QPoint &point) {
-                QSignalSpy rendered(window, &QQuickWindow::frameSwapped);
                 QTest::mouseMove(window, point);
-                window->update();
-                check(!rendered.isEmpty() || rendered.wait(1000), "Hover frame did not render");
+                // Cursor changes need event delivery, not a new scene frame after grabWindow.
+                QTest::qWait(50);
             };
             const QPoint besidePlay = playPoint + QPoint(playButton->width(), 0);
             moveHover(besidePlay);
