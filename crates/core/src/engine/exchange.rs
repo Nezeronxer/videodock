@@ -31,7 +31,9 @@ fn preferences(spec: &Value) -> Result<Value> {
             }
         })
         .collect::<Vec<_>>();
-    Ok(json!({"format":format,"outputDir":spec["output_dir"],"subtitles":subtitles}))
+    Ok(
+        json!({"format":format,"outputDir":spec["output_dir"],"subtitles":subtitles,"audioTracks":selected.audio_tracks}),
+    )
 }
 fn service(url: &url::Url) -> String {
     let host = url
@@ -224,6 +226,10 @@ fn imported_selection(item: &Value, settings: &Value, use_file: bool) -> Result<
                 })
             })
             .collect::<Result<_>>()?;
+    }
+    if let Some(tracks) = prefs.get("audioTracks") {
+        selected.audio_tracks =
+            serde_json::from_value(settings::normalize("audioTracks", tracks)?)?;
     }
     Ok(selected)
 }
@@ -540,4 +546,57 @@ pub(super) fn import(inner: &Inner, action: &Value) -> Result<()> {
         }
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn audio_track_preferences_survive_export_import_without_using_global_tracks() {
+        let selected = Selection {
+            audio_tracks: vec!["ru".into(), "en".into()],
+            ..Default::default()
+        };
+        let prefs = preferences(&json!({"selection":selected,"output_dir":"/fixture"})).unwrap();
+        let mut settings = settings::defaults();
+        settings["audioTracks"] = json!(["de"]);
+        let item = json!({"downloadPreferences":prefs});
+        assert_eq!(
+            imported_selection(&item, &settings, true)
+                .unwrap()
+                .audio_tracks,
+            ["ru", "en"]
+        );
+        assert_eq!(
+            imported_selection(&item, &settings, false)
+                .unwrap()
+                .audio_tracks,
+            ["de"]
+        );
+    }
+
+    #[test]
+    fn imported_audio_tracks_are_optional_but_validated_when_present() {
+        let mut settings = settings::defaults();
+        settings["audioTracks"] = json!(["de"]);
+        let mut item = json!({"downloadPreferences":{"format":{"container":"MP4","video":{}}}});
+        assert_eq!(
+            imported_selection(&item, &settings, true)
+                .unwrap()
+                .audio_tracks,
+            ["de"]
+        );
+        item["downloadPreferences"]["audioTracks"] = json!([]);
+        assert!(
+            imported_selection(&item, &settings, true)
+                .unwrap()
+                .audio_tracks
+                .is_empty()
+        );
+        for invalid in [json!("ru"), json!(["bad\ntrack"]), json!(vec!["ru"; 257])] {
+            item["downloadPreferences"]["audioTracks"] = invalid;
+            assert!(imported_selection(&item, &settings, true).is_err());
+        }
+    }
 }
