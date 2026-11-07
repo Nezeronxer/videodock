@@ -549,3 +549,26 @@ Pendingfinal:commitcurrentdirectpolicy,updatedSDKFlatpakwithoutHostbus+install/r
 
 Дополнение той же проверки: Windows10 latest317 YouTube Zoo черезGUI direct завершён после restart:744478Б/H264320x240+AAC/19.063583с, bundledFFmpeg full decode0/stderr0; windows10-youtube-3171688-proof.json. File→Выйти закрыл именноQAпроцессы, scheduledtask удалён, Windows10 штатноoff; временный transfer39647 остановлен. НативноеLinuxиFlatpakQAокна закрыты штатным compositorclose, чужиеокна не трогались.
 Windows11 повторный ОБЫЧНЫЙboot после завершённогоACPIshutdown показал lockscreen вместоblackbuffer. Это supersedes предположение о постоянномblackscreen: для дальнейшегоQAнуженлокальныйвход. Плашка отправлена, парольнепросили/нечитали. QGAканал остаётсянедоступен, понадобится прежний ограниченныйлокальныйtransfer после входа. Не сбрасыватьпароль/учётку/лицензию. ДоответаVMоставленанаlockscreen.
+
+
+## Проверка всех ОС и выпуск 0.2.0 - 07.11.2026
+
+Что сделать: исправить воспроизводимые ошибки на всех ОС и опубликовать проверенные пакеты. Объём: существующий продукт, нативные CI runners; без тяжёлых сборок и ВМ на личном Mac. Проверка: workspace/Qt/installer/package tests, реальный worker, видимое окно, контрольные суммы и публичный релиз.
+
+- [x] Исправлены десять ошибок: install rollback, stale Windows DLL, audioTracks export/import, subtitle collisions, rollback outputs, Windows Unicode paths, Unix child reaping, ManualDialog modelData, browser address focus, Mac nested signing identifier.
+- [x] Регрессии, RED/GREEN и независимое ревью исправлений; архивы закрытых ресурсов оригинала в поставку не включены.
+- [x] Windows x64 42385130933: workspace/staging/installer/clean PATH worker/UI EN+RU прошли,130 PNG. Public TikTok PASS; YouTube/Shorts controlled metadata confirmation.
+- [x] macOS Intel/ARM 42395354408: workspace/UI EN+RU/bundle/signature/clean PATH worker/startup прошли, по130 PNG. Public TikTok PASS; YouTube/Shorts controlled metadata confirmation.
+- [x] Готовые Mac-архивы проверены локально по SHA256 и strict deep signature. На ARM вживую проверены обучение, настройки, сохранение языка, настоящее меню и повторное раскрытие браузера при сохранённом фокусе.
+- [x] Linux native 42394901843: workspace/UI/worker/startup и архив прошли.
+- [x] Flatpak того же прогона собран внутри KDE SDK6.11; package/install/ffmpeg/ffprobe/IPC прошли. Первичный proxy test остановился в Qt portal Settings при инициализации runner.
+- [x] Причина Flatpak CI подтверждена стеком; на неизменном пакете с настроенным GTK portal proxy/startup PASS (42400855612),15s и sandbox сохранены.
+- [x] Подтвердить видимое окно именно запущенного Flatpak instance и verification.json: финальный run42403231286 SUCCESS, artifact13585988657, SHA пакета069cfc38e43638f797525af209b345b2f1fcdf6400c13747978a97d788128d42. Прежнее окно было видно, но harness ошибочно требовал один global instance; проверка теперь связана с деревом Popen и NSpid.
+- [x] Шесть файлов в dist/0.2.0, sizes/SHA256 сверены с Actions artifacts; старые Linux-кандидаты сохранены отдельно.
+- [x] Publisher связывает producer/verifier/job definitions/artifact ID+digest/package SHA; проверены34 rejection cases и прежние6 tag/draft mocks. Никакого исполнения скачанных файлов или delete/clobber.
+- [x] На реальных GitHub metadata проверены native Windows/Mac/Linux gates и эквивалентность runtime исходников.
+- [x] Завершены release notes, отчёт всех ОС и README; документы подготовлены вместе с исходниками.
+- [ ] Опубликовать стабильный v0.2.0: Windowsrun42385130933, Linuxrun42394901843, Macrun42395354408 и новый успешный Linuxverificationrun.
+- [ ] Проверить публичный tag/source SHA, все8 assets и server-side digests; сохранить manifest/SHA256SUMS рядом с6пакетами.
+
+Ограничения: YouTube доступ из CI не считается успешным скачиванием; собственная Mac подпись без Apple notarization, Windows installer без Authenticode. Полная ручная матрица всех дистрибутивов/железа не заявляется. Подробности - docs/cross-platform-audit-2026-11-07.md.
