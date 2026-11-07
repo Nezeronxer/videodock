@@ -87,7 +87,7 @@ jobs:
       - run: sh crates/desktop/tests/check-proof-boundaries.sh
       # Valid proofs require Chromium sandboxing; this root container checks IPC only.
       # Native Windows/macOS jobs also exercise the packaged WebEngine worker.
-      - run: python3 crates/desktop/tests/proof_worker.py "$CARGO_TARGET_DIR/release/videodock-desktop"
+      - run: python3 crates/desktop/tests/proof_worker.py "$CARGO_TARGET_DIR/release/videodock-desktop" --startup
       - name: Package native Arch Linux build
         run: |
           cargo fetch --locked
@@ -164,12 +164,13 @@ jobs:
           sh scripts/rust/package-flatpak.sh "$RUNNER_TEMP/videodock-base" "$HOME/.cache/videodock-flatpak/sdk-target/release/videodock-desktop" "$RUNNER_TEMP/linux-artifact"
       - name: Verify installed Flatpak runtime and worker
         run: |
+          trap 'flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true' EXIT
           flatpak install --user --noninteractive -y "$RUNNER_TEMP"/linux-artifact/VideoDock-*-linux-x86_64.flatpak
           flatpak run --command=ffmpeg io.github.Nezeronxer.VideoDock -version
           flatpak run --command=ffprobe io.github.Nezeronxer.VideoDock -version
           printf '%s\n' '#!/bin/sh' 'exec flatpak run --command=videodock io.github.Nezeronxer.VideoDock "$@"' > "$RUNNER_TEMP/flatpak-worker"
           chmod +x "$RUNNER_TEMP/flatpak-worker"
-          python3 crates/desktop/tests/proof_worker.py "$RUNNER_TEMP/flatpak-worker"
+          python3 crates/desktop/tests/proof_worker.py "$RUNNER_TEMP/flatpak-worker" --proxy --startup
           sha256sum "$RUNNER_TEMP"/linux-artifact/*.flatpak > "$RUNNER_TEMP/linux-artifact/SHA256SUMS"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
