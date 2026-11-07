@@ -48,13 +48,16 @@ pub fn media_tool(name: &str) -> PathBuf {
 
 #[cfg(unix)]
 fn spawn(program: &str, args: &[&std::ffi::OsStr]) -> Result<()> {
-    Command::new(program)
+    let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .with_context(|| format!("Не удалось запустить системную программу {program}"))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
     Ok(())
 }
 
@@ -408,6 +411,59 @@ pub async fn check_updates(client: &Client) -> Result<Option<Value>> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn system_openers_are_reaped() {
+        use std::{
+            ffi::OsStr,
+            time::{Duration, Instant},
+        };
+        let directory = tempfile::tempdir().unwrap();
+        let marker = directory.path().join("child-pid");
+        super::spawn(
+            "sh",
+            &[
+                OsStr::new("-c"),
+                OsStr::new("printf '%s' \"$$\" > \"$1\""),
+                OsStr::new("videodock-opener-fixture"),
+                marker.as_os_str(),
+            ],
+        )
+        .unwrap();
+        let start = Instant::now();
+        let pid: i32 = loop {
+            if let Ok(text) = std::fs::read_to_string(&marker)
+                && let Ok(pid) = text.parse()
+            {
+                break pid;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "Opener fixture did not start"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert!(pid > 0);
+        let reaped = loop {
+            if unsafe { libc::kill(pid, 0) } == -1
+                && std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
+            {
+                break true;
+            }
+            if start.elapsed() >= Duration::from_secs(5) {
+                break false;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        if !reaped {
+            unsafe {
+                libc::waitpid(pid, std::ptr::null_mut(), libc::WNOHANG);
+            }
+        }
+        assert!(reaped, "Exited system opener remains a zombie");
+        assert!(super::spawn("/videodock-fixture-program-does-not-exist", &[]).is_err());
+    }
+
     #[test]
     fn plist_values_are_escaped() {
         assert_eq!(super::xml("a&<\"'"), "a&amp;&lt;&quot;&apos;");
