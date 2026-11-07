@@ -91,6 +91,68 @@ def build_inputs_match(producer, source, jobs):
     return all(section(producer, header) == section(source, header) for header in headers)
 
 
+def validate_linux_verification(repo, number, producer, source):
+    require(re.fullmatch(r'[1-9][0-9]*', number), 'Invalid Linux verification run ID')
+    run = api(f'repos/{repo}/actions/runs/{number}')
+    require(run['repository']['full_name'].lower() == repo.lower()
+            and run['status'] == 'completed' and run['conclusion'] == 'success'
+            and run['event'] == 'workflow_dispatch' and run['workflow_id'] == producer['workflow_id']
+            and run['actor']['login'].lower() == repo.split('/')[0].lower(), 'Invalid Linux verifier')
+    head = run['head_sha']
+    require(re.fullmatch(r'[0-9a-f]{40}', head), 'Invalid verifier SHA')
+    diff = subprocess.run(['git', 'diff', '--name-only', head, source], capture_output=True, text=True)
+    require(diff.returncode == 0 and producer_sources_match(diff.stdout.splitlines(), 'linux'),
+            'Runtime source differs from verifier')
+    workflow = subprocess.run(['git', 'show', head + ':.github/workflows/native-builds.yml'], capture_output=True, text=True)
+    require(workflow.returncode == 0 and build_inputs_match(workflow.stdout,
+            Path('.github/workflows/native-builds.yml').read_text(), ['flatpak-verify']),
+            'Linux verification definition differs')
+    proof_test = subprocess.run(['git', 'show', head + ':crates/desktop/tests/proof_worker.py'], capture_output=True, text=True)
+    require(proof_test.returncode == 0 and proof_test.stdout == Path('crates/desktop/tests/proof_worker.py').read_text(),
+            'Verified worker assertions differ')
+    jobs = api(f'repos/{repo}/actions/runs/{number}/jobs?filter=latest&per_page=100')['jobs']
+    matches = [job for job in jobs if job['name'] == 'flatpak-verify']
+    require(len(matches) == 1 and matches[0]['conclusion'] == 'success'
+            and succeeded(matches[0], ['Verify installed Flatpak worker and visible window']), 'Linux verification did not pass')
+    artifacts = api(f'repos/{repo}/actions/runs/{number}/artifacts?per_page=100')['artifacts']
+    matches = [artifact for artifact in artifacts if artifact['name'] == 'flatpak-verification']
+    require(len(matches) == 1 and not matches[0]['expired'] and 0 < matches[0]['size_in_bytes'] < 32 * 1024**2
+            and matches[0]['workflow_run']['id'] == int(number) and matches[0]['workflow_run']['head_sha'] == head,
+            'Invalid verification artifact')
+    report_artifact = matches[0]
+    require(isinstance(report_artifact.get('digest'), str)
+            and re.fullmatch(r'sha256:[0-9a-f]{64}', report_artifact['digest']), 'Verification artifact digest missing')
+    with tempfile.TemporaryDirectory(prefix='videodock-verification-') as temporary:
+        directory = Path(temporary)
+        gh('run', 'download', number, '--repo', repo, '--name', 'flatpak-verification', '--dir', str(directory))
+        report = directory / 'verification.json'
+        require(report.is_file() and not report.is_symlink() and 0 < report.stat().st_size < 8192,
+                'Linux verification manifest missing')
+        value = json.loads(report.read_text())
+    keys = {'version', 'producer_run_id', 'source_sha', 'artifact_id', 'artifact_digest', 'package_name',
+            'package_sha256', 'worker_proxy', 'worker_startup', 'gui_visible'}
+    require(isinstance(value, dict) and set(value) == keys and type(value['version']) is int and value['version'] == 1,
+            'Invalid verification manifest')
+    require(type(value['producer_run_id']) is int and value['producer_run_id'] == producer['id']
+            and value['source_sha'] == producer['head_sha'], 'Verification producer mismatch')
+    artifacts = api(f'repos/{repo}/actions/runs/{producer["id"]}/artifacts?per_page=100')['artifacts']
+    matches = [artifact for artifact in artifacts if artifact['name'] == 'VideoDock-linux-flatpak-x86_64']
+    require(len(matches) == 1 and not matches[0]['expired'] and type(value['artifact_id']) is int
+            and value['artifact_id'] == matches[0]['id'] and value['artifact_digest'] == matches[0]['digest']
+            and matches[0]['workflow_run']['id'] == producer['id']
+            and matches[0]['workflow_run']['head_sha'] == producer['head_sha']
+            and re.fullmatch(r'sha256:[0-9a-f]{64}', value['artifact_digest']), 'Verified artifact mismatch')
+    version = tomllib.loads(Path('Cargo.toml').read_text())['workspace']['package']['version']
+    require(value['package_name'] == f'VideoDock-{version}-linux-x86_64.flatpak'
+            and isinstance(value['package_sha256'], str) and re.fullmatch(r'[0-9a-f]{64}', value['package_sha256'])
+            and all(value[key] is True for key in ('worker_proxy', 'worker_startup', 'gui_visible')),
+            'Linux verification evidence incomplete')
+    return {'run_id': int(number), 'head_sha': head, 'artifact_id': report_artifact['id'],
+            'artifact_digest': report_artifact['digest'], 'producer_artifact_id': value['artifact_id'],
+            'producer_artifact_digest': value['artifact_digest'],
+            'package_name': value['package_name'], 'package_sha256': value['package_sha256']}
+
+
 def validate_producer(repo, number, source, kind):
     require(re.fullmatch(r'[1-9][0-9]*', number), 'Invalid producer run ID')
     run = api(f'repos/{repo}/actions/runs/{number}')
@@ -108,11 +170,19 @@ def validate_producer(repo, number, source, kind):
     source_workflow = Path('.github/workflows/native-builds.yml').read_text()
     builders = ['linux', 'linux-flatpak'] if kind == 'linux' else [kind]
     require(build_inputs_match(workflow.stdout, source_workflow, builders), 'Producer build inputs differ')
+    result = {'run_id': int(number), 'head_sha': head}
     if kind == 'linux':
-        require(all(any(job['name'] == name and job['conclusion'] == 'success' for job in jobs)
-                    for name in ['linux', 'linux-flatpak']), 'Linux package gates did not pass')
+        require(any(job['name'] == 'linux' and job['conclusion'] == 'success' for job in jobs), 'Native Linux gates did not pass')
+        matches = [job for job in jobs if job['name'] == 'linux-flatpak']
+        require(len(matches) == 1 and matches[0]['conclusion'] in ('success', 'failure')
+                and succeeded(matches[0], ['Prepare offline sources and writable SDK', 'Build and package against the Flatpak SDK'])
+                and all(step['conclusion'] in ('success', 'skipped', 'failure') for step in matches[0]['steps'])
+                and [step['name'] for step in matches[0]['steps'] if step['conclusion'] == 'failure']
+                    == (['Verify installed Flatpak runtime and worker'] if matches[0]['conclusion'] == 'failure' else []),
+                'Flatpak build gates did not pass')
         require(workflow.returncode == 0 and 'flatpak-worker" --proxy --startup' in workflow.stdout,
                 'Installed Flatpak startup/proxy coverage missing')
+        result['verification'] = validate_linux_verification(repo, os.environ.get('LINUX_VERIFICATION_RUN', ''), run, source)
     elif kind == 'windows':
         needed = ['Verify Windows package staging rollback', 'Test and build Windows package',
                   'Verify installed worker with clean PATH', 'Build Windows installer',
@@ -125,7 +195,7 @@ def validate_producer(repo, number, source, kind):
         for arch in ['x64', 'arm64']:
             require(any(job['name'].startswith('macos (') and '(' + arch + ',' in job['name']
                         and succeeded(job, needed) for job in jobs), 'macOS ' + arch + ' gates did not pass')
-    return {'run_id': int(number), 'head_sha': head}
+    return result
 
 
 def collect(repo, run, artifact, directory, expected):
@@ -212,6 +282,9 @@ def main():
                 with destination.open('rb') as file:
                     digest = hashlib.file_digest(file, 'sha256').hexdigest()
                 packages[destination.name] = {'sha256': digest, 'bytes': destination.stat().st_size}
+        verified = producers['linux']['verification']
+        require(packages[verified['package_name']]['sha256'] == verified['package_sha256'],
+                'Release Flatpak differs from the verified package')
         manifest = {'version': version, 'source_sha': source, 'producers': producers, 'packages': packages}
         (output / 'build-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         with (output / 'build-manifest.json').open('rb') as file:
