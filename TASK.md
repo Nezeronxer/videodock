@@ -567,8 +567,10 @@ Windows11 повторный ОБЫЧНЫЙboot после завершённо�
 - [x] Шесть файлов в dist/0.2.0, sizes/SHA256 сверены с Actions artifacts; старые Linux-кандидаты сохранены отдельно.
 - [x] Publisher связывает producer/verifier/job definitions/artifact ID+digest/package SHA; проверены34 rejection cases и прежние6 tag/draft mocks. Никакого исполнения скачанных файлов или delete/clobber.
 - [x] На реальных GitHub metadata проверены native Windows/Mac/Linux gates и эквивалентность runtime исходников.
-- [x] Завершены release notes, отчёт всех ОС и README; документы подготовлены вместе с исходниками.
-- [ ] Опубликовать стабильный v0.2.0: Windowsrun42385130933, Linuxrun42394901843, Macrun42395354408 и новый успешный Linuxverificationrun.
-- [ ] Проверить публичный tag/source SHA, все8 assets и server-side digests; сохранить manifest/SHA256SUMS рядом с6пакетами.
+- [x] Завершены release notes, отчёт всех ОС и README; документы опубликованы вместе с исходниками.
+- [x] Опубликован стабильный v0.2.0 (publish run42404154016 SUCCESS): Windowsrun42385130933, Linuxrun42394901843, Macrun42395354408 и новый успешный Linuxverificationrun.
+- [x] Проверены публичный tag/source SHA cc9f392440684acd57ca2c62c9bc46ccb3defe52, все 8 assets и server-side digests; manifest/SHA256SUMS скачаны без авторизации и сохранены рядом с 6 пакетами. Все 7 строк SHA256SUMS прошли проверку.
 
 Ограничения: YouTube доступ из CI не считается успешным скачиванием; собственная Mac подпись без Apple notarization, Windows installer без Authenticode. Полная ручная матрица всех дистрибутивов/железа не заявляется. Подробности - docs/cross-platform-audit-2026-11-07.md.
+
+Публичный выпуск: https://github.com/Nezeronxer/videodock/releases/tag/v0.2.0 . Он отмечен Latest, draft=false/prerelease=false. Локальные файлы: dist/0.2.0; build-manifest SHA2565cecc7c4dd49e2ba748fda67903b8af380f5737e7fec7a3fd9ed0cf1e6d8eb50.
