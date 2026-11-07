@@ -25,6 +25,9 @@ ApplicationWindow {
 
     readonly property alias theme: colors
     readonly property color green: colors.accent
+    property string clipboardPlatformIcon: ""
+    onActiveChanged: if (active) Qt.callLater(window.refreshClipboardIcon)
+    Component.onCompleted: Qt.callLater(window.refreshClipboardIcon)
     property bool searchVisible: false
 
     UiTheme {
@@ -108,6 +111,31 @@ ApplicationWindow {
                 })[value] || String(value);
         return String(value === undefined ? "" : value);
     }
+    function platformIcon(url) {
+        var match = /^https?:\/\/(?:[^/@\s]+@)?([^/:?#\s]+)/i.exec(String(url || ""));
+        if (!match)
+            return "";
+        var host = match[1].toLowerCase();
+        var services = {
+            "youtube.com": "youtube", "youtu.be": "youtube", "youtube-nocookie.com": "youtube",
+            "tiktok.com": "tiktok", "vimeo.com": "vimeo", "soundcloud.com": "soundcloud",
+            "facebook.com": "facebook", "fb.watch": "facebook", "twitch.tv": "twitch",
+            "dailymotion.com": "dailymotion", "dai.ly": "dailymotion",
+            "bilibili.com": "bilibili", "b23.tv": "bilibili", "rumble.com": "rumble",
+            "tv.naver.com": "naver", "tv.naver.tv": "naver", "tumblr.com": "tumblr",
+            "nicovideo.jp": "nicovideo", "nico.ms": "nicovideo",
+            "likee.video": "likee", "likee.com": "likee", "likeevideo.ru": "likee",
+            "flickr.com": "flickr", "flic.kr": "flickr", "bitchute.com": "bitchute"
+        };
+        for (var domain in services) {
+            if (host === domain || host.endsWith("." + domain)) {
+                var service = services[domain];
+                return asset((service === "tiktok" ? "tik-tok" : service) + "-icon.svg", "icons/service-" + service + ".svg");
+            }
+        }
+        return "icons/browser.svg";
+    }
+
     function asset(name, fallback) {
         var source = typeof backend.referenceAsset === "function" ? backend.referenceAsset(name) : "";
         return source || fallback || "";
@@ -171,6 +199,13 @@ ApplicationWindow {
             "ids": ids || selectedIds,
             "delete_files": !!deleteFiles
         });
+    }
+
+    function refreshClipboardIcon() {
+        clipboardField.clear();
+        clipboardField.paste();
+        clipboardPlatformIcon = platformIcon(clipboardField.text.trim());
+        clipboardField.clear();
     }
 
     function pasteLink() {
@@ -411,8 +446,8 @@ ApplicationWindow {
                     palette.dark: window.theme.accent
                     objectName: "pasteButton"
                     text: qsTr("Paste Link")
-                    icon.source: window.asset("paste-link.png", "icons/plus.svg")
-                    icon.color: window.theme.accentText
+                    icon.source: window.clipboardPlatformIcon || window.asset("paste-link.png", "icons/plus.svg")
+                    icon.color: window.clipboardPlatformIcon ? "transparent" : window.theme.accentText
                     font.pixelSize: 14
                     highlighted: true
                     Layout.preferredWidth: window.width < 800 ? 40 : 180

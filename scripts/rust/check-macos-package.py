@@ -56,7 +56,10 @@ with tempfile.TemporaryDirectory() as directory:
         assert (app / 'Contents/MacOS' / name).is_file(), f'{name} was not bundled'
         assert '-executable=' + str(staged_app / 'Contents/MacOS' / name) in (root / 'calls').read_text()
     with (app / 'Contents/Info.plist').open('rb') as source:
-        assert plistlib.load(source)['CFBundleExecutable'] == 'VideoDock'
+        info = plistlib.load(source)
+        assert info['CFBundleExecutable'] == 'VideoDock'
+        icon = app / 'Contents/Resources' / info.get('CFBundleIconFile', '')
+        assert icon.is_file() and icon.read_bytes().startswith(b'icns'), 'Dock icon is missing from the Mac bundle'
     for name in ('GPL-3.0.txt', 'Qt-LGPL-3.0.txt', 'BgUtils-MIT.txt', 'googlevideo-MIT.txt', 'sabr-rs-MIT.txt', 'ffmpeg-license.txt', 'ffmpeg-buildconf.txt'):
         assert (app / 'Contents/Resources/licenses' / name).is_file(), f'Missing license: {name}'
     assert (app / 'Contents/Resources/THIRD-PARTY-NOTICES.md').is_file()

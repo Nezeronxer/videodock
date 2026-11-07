@@ -17,28 +17,7 @@ Item {
     }
 
     function platformIcon(url) {
-        var match = /^https?:\/\/(?:[^/@\s]+@)?([^/:?#\s]+)/i.exec(String(url || ""));
-        if (!match)
-            return "";
-        var host = match[1].toLowerCase();
-        var services = {
-            "youtube.com": "youtube", "youtu.be": "youtube", "youtube-nocookie.com": "youtube",
-            "tiktok.com": "tiktok", "vimeo.com": "vimeo", "soundcloud.com": "soundcloud",
-            "facebook.com": "facebook", "fb.watch": "facebook", "twitch.tv": "twitch",
-            "dailymotion.com": "dailymotion", "dai.ly": "dailymotion",
-            "bilibili.com": "bilibili", "b23.tv": "bilibili", "rumble.com": "rumble",
-            "tv.naver.com": "naver", "tv.naver.tv": "naver", "tumblr.com": "tumblr",
-            "nicovideo.jp": "nicovideo", "nico.ms": "nicovideo",
-            "likee.video": "likee", "likee.com": "likee", "likeevideo.ru": "likee",
-            "flickr.com": "flickr", "flic.kr": "flickr", "bitchute.com": "bitchute"
-        };
-        for (var domain in services) {
-            if (host === domain || host.endsWith("." + domain)) {
-                var service = services[domain];
-                return app.asset((service === "tiktok" ? "tik-tok" : service) + "-icon.svg", "icons/service-" + service + ".svg");
-            }
-        }
-        return "icons/browser.svg";
+        return app.platformIcon(url);
     }
 
     function openCompleted(job) {

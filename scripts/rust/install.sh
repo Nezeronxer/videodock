@@ -106,10 +106,11 @@ EOF
     for tool in ffmpeg ffprobe; do
         install -m755 "$(command -v "$tool")" "$app/Contents/MacOS/$tool"
     done
+    cp "$project/assets/videodock.icns" "$app/Contents/Resources/VideoDock.icns"
     cat > "$app/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>CFBundleName</key><string>VideoDock</string><key>CFBundleIdentifier</key><string>com.nezeronxer.videodock</string><key>CFBundleExecutable</key><string>VideoDock</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>0.2.0</string><key>CFBundleVersion</key><string>0.2.0</string><key>NSHighResolutionCapable</key><true/></dict></plist>
+<plist version="1.0"><dict><key>CFBundleName</key><string>VideoDock</string><key>CFBundleIdentifier</key><string>com.nezeronxer.videodock</string><key>CFBundleExecutable</key><string>VideoDock</string><key>CFBundleIconFile</key><string>VideoDock.icns</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>0.2.0</string><key>CFBundleVersion</key><string>0.2.0</string><key>NSHighResolutionCapable</key><true/></dict></plist>
 EOF
     command -v macdeployqt >/dev/null
     identity='VideoDock Self-Signed'

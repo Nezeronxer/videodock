@@ -282,18 +282,13 @@ Rectangle {
                             readonly property string imageSource: root.app.asset((modelData.icon === "tiktok" ? "tik-tok" : modelData.icon) + "-icon.svg", "icons/service-" + modelData.icon + ".svg")
                             contentItem: Item {
                                 Image {
-                                    property int originalWidth: 0
-                                    property int originalHeight: 0
+                                    objectName: "browserServiceIcon-" + serviceItem.modelData.icon
                                     anchors.centerIn: parent
+                                    width: 64 * serviceGrid.scaleFactor
+                                    height: width
                                     source: serviceItem.imageSource
-                                    sourceSize.width: originalWidth > 0 ? Math.ceil(serviceGrid.scaleFactor * originalWidth) : -1
-                                    sourceSize.height: originalHeight > 0 ? Math.ceil(serviceGrid.scaleFactor * originalHeight) : -1
-                                    onStatusChanged: {
-                                        if (status === Image.Ready && originalWidth === 0) {
-                                            originalWidth = implicitWidth;
-                                            originalHeight = implicitHeight;
-                                        }
-                                    }
+                                    sourceSize.width: Math.ceil(width)
+                                    fillMode: Image.PreserveAspectFit
                                 }
                             }
                             Accessible.name: text

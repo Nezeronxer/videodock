@@ -4,6 +4,7 @@
 #include <QClipboard>
 #include <QDir>
 #include <QImage>
+#include <QImageReader>
 #include <QDialogButtonBox>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -206,6 +207,46 @@ int main(int argc, char **argv) {
             check(!image.isNull(), "Empty render");
             check(image.save(QDir(QString::fromLocal8Bit(argv[2])).filePath(name + ".png")), "Screenshot not saved");
         };
+        QTest::qWait(200);
+        QList<QQuickItem *> serviceIcons;
+        std::function<void(QQuickItem *)> collectIcons = [&](QQuickItem *parent) {
+            for (auto *item : parent->childItems()) {
+                if (item->objectName().startsWith("browserServiceIcon-")) serviceIcons.append(item);
+                collectIcons(item);
+            }
+        };
+        collectIcons(window->contentItem());
+        check(serviceIcons.size() == 10, "Service logos missing from the start screen");
+        for (auto *image : serviceIcons) {
+            const QUrl source = image->property("source").toUrl();
+            const QString path = source.isLocalFile() ? source.toLocalFile() : source.toString().mid(3);
+            const QSize natural = QImageReader(path).size();
+            const qreal width = image->property("paintedWidth").toReal();
+            const qreal height = image->property("paintedHeight").toReal();
+            check(natural.isValid() && width > 0 && height > 0, "Service logo did not render");
+            check(std::abs(width / height - qreal(natural.width()) / natural.height()) < 0.03,
+                  "Service logo is stretched: " + image->objectName());
+        }
+        capture("service-icons-proportions");
+        // Returning from a browser updates the button without parsing or retaining clipboard text.
+        for (const auto &sample : QList<QPair<QString, QString>>{
+                 {"https://www.youtube.com/watch?v=fixture", "service-youtube.svg"},
+                 {"https://youtu.be/fixture", "service-youtube.svg"},
+                 {"https://www.tiktok.com/@fixture/video/1", "service-tiktok.svg"},
+                 {"https://youtube.com.example.invalid/", "browser.svg"},
+                 {"private-fixture-marker", "plus.svg"}}) {
+            QApplication::clipboard()->setText(sample.first);
+            backend->lastAction = {};
+            invoke(window, "refreshClipboardIcon");
+            const auto icon = engine.newQObject(named(window, "pasteButton")).property("icon");
+            const QString source = icon.property("source").toString();
+            const QString reference = sample.second == "plus.svg" ? "paste-link.png"
+                : QString(sample.second).replace("service-", "").replace("tiktok", "tik-tok").replace(".svg", "-icon.svg");
+            check(source.endsWith(sample.second) || source.endsWith(reference), "Paste button does not show the clipboard platform");
+            check(!icon.property("color").toVariant().value<QColor>().alpha() || sample.second == "plus.svg", "Platform logo is recolored");
+            check(backend->lastAction.isEmpty(), "Clipboard preview dispatched private input");
+            check(named(window, "clipboardBuffer")->property("text").toString().isEmpty(), "Clipboard preview retained private input");
+        }
         auto paletteColor = [&](QObject *object, const char *role) {
             return engine.newQObject(object).property("palette").property(QString::fromLatin1(role)).toVariant().value<QColor>();
         };
