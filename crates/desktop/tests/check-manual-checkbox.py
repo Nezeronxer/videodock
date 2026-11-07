@@ -66,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix='videodock-checkbox-') as temporary:
     path = Path(temporary) / 'Checkbox.qml'
     path.write_text(qml)
     result = subprocess.run(['qml', str(path)], env={**os.environ, 'QT_QPA_PLATFORM': 'offscreen',
-                            'QT_QUICK_CONTROLS_STYLE': 'Basic'}, capture_output=True, text=True, timeout=15)
+                            'QT_QUICK_CONTROLS_STYLE': 'Basic', 'QT_QUICK_BACKEND': 'software'}, capture_output=True, text=True, timeout=15)
 output = result.stdout + result.stderr
 assert result.returncode == 0, output
 assert 'TypeError' not in output and 'Error:' not in output and 'FAIL:' not in output, output
