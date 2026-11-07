@@ -968,19 +968,42 @@ int main(int argc, char **argv) {
             const QPoint playPoint = playButton->mapToScene(QPointF(playButton->width()/2, playButton->height()/2)).toPoint();
             check(QRect(QPoint(), window->size()).contains(playPoint), "Play hover target is outside the window");
             check(list->contains(list->mapFromScene(playPoint)), "Play hover target is clipped by its list");
-            auto moveHover = [&](const QPoint &point) {
+            auto moveHover = [&](const QPoint &point, bool hovered, Qt::CursorShape cursor, const char *stage) {
+                const auto global = window->mapToGlobal(point);
+                // QWindow's QTest mouseMove injects an event without moving the native cursor.
+                QCursor::setPos(global);
                 QTest::mouseMove(window, point);
-                // Cursor changes need event delivery, not a new scene frame after grabWindow.
-                QTest::qWait(50);
+                auto settled = [&]() {
+                    return playButton->property("hovered").toBool() == hovered
+                        && window->cursor().shape() == cursor;
+                };
+                QElapsedTimer timer;
+                timer.start();
+                while (!settled() && timer.elapsed() < 2000) QTest::qWait(10);
+                const bool ready = settled();
+                if (!ready) {
+                    const auto bounds = playButton->mapRectToScene(QRectF(0, 0, playButton->width(), playButton->height()));
+                    auto *focus = window->activeFocusItem();
+                    qWarning("Hover state %s: point=%d,%d bounds=%g,%g,%g,%g nativeDistance=%d visible=%d enabled=%d active=%d hovered=%d cursor=%d dpr=%g focusClass=%s",
+                             stage, point.x(), point.y(), bounds.x(), bounds.y(), bounds.width(), bounds.height(),
+                             (QCursor::pos() - global).manhattanLength(), playButton->isVisible(), playButton->isEnabled(),
+                             window->isActive(), playButton->property("hovered").toBool(), int(window->cursor().shape()),
+                             window->devicePixelRatio(), focus ? focus->metaObject()->className() : "none");
+                    const auto filename = QStringLiteral("hover-%1-failure.png").arg(QString::fromLatin1(stage));
+                    const bool saved = window->grabWindow().save(QDir(QString::fromLocal8Bit(argv[2])).filePath(filename));
+                    qWarning("Hover failure frame saved: %d", saved);
+                }
+                check(ready, QStringLiteral("Native hover state did not settle: ") + QString::fromLatin1(stage));
+                qInfo("Hover settled %s: elapsed=%lld nativeDistance=%d", stage, timer.elapsed(), (QCursor::pos() - global).manhattanLength());
             };
             const QPoint besidePlay = playPoint + QPoint(playButton->width(), 0);
-            moveHover(besidePlay);
+            moveHover(besidePlay, false, Qt::ArrowCursor, "before-play");
             check(!playButton->property("hovered").toBool() && window->cursor().shape() == Qt::ArrowCursor, "Play cursor baseline is not an unhovered arrow");
-            moveHover(playPoint);
+            moveHover(playPoint, true, Qt::PointingHandCursor, "play");
             check(playButton->property("hovered").toBool(), "Play hover event did not reach its target");
             check(window->cursor().shape() == Qt::PointingHandCursor, "Play hover cursor did not become a pointing hand");
             capture("real-engine-complete");
-            moveHover(besidePlay);
+            moveHover(besidePlay, false, Qt::ArrowCursor, "after-play");
             check(!playButton->property("hovered").toBool() && window->cursor().shape() == Qt::ArrowCursor, "Play cursor did not reset after leaving the button");
             QApplication::clipboard()->setText(url + "?second=1");
             focusGlobalPaste(window);
