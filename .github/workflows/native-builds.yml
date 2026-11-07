@@ -7,7 +7,20 @@ on:
         description: Platform to verify
         type: choice
         default: all
-        options: [all, native, linux, flatpak, macos, windows, audit]
+        options: [all, native, linux, flatpak, macos, windows, audit, publish]
+      release_tag:
+        description: Stable release tag (publish only)
+        type: string
+        default: v0.2.0
+      windows_run:
+        description: Validated Windows artifact run (publish only)
+        type: string
+      linux_run:
+        description: Validated Linux and Flatpak artifact run (publish only)
+        type: string
+      macos_run:
+        description: Validated Mac Intel and ARM artifact run (publish only)
+        type: string
   push:
     branches: [release/first-stable]
 
@@ -23,6 +36,28 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: 2
 
 jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.platform == 'publish' && github.actor == github.repository_owner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_HOST: github.com
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      WINDOWS_RUN: ${{ inputs.windows_run }}
+      LINUX_RUN: ${{ inputs.linux_run }}
+      MACOS_RUN: ${{ inputs.macos_run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 scripts/rust/publish-release.py --self-test
+      - run: python3 scripts/rust/publish-release.py
+
   dependency-audit:
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'audit'
     runs-on: ubuntu-24.04
