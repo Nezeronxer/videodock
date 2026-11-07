@@ -17,13 +17,47 @@ stage_notices() {
         qmake -query QT_VERSION > "$licenses/qt-version.txt"
     fi
 }
+install_stage=
+install_published=0
+cleanup_install() {
+    install_result=$?
+    if [ -n "$install_stage" ]; then
+        if [ "$install_result" -ne 0 ]; then
+            if [ "$install_published" -eq 1 ] && { [ -e "$install_destination" ] || [ -L "$install_destination" ]; }; then
+                mv "$install_destination" "$install_stage/failed" || return 1
+            fi
+            if [ -e "$install_stage/previous" ] || [ -L "$install_stage/previous" ]; then
+                mv "$install_stage/previous" "$install_destination" || return 1
+            fi
+        fi
+        rm -rf -- "$install_stage"
+    fi
+    return "$install_result"
+}
+trap cleanup_install EXIT
+trap 'exit 1' HUP INT TERM
+stage_install() {
+    install_destination=$1
+    mkdir -p "$(dirname "$install_destination")"
+    install_stage=$(mktemp -d "$(dirname "$install_destination")/.videodock-install.XXXXXX")
+    install_candidate="$install_stage/$(basename "$install_destination")"
+}
+publish_install() {
+    if [ -e "$install_destination" ] || [ -L "$install_destination" ]; then
+        mv "$install_destination" "$install_stage/previous"
+    fi
+    install_published=1
+    mv "$install_candidate" "$install_destination"
+}
 case "$(uname -s)" in
   Linux)
     build="${CARGO_TARGET_DIR:-$HOME/.cache/videodock-rust-target}"
     binary="$build/release/videodock-desktop"
     "$project/scripts/rust/build.sh"
-    install -Dm755 "$binary" "$HOME/.local/lib/videodock/videodock"
-    stage_notices "$HOME/.local/lib/videodock/licenses"
+    stage_install "$HOME/.local/lib/videodock"
+    install -Dm755 "$binary" "$install_candidate/videodock"
+    stage_notices "$install_candidate/licenses"
+    publish_install
     install -Dm644 "$project/assets/videodock.svg" "$HOME/.local/share/icons/hicolor/scalable/apps/videodock.svg"
     mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
     ln -sfn "$HOME/.local/lib/videodock/videodock" "$HOME/.local/bin/videodock"
@@ -46,6 +80,8 @@ EOF
     app="${VIDEODOCK_MAC_APP:-$HOME/Applications/VideoDock.app}"
     case "$app" in /*.app) ;; *) echo 'Expected an absolute .app destination' >&2; exit 1 ;; esac
     "$project/scripts/rust/build.sh"
+    stage_install "$app"
+    app=$install_candidate
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
     cp "$binary" "$app/Contents/MacOS/VideoDock"
     stage_notices "$app/Contents/Resources/licenses"
@@ -110,6 +146,7 @@ EOF
     codesign --verify --deep --strict "$app"
     "$app/Contents/MacOS/ffmpeg" -version >/dev/null
     "$app/Contents/MacOS/ffprobe" -version >/dev/null
+    publish_install
     ;;
   *) echo 'Use build-windows.ps1 on Windows' >&2; exit 1 ;;
 esac
