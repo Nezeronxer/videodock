@@ -883,7 +883,7 @@ AppDialog {
                     Layout.preferredHeight: 40
                     text: root.manual.editing ? qsTranslate("SettingsDialog", "Save") : root.subscribe ? (root.existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : root.batch ? qsTr("Download %1").arg(root.selectedItems.length) : qsTr("Download")
                     highlighted: true
-                    enabled: root.manual.state === "ready" && !root.manual.error && (root.formats.length > 0 || (root.manual.editing && Object.keys(root.editedFormat).length === 0)) && (!root.batch || root.selectedItems.length > 0 || root.subscribe)
+                    enabled: root.manual.state === "ready" && !root.manual.error && (root.formats.length > 0 || (root.manual.editing === true && Object.keys(root.editedFormat).length === 0)) && (!root.batch || root.selectedItems.length > 0 || root.subscribe)
                     onClicked: root.submit()
                 }
             }
