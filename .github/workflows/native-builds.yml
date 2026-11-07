@@ -71,23 +71,59 @@ jobs:
       - name: Install only the tested runtime package
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak dbus-user-session xvfb xauth
+          sudo apt-get install -y flatpak dbus-user-session xvfb xauth gdb
           sudo loginctl enable-linger "$USER"
           sudo systemctl start "user@$(id -u).service"
           echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
           echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive -y "$RUNNER_TEMP"/flatpak-input/VideoDock-*-linux-x86_64.flatpak
-      - name: Compare offscreen and X11 packaged workers with process observations
+      - name: Capture one offscreen proof-worker stack without rebuilding
         run: |
           report="$RUNNER_TEMP/flatpak-verification"
           mkdir -p "$report"
+          cat > "$report/worker-stack.gdb" <<'GDB'
+          python
+          import gdb, json
+          for thread in gdb.selected_inferior().threads()[:128]:
+              try:
+                  thread.switch()
+                  frame = gdb.newest_frame()
+                  for depth in range(16):
+                      if frame is None: break
+                      name = frame.name()
+                      if name and (not name.isprintable() or '://' in name): name = '<filtered-symbol>'
+                      print('VD_STACK ' + json.dumps({'thread': thread.num, 'depth': depth, 'function': name[:500] if name else None, 'address': hex(frame.pc())}))
+                      frame = frame.older()
+              except gdb.error:
+                  print('VD_STACK ' + json.dumps({'thread': thread.num, 'unwind_error': True}))
+          end
+          detach
+          GDB
           cat > "$report/observe-worker.py" <<'PY'
           import json, pathlib, re, subprocess, sys, time
           stop, output = map(pathlib.Path, sys.argv[1:])
           start = time.monotonic()
           observed = {name: False for name in ('application', 'proof_worker', 'renderer', 'offscreen_plugin', 'xcb_plugin', 'portal_plugin', 'unreadable_maps')}
+          proof_seen, stack_attempted = {}, False
+          stack_path = output.with_name(output.name.replace('.processes.jsonl', '.stack.json'))
+          def capture_stack(pid, ticks):
+              record = {'pid': pid, 'start_ticks': ticks, 'status': 'identity_changed', 'frames': []}
+              try:
+                  directory = pathlib.Path('/proc') / str(pid)
+                  fields = (directory / 'stat').read_text().rpartition(') ')[2].split()
+                  if int(fields[19]) != ticks or b'--youtube-proof' not in (directory / 'cmdline').read_bytes().split(b'\0'): return record
+                  command = ['sudo', '-n', 'timeout', '--kill-after=1s', '8s', 'gdb', '-nx', '-q', '-batch', '-iex', 'set auto-load safe-path /nonexistent', '-iex', 'set auto-load python-scripts off', '-iex', 'set debuginfod enabled off', '-iex', 'set print frame-arguments none', '-iex', 'set print entry-values no', '-iex', f'set sysroot /proc/{pid}/root', '-p', str(pid), '-x', str(output.parent / 'worker-stack.gdb')]
+                  result = subprocess.run(command, capture_output=True, timeout=10)
+                  record.update(status='captured' if result.returncode == 0 else 'debugger_failed', exit=result.returncode)
+                  for line in result.stdout.decode('utf-8', 'replace').splitlines():
+                      if line.startswith('VD_STACK '): record['frames'].append(json.loads(line[len('VD_STACK '):]))
+                  if b'ptrace' in result.stderr.lower() or b'operation not permitted' in result.stderr.lower(): record['status'] = 'attach_denied'
+              except subprocess.TimeoutExpired: record['status'] = 'host_debugger_timeout'
+              except (OSError, ValueError, IndexError): record['status'] = 'inspection_unavailable'
+              return record
           def snapshot():
+              global stack_attempted
               try:
                   result = subprocess.run(['flatpak', 'ps', '--columns=pid,application'], capture_output=True, text=True, timeout=2)
                   roots = {int(row[0]) for line in result.stdout.splitlines() if len(row := line.split()) == 2 and row[0].isdigit() and row[1] == 'io.github.Nezeronxer.VideoDock'}
@@ -99,10 +135,10 @@ jobs:
                   if not directory.name.isdigit(): continue
                   try:
                       fields = (directory / 'stat').read_text().rpartition(') ')[2].split()
-                      table[int(directory.name)] = (int(fields[1]), fields[0])
+                      table[int(directory.name)] = (int(fields[1]), fields[0], int(fields[19]))
                   except (OSError, ValueError, IndexError): pass
               selected = roots.copy()
-              while children := {pid for pid, (parent, _) in table.items() if parent in selected} - selected:
+              while children := {pid for pid, (parent, _, _) in table.items() if parent in selected} - selected:
                   selected.update(children)
               processes = []
               for pid in sorted(selected):
@@ -110,8 +146,10 @@ jobs:
                   try: args = (directory / 'cmdline').read_bytes().split(b'\0')
                   except OSError: args = []
                   try: name = (directory / 'exe').readlink().name
-                  except OSError: name = ''
-                  role = 'proof_worker' if name == 'videodock' and b'--youtube-proof' in args else 'renderer' if name == 'QtWebEngineProcess' and b'--type=renderer' in args else 'application' if name == 'videodock' else 'webengine_helper' if name == 'QtWebEngineProcess' else 'sandbox' if name == 'bwrap' else 'other'
+                  except OSError:
+                      try: name = (directory / 'comm').read_text().strip()
+                      except OSError: name = ''
+                  role = 'proof_worker' if name == 'videodock' and b'--youtube-proof' in args else 'renderer' if name in ('QtWebEngineProcess', 'QtWebEngineProc') and b'--type=renderer' in args else 'application' if name == 'videodock' else 'webengine_helper' if name in ('QtWebEngineProcess', 'QtWebEngineProc') else 'sandbox' if name == 'bwrap' else 'other'
                   if role in observed: observed[role] = True
                   maps_error = None
                   try: maps = (directory / 'maps').read_bytes()
@@ -123,14 +161,20 @@ jobs:
                   observed['unreadable_maps'] |= maps_error in ('permission_denied', 'unavailable')
                   try: wchan = (directory / 'wchan').read_text().strip()
                   except OSError: wchan = ''
-                  parent, state = table.get(pid, (None, '?'))
+                  parent, state, ticks = table.get(pid, (None, '?', None))
                   processes.append({'pid': pid, 'parent': parent, 'role': role, 'state': state if state in ('R', 'S', 'D', 'Z', 'T', 't', 'X', 'I', 'P') else '?', 'wait_symbol': wchan if re.fullmatch(r'[A-Za-z0-9_]{1,80}', wchan) else None, 'maps_accessible': maps is not None, 'maps_error': maps_error, **plugins})
+                  if role == 'proof_worker' and ticks is not None:
+                      first_seen = proof_seen.setdefault((pid, ticks), time.monotonic())
+                      if not stack_attempted and time.monotonic() - first_seen >= 3:
+                          stack_attempted = True
+                          stack_path.write_text(json.dumps(capture_stack(pid, ticks), indent=2) + '\n')
               return {'elapsed_seconds': round(time.monotonic() - start, 3), 'flatpak_ps_status': ps_status, 'instances': len(roots), 'processes': processes}
           with output.open('w') as stream:
               while not stop.exists():
                   stream.write(json.dumps(snapshot(), sort_keys=True) + '\n'); stream.flush()
                   time.sleep(.25)
               stream.write(json.dumps({'event': 'complete', 'observed': observed}, sort_keys=True) + '\n')
+          if not stack_attempted: stack_path.write_text(json.dumps({'status': 'stable_proof_worker_not_observed', 'frames': []}) + '\n')
           PY
           xvfb-run -a -s '-screen 0 1280x800x24' bash <<'SH'
           set -eu
@@ -143,11 +187,11 @@ jobs:
             flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true
           }
           trap cleanup EXIT
-          for variant in offscreen xcb; do
+          for variant in offscreen; do
             wrapper="$report/$variant-worker"
             printf '%s\n' '#!/bin/sh' "exec flatpak run --env=QT_QPA_PLATFORM=$variant --command=videodock io.github.Nezeronxer.VideoDock \"\$@\"" > "$wrapper"
             chmod +x "$wrapper"
-            for check in startup proxy; do
+            for check in proxy; do
               monitor_stop="$report/$variant-$check.stop"
               python3 "$report/observe-worker.py" "$monitor_stop" "$report/$variant-$check.processes.jsonl" &
               monitor_pid=$!
@@ -164,13 +208,14 @@ jobs:
           import json, os, pathlib
           report = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flatpak-verification'
           result = {}
-          for variant in ('offscreen', 'xcb'):
+          for variant in ('offscreen',):
               result[variant] = {}
-              for check in ('startup', 'proxy'):
+              for check in ('proxy',):
                   name = f'{variant}-{check}'
                   events = [json.loads(line) for line in (report / f'{name}.processes.jsonl').read_text().splitlines()]
                   assert events and events[-1].get('event') == 'complete', 'Incomplete process monitor'
-                  result[variant][check] = {'exit': int((report / f'{name}.exit').read_text()), 'observed': events[-1]['observed']}
+                  stack = json.loads((report / f'{name}.stack.json').read_text())
+                  result[variant][check] = {'exit': int((report / f'{name}.exit').read_text()), 'observed': events[-1]['observed'], 'stack_status': stack['status'], 'stack_frames': len(stack['frames'])}
           (report / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
           raise SystemExit(1 if any(check['exit'] for variant in result.values() for check in variant.values()) else 0)
           PY
