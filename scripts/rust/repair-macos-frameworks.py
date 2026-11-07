@@ -47,7 +47,8 @@ def repair(app, identity):
         if arguments:
             subprocess.run(['install_name_tool', *arguments, str(binary)], check=True)
             changed.append(binary)
-    metadata = '--preserve-metadata=entitlements,requirements,flags,runtime'
+    # A preserved designated requirement can bind the original code identifier.
+    metadata = '--preserve-metadata=identifier,entitlements,requirements,flags,runtime'
     for binary in changed:
         subprocess.run(['codesign', '--force', '--sign', identity, metadata, str(binary)], check=True)
     # Rebuild enclosing resource seals after changing a nested library/helper.
@@ -55,7 +56,11 @@ def repair(app, identity):
                and p.suffix in ('.framework', '.app')]
     for bundle in sorted(bundles, key=lambda p: len(p.parts), reverse=True) + [app]:
         subprocess.run(['codesign', '--force', '--sign', identity, metadata, str(bundle)], check=True)
-    subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
+    try:
+        subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
+    except subprocess.CalledProcessError:
+        subprocess.run(['codesign', '--verify', '--deep', '--strict', '--verbose=4', str(app)], check=False)
+        raise
 
 
 if __name__ == '__main__':
