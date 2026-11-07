@@ -200,7 +200,7 @@ jobs:
           timeout 20s systemctl --user restart xdg-desktop-portal-gtk.service
           timeout 20s systemctl --user restart xdg-desktop-portal.service
           python3 - <<'PY'
-          import subprocess, time
+          import os, pathlib, subprocess, time
           command = ['gdbus', 'call', '--session', '--dest', 'org.freedesktop.portal.Desktop', '--object-path', '/org/freedesktop/portal/desktop', '--method', 'org.freedesktop.portal.Settings.ReadAll', "['org.freedesktop.appearance']"]
           deadline = time.monotonic() + 10
           while time.monotonic() < deadline:
@@ -209,7 +209,12 @@ jobs:
                       print('Portal Settings preflight PASS'); break
               except subprocess.TimeoutExpired: pass
               time.sleep(.2)
-          else: raise SystemExit('Portal Settings preflight failed')
+          else:
+              report = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flatpak-verification'
+              for unit in ('xdg-desktop-portal', 'xdg-desktop-portal-gtk'):
+                  log = subprocess.run(['journalctl', '--user', '-u', unit + '.service', '--no-pager', '-o', 'cat', '-n', '50'], capture_output=True, timeout=3)
+                  (report / (unit + '.log')).write_bytes(log.stdout[:65536])
+              raise SystemExit('Portal Settings preflight failed')
           PY
           monitor_pid=''
           monitor_stop=''
