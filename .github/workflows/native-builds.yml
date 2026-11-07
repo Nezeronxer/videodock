@@ -191,10 +191,26 @@ jobs:
           set -eu
           report="$RUNNER_TEMP/flatpak-verification"
           export XDG_CURRENT_DESKTOP=GNOME
+          test -n "$DISPLAY"
+          test -r "$XAUTHORITY"
           dbus-update-activation-environment --systemd DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP
-          systemctl --user restart xdg-desktop-portal-gtk.service xdg-desktop-portal.service
-          timeout 10s gdbus call --session --dest org.freedesktop.portal.Desktop --object-path /org/freedesktop/portal/desktop --method org.freedesktop.portal.Settings.ReadAll "['org.freedesktop.appearance']" >/dev/null
-          printf '%s\n' 'Portal Settings preflight PASS'
+          mkdir -p "$HOME/.config/xdg-desktop-portal"
+          printf '%s\n' '[preferred]' 'default=gtk' 'org.freedesktop.impl.portal.Settings=gtk' > "$HOME/.config/xdg-desktop-portal/gnome-portals.conf"
+          systemctl --user daemon-reload
+          timeout 20s systemctl --user restart xdg-desktop-portal-gtk.service
+          timeout 20s systemctl --user restart xdg-desktop-portal.service
+          python3 - <<'PY'
+          import subprocess, time
+          command = ['gdbus', 'call', '--session', '--dest', 'org.freedesktop.portal.Desktop', '--object-path', '/org/freedesktop/portal/desktop', '--method', 'org.freedesktop.portal.Settings.ReadAll', "['org.freedesktop.appearance']"]
+          deadline = time.monotonic() + 10
+          while time.monotonic() < deadline:
+              try:
+                  if subprocess.run(command, capture_output=True, timeout=2).returncode == 0:
+                      print('Portal Settings preflight PASS'); break
+              except subprocess.TimeoutExpired: pass
+              time.sleep(.2)
+          else: raise SystemExit('Portal Settings preflight failed')
+          PY
           monitor_pid=''
           monitor_stop=''
           cleanup() {
