@@ -71,33 +71,110 @@ jobs:
       - name: Install only the tested runtime package
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak dbus-user-session
+          sudo apt-get install -y flatpak dbus-user-session xvfb xauth
           sudo loginctl enable-linger "$USER"
           sudo systemctl start "user@$(id -u).service"
           echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
           echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive -y "$RUNNER_TEMP"/flatpak-input/VideoDock-*-linux-x86_64.flatpak
-      - name: Compare packaged worker startup with and without a portal theme
+      - name: Compare offscreen and X11 packaged workers with process observations
         run: |
           report="$RUNNER_TEMP/flatpak-verification"
           mkdir -p "$report"
-          trap 'flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true' EXIT
-          for variant in baseline no-theme; do
+          cat > "$report/observe-worker.py" <<'PY'
+          import json, pathlib, re, subprocess, sys, time
+          stop, output = map(pathlib.Path, sys.argv[1:])
+          start = time.monotonic()
+          observed = {name: False for name in ('application', 'proof_worker', 'renderer', 'offscreen_plugin', 'xcb_plugin', 'portal_plugin', 'unreadable_maps')}
+          def snapshot():
+              try:
+                  result = subprocess.run(['flatpak', 'ps', '--columns=pid,application'], capture_output=True, text=True, timeout=2)
+                  roots = {int(row[0]) for line in result.stdout.splitlines() if len(row := line.split()) == 2 and row[0].isdigit() and row[1] == 'io.github.Nezeronxer.VideoDock'}
+                  ps_status = result.returncode
+              except subprocess.TimeoutExpired:
+                  roots, ps_status = set(), 'timeout'
+              table = {}
+              for directory in pathlib.Path('/proc').iterdir():
+                  if not directory.name.isdigit(): continue
+                  try:
+                      fields = (directory / 'stat').read_text().rpartition(') ')[2].split()
+                      table[int(directory.name)] = (int(fields[1]), fields[0])
+                  except (OSError, ValueError, IndexError): pass
+              selected = roots.copy()
+              while children := {pid for pid, (parent, _) in table.items() if parent in selected} - selected:
+                  selected.update(children)
+              processes = []
+              for pid in sorted(selected):
+                  directory = pathlib.Path('/proc') / str(pid)
+                  try: args = (directory / 'cmdline').read_bytes().split(b'\0')
+                  except OSError: args = []
+                  try: name = (directory / 'exe').readlink().name
+                  except OSError: name = ''
+                  role = 'proof_worker' if name == 'videodock' and b'--youtube-proof' in args else 'renderer' if name == 'QtWebEngineProcess' and b'--type=renderer' in args else 'application' if name == 'videodock' else 'webengine_helper' if name == 'QtWebEngineProcess' else 'sandbox' if name == 'bwrap' else 'other'
+                  if role in observed: observed[role] = True
+                  maps_error = None
+                  try: maps = (directory / 'maps').read_bytes()
+                  except FileNotFoundError: maps, maps_error = None, 'process_gone'
+                  except PermissionError: maps, maps_error = None, 'permission_denied'
+                  except OSError: maps, maps_error = None, 'unavailable'
+                  plugins = {key: None if maps is None else library in maps for key, library in [('offscreen_plugin', b'libqoffscreen.so'), ('xcb_plugin', b'libqxcb.so'), ('portal_plugin', b'libqxdgdesktopportal.so')]}
+                  for key, value in plugins.items(): observed[key] |= value is True
+                  observed['unreadable_maps'] |= maps_error in ('permission_denied', 'unavailable')
+                  try: wchan = (directory / 'wchan').read_text().strip()
+                  except OSError: wchan = ''
+                  parent, state = table.get(pid, (None, '?'))
+                  processes.append({'pid': pid, 'parent': parent, 'role': role, 'state': state if state in ('R', 'S', 'D', 'Z', 'T', 't', 'X', 'I', 'P') else '?', 'wait_symbol': wchan if re.fullmatch(r'[A-Za-z0-9_]{1,80}', wchan) else None, 'maps_accessible': maps is not None, 'maps_error': maps_error, **plugins})
+              return {'elapsed_seconds': round(time.monotonic() - start, 3), 'flatpak_ps_status': ps_status, 'instances': len(roots), 'processes': processes}
+          with output.open('w') as stream:
+              while not stop.exists():
+                  stream.write(json.dumps(snapshot(), sort_keys=True) + '\n'); stream.flush()
+                  time.sleep(.25)
+              stream.write(json.dumps({'event': 'complete', 'observed': observed}, sort_keys=True) + '\n')
+          PY
+          xvfb-run -a -s '-screen 0 1280x800x24' bash <<'SH'
+          set -eu
+          report="$RUNNER_TEMP/flatpak-verification"
+          monitor_pid=''
+          monitor_stop=''
+          cleanup() {
+            if [ -n "$monitor_stop" ]; then touch "$monitor_stop"; fi
+            if [ -n "$monitor_pid" ]; then wait "$monitor_pid" || true; fi
+            flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for variant in offscreen xcb; do
             wrapper="$report/$variant-worker"
-            if [ "$variant" = baseline ]; then
-              printf '%s\n' '#!/bin/sh' 'exec flatpak run --command=videodock io.github.Nezeronxer.VideoDock "$@"' > "$wrapper"
-            else
-              printf '%s\n' '#!/bin/sh' 'exec flatpak run --env=QT_QPA_PLATFORMTHEME= --command=videodock io.github.Nezeronxer.VideoDock "$@"' > "$wrapper"
-            fi
+            printf '%s\n' '#!/bin/sh' "exec flatpak run --env=QT_QPA_PLATFORM=$variant --command=videodock io.github.Nezeronxer.VideoDock \"\$@\"" > "$wrapper"
             chmod +x "$wrapper"
             for check in startup proxy; do
+              monitor_stop="$report/$variant-$check.stop"
+              python3 "$report/observe-worker.py" "$monitor_stop" "$report/$variant-$check.processes.jsonl" &
+              monitor_pid=$!
               status=0
               python3 crates/desktop/tests/proof_worker.py "$wrapper" "--$check" > "$report/$variant-$check.log" 2>&1 || status=$?
               printf '%s\n' "$status" > "$report/$variant-$check.exit"
               flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true
+              touch "$monitor_stop"
+              wait "$monitor_pid"
+              monitor_pid=''
             done
           done
+          python3 - <<'PY'
+          import json, os, pathlib
+          report = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flatpak-verification'
+          result = {}
+          for variant in ('offscreen', 'xcb'):
+              result[variant] = {}
+              for check in ('startup', 'proxy'):
+                  name = f'{variant}-{check}'
+                  events = [json.loads(line) for line in (report / f'{name}.processes.jsonl').read_text().splitlines()]
+                  assert events and events[-1].get('event') == 'complete', 'Incomplete process monitor'
+                  result[variant][check] = {'exit': int((report / f'{name}.exit').read_text()), 'observed': events[-1]['observed']}
+          (report / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+          raise SystemExit(1 if any(check['exit'] for variant in result.values() for check in variant.values()) else 0)
+          PY
+          SH
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
