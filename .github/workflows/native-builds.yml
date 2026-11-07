@@ -103,7 +103,14 @@ jobs:
           xvfb-run -a -s '-screen 0 1280x800x24' bash <<'SH'
           set -eu
           report="$RUNNER_TEMP/flatpak-verification"
-          trap 'flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true' EXIT
+          cleanup_flatpak() {
+            flatpak ps --columns=instance,application | while read -r instance application; do
+              [ "$application" = io.github.Nezeronxer.VideoDock ] || continue
+              case "$instance" in ''|*[!0-9]*) continue;; esac
+              flatpak kill "$instance" 2>/dev/null || true
+            done
+          }
+          trap cleanup_flatpak EXIT
           export XDG_CURRENT_DESKTOP=GNOME
           test -n "$DISPLAY"
           test -r "$XAUTHORITY"
@@ -130,7 +137,7 @@ jobs:
           printf '%s\n' '#!/bin/sh' 'exec flatpak run --env=QT_QPA_PLATFORM=offscreen --command=videodock io.github.Nezeronxer.VideoDock "$@"' > "$report/flatpak-worker"
           chmod +x "$report/flatpak-worker"
           python3 crates/desktop/tests/proof_worker.py "$report/flatpak-worker" --proxy --startup > "$report/worker.log" 2>&1
-          flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true
+          cleanup_flatpak
           python3 - <<'PY'
           import json, os, pathlib, re, subprocess, time, uuid
           report = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flatpak-verification'
@@ -139,7 +146,7 @@ jobs:
               result = subprocess.run(['flatpak', 'ps', '--columns=pid,application'], capture_output=True, text=True, timeout=1)
               roots = {int(row[0]) for line in result.stdout.splitlines() if len(row := line.split()) == 2 and row[0].isdigit() and row[1] == 'io.github.Nezeronxer.VideoDock'}
               diagnostic['instances'] = len(roots)
-              if result.returncode or len(roots) != 1: return set()
+              if result.returncode: return set()
               parents, starts = {}, {}
               for path in pathlib.Path('/proc').iterdir():
                   if not path.name.isdigit(): continue
@@ -147,6 +154,11 @@ jobs:
                       fields = (path / 'stat').read_text().rpartition(') ')[2].split()
                       parents[int(path.name)], starts[int(path.name)] = int(fields[1]), int(fields[19])
                   except (OSError, ValueError, IndexError): pass
+              launched = {process.pid}
+              while children := {pid for pid, parent in parents.items() if parent in launched} - launched: launched.update(children)
+              roots &= launched
+              diagnostic['launched_instances'] = len(roots)
+              if len(roots) != 1: return set()
               selected = roots.copy()
               while children := {pid for pid, parent in parents.items() if parent in selected} - selected: selected.update(children)
               output = set()
