@@ -7,7 +7,7 @@ on:
         description: Platform to verify
         type: choice
         default: all
-        options: [all, native, linux, flatpak, macos, windows, audit, publish]
+        options: [all, native, linux, flatpak, flatpak-verify, macos, windows, audit, publish]
       release_tag:
         description: Stable release tag (publish only)
         type: string
@@ -16,7 +16,7 @@ on:
         description: Validated Windows artifact run (publish only)
         type: string
       linux_run:
-        description: Validated Linux and Flatpak artifact run (publish only)
+        description: Existing Linux artifact run (publish or Flatpak verify)
         type: string
       macos_run:
         description: Validated Mac Intel and ARM artifact run (publish only)
@@ -36,6 +36,75 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: 2
 
 jobs:
+  flatpak-verify:
+    if: github.event_name == 'workflow_dispatch' && inputs.platform == 'flatpak-verify' && github.actor == github.repository_owner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download the source-compatible Flatpak package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.linux_run }}
+        run: |
+          python3 - <<'PY'
+          import importlib.util, os, pathlib, re, subprocess
+          spec = importlib.util.spec_from_file_location('publisher', 'scripts/rust/publish-release.py')
+          p = importlib.util.module_from_spec(spec); spec.loader.exec_module(p)
+          number, repo = os.environ['SOURCE_RUN'], os.environ['GITHUB_REPOSITORY']
+          p.require(re.fullmatch(r'[1-9][0-9]*', number), 'Invalid artifact run')
+          run = p.api(f'repos/{repo}/actions/runs/{number}')
+          p.require(run['status'] == 'completed' and run['repository']['full_name'] == repo, 'Invalid producer')
+          diff = subprocess.run(['git', 'diff', '--name-only', run['head_sha'], os.environ['GITHUB_SHA']], capture_output=True, text=True)
+          p.require(diff.returncode == 0 and p.producer_sources_match(diff.stdout.splitlines(), 'linux'), 'Different runtime source')
+          jobs = p.api(f'repos/{repo}/actions/runs/{number}/jobs?per_page=100')['jobs']
+          p.require(any(j['name'] == 'linux-flatpak' and p.succeeded(j, ['Build and package against the Flatpak SDK']) for j in jobs), 'Package build did not pass')
+          output = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flatpak-input'
+          p.gh('run', 'download', number, '--repo', repo, '--name', 'VideoDock-linux-flatpak-x86_64', '--dir', str(output))
+          PY
+      - name: Install only the tested runtime package
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak dbus-user-session
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive -y "$RUNNER_TEMP"/flatpak-input/VideoDock-*-linux-x86_64.flatpak
+      - name: Compare packaged worker startup with and without a portal theme
+        run: |
+          report="$RUNNER_TEMP/flatpak-verification"
+          mkdir -p "$report"
+          trap 'flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true' EXIT
+          for variant in baseline no-theme; do
+            wrapper="$report/$variant-worker"
+            if [ "$variant" = baseline ]; then
+              printf '%s\n' '#!/bin/sh' 'exec flatpak run --command=videodock io.github.Nezeronxer.VideoDock "$@"' > "$wrapper"
+            else
+              printf '%s\n' '#!/bin/sh' 'exec flatpak run --env=QT_QPA_PLATFORMTHEME= --command=videodock io.github.Nezeronxer.VideoDock "$@"' > "$wrapper"
+            fi
+            chmod +x "$wrapper"
+            for check in startup proxy; do
+              status=0
+              python3 crates/desktop/tests/proof_worker.py "$wrapper" "--$check" > "$report/$variant-$check.log" 2>&1 || status=$?
+              printf '%s\n' "$status" > "$report/$variant-$check.exit"
+              flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true
+            done
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: flatpak-verification
+          path: ${{ runner.temp }}/flatpak-verification
+          if-no-files-found: warn
+
   publish:
     if: github.event_name == 'workflow_dispatch' && inputs.platform == 'publish' && github.actor == github.repository_owner
     runs-on: ubuntu-24.04
