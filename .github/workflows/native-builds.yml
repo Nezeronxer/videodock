@@ -36,20 +36,116 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - run: python3 -m unittest discover -s scripts/rust/tests -p test_install_staging.py -v
       - run: cargo test --workspace --locked
       - run: sh scripts/rust/build.sh
-      - run: sh crates/desktop/tests/check-appearance.sh
+      - name: Verify Linux interface in English and Russian
+        run: |
+          mkdir -p "$RUNNER_TEMP/linux-interface"
+          failed=0
+          for language in en ru; do
+            sh crates/desktop/tests/check-appearance.sh "$RUNNER_TEMP/linux-interface/$language" "$language" > "$RUNNER_TEMP/linux-interface/$language.log" 2>&1 || failed=1
+          done
+          exit "$failed"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: linux-interface
+          path: ${{ runner.temp }}/linux-interface
+          if-no-files-found: warn
       - run: sh crates/desktop/tests/check-browser-proxy.sh
       - run: sh crates/desktop/tests/check-cookie-bridge.sh
       - run: sh crates/desktop/tests/check-proof-boundaries.sh
       # Valid proofs require Chromium sandboxing; this root container checks IPC only.
       # Native Windows/macOS jobs also exercise the packaged WebEngine worker.
       - run: python3 crates/desktop/tests/proof_worker.py "$HOME/.cache/videodock-rust-target/release/videodock-desktop"
+      - name: Package native Arch Linux build
+        run: |
+          cargo fetch --locked
+          python3 LICENSES/generate-rust-licenses.py --check
+          package="$RUNNER_TEMP/VideoDock-linux-arch-x86_64"
+          mkdir -p "$package/bin" "$package/licenses"
+          install -m755 "$HOME/.cache/videodock-rust-target/release/videodock-desktop" "$package/bin/videodock"
+          cp -R LICENSES/. "$package/licenses/"
+          cp THIRD-PARTY-NOTICES.md "$package/"
+          cp crates/desktop/attestation/bgutils/LICENSE "$package/licenses/BgUtils-MIT.txt"
+          cp crates/core/src/sabr/LICENSE.googlevideo "$package/licenses/googlevideo-MIT.txt"
+          cp crates/core/src/sabr/LICENSE.sabr-rs "$package/licenses/sabr-rs-MIT.txt"
+          ffmpeg -L > "$package/licenses/ffmpeg-license.txt" 2>&1
+          ffmpeg -buildconf > "$package/licenses/ffmpeg-buildconf.txt" 2>&1
+          printf '%s\n' 'Arch Linux x86_64 build. Install matching runtime packages: qt6-base qt6-declarative qt6-webengine qt6-5compat qt6-svg ffmpeg. Run bin/videodock. Other distributions require a matching build or Flatpak; this is not a portable glibc bundle.' > "$package/README.txt"
+          tar -czf "$RUNNER_TEMP/VideoDock-linux-arch-x86_64.tar.gz" -C "$RUNNER_TEMP" VideoDock-linux-arch-x86_64
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: VideoDock-linux-arch-x86_64
+          path: ${{ runner.temp }}/VideoDock-linux-arch-x86_64.tar.gz
+          if-no-files-found: error
+
+  linux-flatpak:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'linux'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install Flatpak SDK and matching WebEngine
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak appstream dbus-user-session
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          for ref in runtime/org.kde.Platform/x86_64/6.11 runtime/org.kde.Sdk/x86_64/6.11 app/io.qt.qtwebengine.BaseApp/x86_64/6.11 runtime/org.freedesktop.Sdk.Extension.llvm22/x86_64/25.08; do
+            flatpak remote-info --user flathub "$ref"
+            flatpak install --user --noninteractive -y flathub "$ref"
+          done
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup override set 1.99.1
+      - name: Prepare offline sources and writable SDK
+        run: |
+          test -S "$XDG_RUNTIME_DIR/bus"
+          systemctl --user show-environment >/dev/null
+          cargo vendor --locked "$RUNNER_TEMP/videodock-vendor"
+          python3 LICENSES/generate-rust-licenses.py --check
+          flatpak build-init --arch=x86_64 --writable-sdk --sdk-extension=org.freedesktop.Sdk.Extension.llvm22 --base=io.qt.qtwebengine.BaseApp --base-version=6.11 "$RUNNER_TEMP/videodock-base" io.github.Nezeronxer.VideoDock org.kde.Sdk org.kde.Platform 6.11
+          flatpak build "$RUNNER_TEMP/videodock-base" sh -ec 'test -f /usr/lib/sdk/llvm22/lib/libclang.so; /usr/bin/qmake -query QT_VERSION; test -f /app/lib/libexec/QtWebEngineProcess'
+      - name: Build and package against the Flatpak SDK
+        run: |
+          rust_prefix=$(dirname "$(dirname "$(rustup which --toolchain 1.99.1 rustc)")")
+          python3 scripts/rust/build-flatpak.py "$RUNNER_TEMP/videodock-base" "$RUNNER_TEMP/videodock-vendor" "$rust_prefix"
+          sh scripts/rust/package-flatpak.sh "$RUNNER_TEMP/videodock-base" "$HOME/.cache/videodock-flatpak/sdk-target/release/videodock-desktop" "$RUNNER_TEMP/linux-artifact"
+      - name: Verify installed Flatpak runtime and worker
+        run: |
+          flatpak install --user --noninteractive -y "$RUNNER_TEMP"/linux-artifact/VideoDock-*-linux-x86_64.flatpak
+          flatpak run --command=ffmpeg io.github.Nezeronxer.VideoDock -version
+          flatpak run --command=ffprobe io.github.Nezeronxer.VideoDock -version
+          printf '%s\n' '#!/bin/sh' 'exec flatpak run --command=videodock io.github.Nezeronxer.VideoDock "$@"' > "$RUNNER_TEMP/flatpak-worker"
+          chmod +x "$RUNNER_TEMP/flatpak-worker"
+          python3 crates/desktop/tests/proof_worker.py "$RUNNER_TEMP/flatpak-worker"
+          sha256sum "$RUNNER_TEMP"/linux-artifact/*.flatpak > "$RUNNER_TEMP/linux-artifact/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: VideoDock-linux-flatpak-x86_64
+          path: |
+            ${{ runner.temp }}/linux-artifact/*.flatpak
+            ${{ runner.temp }}/linux-artifact/SHA256SUMS
+          if-no-files-found: warn
 
   macos:
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'macos'
-    # Use the standard Intel pool while the arm64 pool has capacity failures.
-    runs-on: macos-15-intel
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: macos-15-intel
+          - arch: arm64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
@@ -73,15 +169,27 @@ jobs:
             ${{ github.workspace }}/target
             ~/.cargo/registry
           key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}
+      - run: python3 -m unittest discover -s scripts/rust/tests -p test_install_staging.py -v
+      - run: python3 scripts/rust/check-macos-package.py
       - run: cargo test --workspace --locked
       - name: Build native release before importing signing identity
         run: sh scripts/rust/build.sh
+      - name: Verify native macOS interface and real Engine in English and Russian
+        timeout-minutes: 15
+        run: sh crates/desktop/tests/check-appearance-macos.sh "$RUNNER_TEMP/macos-interface"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: macos-interface-${{ matrix.arch }}
+          path: ${{ runner.temp }}/macos-interface
+          if-no-files-found: warn
       - name: Import VideoDock signing identity
         env:
           VIDEODOCK_MACOS_CERTIFICATE: ${{ secrets.VIDEODOCK_MACOS_CERTIFICATE }}
           VIDEODOCK_MACOS_CERT_PASSWORD: ${{ secrets.VIDEODOCK_MACOS_CERT_PASSWORD }}
         run: python3 scripts/rust/import-macos-signing.py
       - name: Build and verify application bundle
+        id: macos-package
         env:
           VIDEODOCK_MAC_APP: ${{ runner.temp }}/VideoDock.app
         run: |
@@ -89,7 +197,7 @@ jobs:
           "$VIDEODOCK_MAC_APP/Contents/MacOS/ffmpeg" -version
           "$VIDEODOCK_MAC_APP/Contents/MacOS/ffprobe" -version
           PATH=/usr/bin:/bin:/usr/sbin:/sbin /usr/bin/python3 crates/desktop/tests/proof_worker.py "$VIDEODOCK_MAC_APP/Contents/MacOS/VideoDock" --proxy --startup
-          ditto -c -k --sequesterRsrc --keepParent "$VIDEODOCK_MAC_APP" "$RUNNER_TEMP/VideoDock-macos-x64.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$VIDEODOCK_MAC_APP" "$RUNNER_TEMP/VideoDock-macos-${{ matrix.arch }}.zip"
       - name: Preserve macOS crash diagnostics
         if: failure()
         run: |
@@ -102,13 +210,13 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: failure()
         with:
-          name: macos-crash-diagnostics
+          name: macos-crash-diagnostics-${{ matrix.arch }}
           path: ${{ runner.temp }}/macos-diagnostics
           if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: VideoDock-macos-x64
-          path: ${{ runner.temp }}/VideoDock-macos-x64.zip
+          name: VideoDock-macos-${{ matrix.arch }}
+          path: ${{ runner.temp }}/VideoDock-macos-${{ matrix.arch }}.zip
           if-no-files-found: error
       - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         if: always() && steps.macos-cache.outcome == 'success' && steps.macos-cache.outputs.cache-hit != 'true'
@@ -118,60 +226,39 @@ jobs:
             ~/.cargo/registry
           key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}
 
-      - name: Remove ephemeral signing keychain
-        if: always()
-        run: security delete-keychain "$RUNNER_TEMP/videodock-signing.keychain-db" || true
-
-  macos-downloads:
-    needs: macos
-    if: needs.macos.result == 'success'
-    runs-on: macos-15-intel
-    timeout-minutes: 20
-    env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/target
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
-        with:
-          name: VideoDock-macos-x64
-          path: ${{ runner.temp }}/macos-artifact
-      - name: Prepare standalone bundle and Rust tests
-        run: |
-          ditto -x -k "$RUNNER_TEMP/macos-artifact/VideoDock-macos-x64.zip" "$RUNNER_TEMP/native-app"
-          rustup toolchain install 1.99.1 --profile minimal
-          rustup override set 1.99.1
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            ${{ github.workspace }}/target
-            ~/.cargo/registry
-          key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}
-      - name: Complete public downloads with the packaged worker
+      - name: Complete public macOS downloads with the packaged worker
+        if: always() && steps.macos-package.outcome == 'success'
+        timeout-minutes: 10
         env:
           QT_QPA_PLATFORM: cocoa
         run: |
-          export PATH="$RUNNER_TEMP/native-app/VideoDock.app/Contents/MacOS:$PATH"
-          export VIDEODOCK_TEST_PROOF_WORKER="$RUNNER_TEMP/native-app/VideoDock.app/Contents/MacOS/VideoDock"
+          export PATH="$RUNNER_TEMP/VideoDock.app/Contents/MacOS:$PATH"
+          export VIDEODOCK_TEST_PROOF_WORKER="$RUNNER_TEMP/VideoDock.app/Contents/MacOS/VideoDock"
           export VIDEODOCK_TEST_OUTPUT_DIR="$RUNNER_TEMP/native-downloads/files"
+          export VIDEODOCK_DATA_DIR="$RUNNER_TEMP/native-downloads/profile"
           mkdir -p "$RUNNER_TEMP/native-downloads"
           set +e
           cargo test -p videodock-core --test catalog_downloads tiktok_adaptive_audio --locked -- --ignored --exact --nocapture > "$RUNNER_TEMP/native-downloads/tiktok.log" 2>&1
           tiktok_status=$?
           cargo test -p videodock-core --test youtube_downloads zoo_complete_240p --locked -- --ignored --exact --nocapture > "$RUNNER_TEMP/native-downloads/youtube.log" 2>&1
           youtube_status=$?
-          python3 - "$tiktok_status" "$youtube_status" "$RUNNER_TEMP/native-downloads/result.json" <<'PY'
+          cargo test -p videodock-core --test youtube_downloads reported_shorts_complete_1080p --locked -- --ignored --exact --nocapture > "$RUNNER_TEMP/native-downloads/shorts.log" 2>&1
+          shorts_status=$?
+          python3 - "$tiktok_status" "$youtube_status" "$shorts_status" "$RUNNER_TEMP/native-downloads/result.json" <<'PYTHON'
           import json, pathlib, sys
-          pathlib.Path(sys.argv[3]).write_text(json.dumps({"tiktok_exit":int(sys.argv[1]),"youtube_exit":int(sys.argv[2])}) + "\n")
-          PY
-          test "$tiktok_status" -eq 0 && test "$youtube_status" -eq 0
+          pathlib.Path(sys.argv[4]).write_text(json.dumps(dict(zip(['tiktok','youtube','shorts'], map(int, sys.argv[1:4])))) + "\n")
+          PYTHON
+          test "$tiktok_status" -eq 0 && test "$youtube_status" -eq 0 && test "$shorts_status" -eq 0
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: macos-public-downloads
+          name: macos-public-downloads-${{ matrix.arch }}
           path: ${{ runner.temp }}/native-downloads
           if-no-files-found: warn
+
+      - name: Remove ephemeral signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/videodock-signing.keychain-db" || true
 
   windows:
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'windows'
@@ -216,6 +303,8 @@ jobs:
             ${{ github.workspace }}/target
             ~/.cargo/registry
           key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}
+      - name: Verify Windows package staging rollback
+        run: powershell -NoProfile -File scripts/rust/tests/check-windows-staging.ps1
       - name: Test and build Windows package
         id: windows-tests
         shell: cmd
