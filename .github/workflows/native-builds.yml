@@ -7,7 +7,7 @@ on:
         description: Platform to verify
         type: choice
         default: all
-        options: [all, linux, macos, windows]
+        options: [all, linux, macos, windows, audit]
   push:
     branches: [release/first-stable]
 
@@ -23,6 +23,25 @@ env:
   CMAKE_BUILD_PARALLEL_LEVEL: 2
 
 jobs:
+  dependency-audit:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'audit'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install pinned RustSec audit tool
+        run: cargo install cargo-audit --locked --version 0.22.2
+      - name: Audit locked dependencies
+        run: cargo audit --file Cargo.lock --json > "$RUNNER_TEMP/dependency-audit.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: dependency-audit
+          path: ${{ runner.temp }}/dependency-audit.json
+          if-no-files-found: warn
+
   linux:
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'linux'
     runs-on: ubuntu-latest
