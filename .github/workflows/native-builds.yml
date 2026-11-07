@@ -134,9 +134,11 @@ jobs:
           python3 - <<'PY'
           import json, os, pathlib, re, subprocess, time, uuid
           report = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flatpak-verification'
+          diagnostic = {'instances': 0, 'matching_windows': 0, 'viewable_windows': 0, 'window_pids': [], 'own_pids': [], 'proc_errors': 0, 'stale_processes': 0}
           def own_pids():
               result = subprocess.run(['flatpak', 'ps', '--columns=pid,application'], capture_output=True, text=True, timeout=1)
               roots = {int(row[0]) for line in result.stdout.splitlines() if len(row := line.split()) == 2 and row[0].isdigit() and row[1] == 'io.github.Nezeronxer.VideoDock'}
+              diagnostic['instances'] = len(roots)
               if result.returncode or len(roots) != 1: return set()
               parents, starts = {}, {}
               for path in pathlib.Path('/proc').iterdir():
@@ -151,16 +153,20 @@ jobs:
               for pid in selected:
                   path = pathlib.Path('/proc') / str(pid)
                   try:
-                      if starts.get(pid, 0) < launch_tick or (path / 'exe').readlink().name != 'videodock' or b'--youtube-proof' in (path / 'cmdline').read_bytes().split(b'\0'): continue
+                      if starts.get(pid, 0) < launch_tick:
+                          diagnostic['stale_processes'] += 1; continue
+                      if (path / 'exe').readlink().name != 'videodock' or b'--youtube-proof' in (path / 'cmdline').read_bytes().split(b'\0'): continue
                       line = next(line for line in (path / 'status').read_text().splitlines() if line.startswith('NSpid:'))
                       output.add(int(line.split()[-1]))
-                  except (OSError, ValueError, StopIteration): pass
+                  except (OSError, ValueError, StopIteration): diagnostic['proc_errors'] += 1
+              diagnostic['own_pids'] = sorted(output)
               return output
           def command(*args):
               return subprocess.run(args, capture_output=True, text=True, timeout=max(.05, min(1, deadline - time.monotonic())))
           profile = '/tmp/videodock-gui-' + uuid.uuid4().hex
           launch_tick = int(float(pathlib.Path('/proc/uptime').read_text().split()[0]) * os.sysconf('SC_CLK_TCK'))
-          process = subprocess.Popen(['flatpak', 'run', '--env=QT_QPA_PLATFORM=xcb', '--env=VIDEODOCK_DATA_DIR=' + profile, '--command=videodock', 'io.github.Nezeronxer.VideoDock'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          app_log = (report / 'gui-app.log').open('wb')
+          process = subprocess.Popen(['flatpak', 'run', '--env=QT_QPA_PLATFORM=xcb', '--env=VIDEODOCK_DATA_DIR=' + profile, '--command=videodock', 'io.github.Nezeronxer.VideoDock'], stdout=app_log, stderr=subprocess.STDOUT)
           visible = False
           try:
               deadline = time.monotonic() + 10
@@ -168,10 +174,14 @@ jobs:
                   if process.poll() is not None: raise RuntimeError('Installed GUI exited before a visible window')
                   try:
                       tree = command('xwininfo', '-root', '-tree')
-                      for window in re.findall(r'^\s*(0x[0-9a-fA-F]+)\s+"VideoDock":', tree.stdout, re.M):
+                      windows = re.findall(r'^\s*(0x[0-9a-fA-F]+)\s+"VideoDock":', tree.stdout, re.M)
+                      diagnostic['matching_windows'] = len(windows)
+                      for window in windows:
                           info = command('xwininfo', '-id', window)
                           owner = command('xprop', '-id', window, '_NET_WM_PID')
                           match = re.search(r'=\s*(\d+)\s*$', owner.stdout)
+                          if match: diagnostic['window_pids'] = sorted(set(diagnostic['window_pids']) | {int(match[1])})
+                          if re.search(r'^\s*Map State:\s*IsViewable\s*$', info.stdout, re.M): diagnostic['viewable_windows'] += 1
                           if info.returncode == 0 and owner.returncode == 0 and match and int(match[1]) in own_pids() and re.search(r'^\s*Map State:\s*IsViewable\s*$', info.stdout, re.M) and time.monotonic() < deadline:
                               (report / 'gui-window.log').write_text(info.stdout)
                               visible = True; break
@@ -184,6 +194,10 @@ jobs:
               finally:
                   if process.poll() is None: process.kill()
                   process.wait(timeout=5)
+                  app_log.close()
+                  diagnostic['visible'] = visible
+                  (report / 'gui-state.json').write_text(json.dumps(diagnostic, indent=2) + '\n')
+                  with (report / 'gui-app.log').open('r+b') as stream: stream.truncate(min(stream.seek(0, 2), 65536))
           metadata = json.loads((report / 'input.json').read_text())
           assert set(metadata) == {'version', 'producer_run_id', 'source_sha', 'artifact_id', 'artifact_digest', 'package_name', 'package_sha256'}
           (report / 'verification.json').write_text(json.dumps({**metadata, 'worker_proxy': True, 'worker_startup': True, 'gui_visible': True}, indent=2) + '\n')
