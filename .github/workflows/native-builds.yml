@@ -18,6 +18,9 @@ on:
       linux_run:
         description: Existing Linux artifact run (publish or Flatpak verify)
         type: string
+      linux_verification_run:
+        description: Successful installed Flatpak verification run (publish only)
+        type: string
       macos_run:
         description: Validated Mac Intel and ARM artifact run (publish only)
         type: string
@@ -54,142 +57,53 @@ jobs:
           SOURCE_RUN: ${{ inputs.linux_run }}
         run: |
           python3 - <<'PY'
-          import importlib.util, os, pathlib, re, subprocess
+          import hashlib, importlib.util, json, os, pathlib, re, subprocess
           spec = importlib.util.spec_from_file_location('publisher', 'scripts/rust/publish-release.py')
           p = importlib.util.module_from_spec(spec); spec.loader.exec_module(p)
           number, repo = os.environ['SOURCE_RUN'], os.environ['GITHUB_REPOSITORY']
           p.require(re.fullmatch(r'[1-9][0-9]*', number), 'Invalid artifact run')
           run = p.api(f'repos/{repo}/actions/runs/{number}')
           p.require(run['status'] == 'completed' and run['repository']['full_name'] == repo, 'Invalid producer')
+          p.require(re.fullmatch(r'[0-9a-f]{40}', run['head_sha']), 'Invalid producer SHA')
           diff = subprocess.run(['git', 'diff', '--name-only', run['head_sha'], os.environ['GITHUB_SHA']], capture_output=True, text=True)
           p.require(diff.returncode == 0 and p.producer_sources_match(diff.stdout.splitlines(), 'linux'), 'Different runtime source')
           jobs = p.api(f'repos/{repo}/actions/runs/{number}/jobs?per_page=100')['jobs']
           p.require(any(j['name'] == 'linux-flatpak' and p.succeeded(j, ['Build and package against the Flatpak SDK']) for j in jobs), 'Package build did not pass')
+          artifacts = p.api(f'repos/{repo}/actions/runs/{number}/artifacts?per_page=100')
+          p.require(artifacts['total_count'] <= 100, 'Unexpected artifact count')
+          matches = [a for a in artifacts['artifacts'] if a['name'] == 'VideoDock-linux-flatpak-x86_64']
+          p.require(len(matches) == 1 and not matches[0]['expired'], 'Expected one available Flatpak artifact')
+          artifact = matches[0]
+          p.require(type(artifact['id']) is int and artifact['id'] > 0 and re.fullmatch(r'sha256:[0-9a-f]{64}', artifact.get('digest') or ''), 'Invalid artifact identity')
           output = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flatpak-input'
-          p.gh('run', 'download', number, '--repo', repo, '--name', 'VideoDock-linux-flatpak-x86_64', '--dir', str(output))
+          p.gh('run', 'download', number, '--repo', repo, '--name', artifact['name'], '--dir', str(output))
+          entries = list(output.rglob('*'))
+          p.require(all(not f.is_symlink() and f.is_file() and f.parent == output for f in entries), 'Unexpected package layout')
+          packages = [f for f in entries if f.suffix == '.flatpak']
+          p.require(len(packages) == 1 and all(f.name in (packages[0].name, 'SHA256SUMS') for f in entries), 'Expected one Flatpak package')
+          package = packages[0]
+          p.require(0 < package.stat().st_size < 2 * 1024**3, 'Invalid package size')
+          with package.open('rb') as stream: digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+          report = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flatpak-verification'
+          report.mkdir()
+          (report / 'input.json').write_text(json.dumps({'version': 1, 'producer_run_id': int(number), 'source_sha': run['head_sha'], 'artifact_id': artifact['id'], 'artifact_digest': artifact['digest'], 'package_name': package.name, 'package_sha256': digest}, indent=2) + '\n')
           PY
       - name: Install only the tested runtime package
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak dbus-user-session xvfb xauth gdb xdg-desktop-portal-gtk
+          sudo apt-get install -y flatpak dbus-user-session xvfb xauth x11-utils xdg-desktop-portal-gtk
           sudo loginctl enable-linger "$USER"
           sudo systemctl start "user@$(id -u).service"
           echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
           echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive -y "$RUNNER_TEMP"/flatpak-input/VideoDock-*-linux-x86_64.flatpak
-      - name: Capture one offscreen proof-worker stack without rebuilding
+      - name: Verify installed Flatpak worker and visible window
         run: |
-          report="$RUNNER_TEMP/flatpak-verification"
-          mkdir -p "$report"
-          cat > "$report/worker-stack.gdb" <<'GDB'
-          python
-          import gdb, json, pathlib, re
-          pid = gdb.selected_inferior().pid
-          mappings = []
-          for line in pathlib.Path(f'/proc/{pid}/maps').read_text().splitlines():
-              fields = line.split(None, 5)
-              if len(fields) != 6: continue
-              path = fields[5]
-              if not re.fullmatch(r'/(?:usr/lib|app/lib|app/bin)/[-A-Za-z0-9_./+]+', path): continue
-              start, end = (int(value, 16) for value in fields[0].split('-'))
-              mappings.append((start, end, start - int(fields[2], 16), pathlib.Path(path).name))
-          for thread in gdb.selected_inferior().threads()[:128]:
-              try:
-                  thread.switch()
-                  frame = gdb.newest_frame()
-                  for depth in range(16):
-                      if frame is None: break
-                      name = frame.name()
-                      if name and (not name.isprintable() or '://' in name): name = '<filtered-symbol>'
-                      pc = frame.pc()
-                      module = next(({'module': library, 'relative_pc': hex(pc - base)} for start, end, base, library in mappings if start <= pc < end), {})
-                      print('VD_STACK ' + json.dumps({'thread': thread.num, 'depth': depth, 'function': name[:500] if name else None, 'address': hex(pc), **module}))
-                      frame = frame.older()
-              except gdb.error:
-                  print('VD_STACK ' + json.dumps({'thread': thread.num, 'unwind_error': True}))
-          end
-          detach
-          GDB
-          cat > "$report/observe-worker.py" <<'PY'
-          import json, pathlib, re, subprocess, sys, time
-          stop, output = map(pathlib.Path, sys.argv[1:])
-          start = time.monotonic()
-          observed = {name: False for name in ('application', 'proof_worker', 'renderer', 'offscreen_plugin', 'xcb_plugin', 'portal_plugin', 'unreadable_maps')}
-          proof_seen, stack_attempted = {}, False
-          stack_path = output.with_name(output.name.replace('.processes.jsonl', '.stack.json'))
-          def capture_stack(pid, ticks):
-              record = {'pid': pid, 'start_ticks': ticks, 'status': 'identity_changed', 'frames': []}
-              try:
-                  directory = pathlib.Path('/proc') / str(pid)
-                  fields = (directory / 'stat').read_text().rpartition(') ')[2].split()
-                  if int(fields[19]) != ticks or b'--youtube-proof' not in (directory / 'cmdline').read_bytes().split(b'\0'): return record
-                  command = ['sudo', '-n', 'timeout', '--kill-after=1s', '8s', 'gdb', '-nx', '-q', '-batch', '-iex', 'set auto-load safe-path /nonexistent', '-iex', 'set auto-load python-scripts off', '-iex', 'set debuginfod enabled off', '-iex', 'set print frame-arguments none', '-iex', 'set print entry-values no', '-iex', f'set sysroot /proc/{pid}/root', '-iex', f'file /proc/{pid}/exe', '-iex', f'set solib-search-path /proc/{pid}/root/app/lib:/proc/{pid}/root/app/lib/x86_64-linux-gnu:/proc/{pid}/root/usr/lib/x86_64-linux-gnu', '-p', str(pid), '-ex', 'sharedlibrary', '-x', str(output.parent / 'worker-stack.gdb')]
-                  result = subprocess.run(command, capture_output=True, timeout=10)
-                  record.update(status='captured' if result.returncode == 0 else 'debugger_failed', exit=result.returncode)
-                  for line in result.stdout.decode('utf-8', 'replace').splitlines():
-                      if line.startswith('VD_STACK '): record['frames'].append(json.loads(line[len('VD_STACK '):]))
-                  if b'ptrace' in result.stderr.lower() or b'operation not permitted' in result.stderr.lower(): record['status'] = 'attach_denied'
-              except subprocess.TimeoutExpired: record['status'] = 'host_debugger_timeout'
-              except (OSError, ValueError, IndexError): record['status'] = 'inspection_unavailable'
-              return record
-          def snapshot():
-              global stack_attempted
-              try:
-                  result = subprocess.run(['flatpak', 'ps', '--columns=pid,application'], capture_output=True, text=True, timeout=2)
-                  roots = {int(row[0]) for line in result.stdout.splitlines() if len(row := line.split()) == 2 and row[0].isdigit() and row[1] == 'io.github.Nezeronxer.VideoDock'}
-                  ps_status = result.returncode
-              except subprocess.TimeoutExpired:
-                  roots, ps_status = set(), 'timeout'
-              table = {}
-              for directory in pathlib.Path('/proc').iterdir():
-                  if not directory.name.isdigit(): continue
-                  try:
-                      fields = (directory / 'stat').read_text().rpartition(') ')[2].split()
-                      table[int(directory.name)] = (int(fields[1]), fields[0], int(fields[19]))
-                  except (OSError, ValueError, IndexError): pass
-              selected = roots.copy()
-              while children := {pid for pid, (parent, _, _) in table.items() if parent in selected} - selected:
-                  selected.update(children)
-              processes = []
-              for pid in sorted(selected):
-                  directory = pathlib.Path('/proc') / str(pid)
-                  try: args = (directory / 'cmdline').read_bytes().split(b'\0')
-                  except OSError: args = []
-                  try: name = (directory / 'exe').readlink().name
-                  except OSError:
-                      try: name = (directory / 'comm').read_text().strip()
-                      except OSError: name = ''
-                  role = 'proof_worker' if name == 'videodock' and b'--youtube-proof' in args else 'renderer' if name in ('QtWebEngineProcess', 'QtWebEngineProc') and b'--type=renderer' in args else 'application' if name == 'videodock' else 'webengine_helper' if name in ('QtWebEngineProcess', 'QtWebEngineProc') else 'sandbox' if name == 'bwrap' else 'other'
-                  if role in observed: observed[role] = True
-                  maps_error = None
-                  try: maps = (directory / 'maps').read_bytes()
-                  except FileNotFoundError: maps, maps_error = None, 'process_gone'
-                  except PermissionError: maps, maps_error = None, 'permission_denied'
-                  except OSError: maps, maps_error = None, 'unavailable'
-                  plugins = {key: None if maps is None else library in maps for key, library in [('offscreen_plugin', b'libqoffscreen.so'), ('xcb_plugin', b'libqxcb.so'), ('portal_plugin', b'libqxdgdesktopportal.so')]}
-                  for key, value in plugins.items(): observed[key] |= value is True
-                  observed['unreadable_maps'] |= maps_error in ('permission_denied', 'unavailable')
-                  try: wchan = (directory / 'wchan').read_text().strip()
-                  except OSError: wchan = ''
-                  parent, state, ticks = table.get(pid, (None, '?', None))
-                  processes.append({'pid': pid, 'parent': parent, 'role': role, 'state': state if state in ('R', 'S', 'D', 'Z', 'T', 't', 'X', 'I', 'P') else '?', 'wait_symbol': wchan if re.fullmatch(r'[A-Za-z0-9_]{1,80}', wchan) else None, 'maps_accessible': maps is not None, 'maps_error': maps_error, **plugins})
-                  if role == 'proof_worker' and ticks is not None:
-                      first_seen = proof_seen.setdefault((pid, ticks), time.monotonic())
-                      if not stack_attempted and time.monotonic() - first_seen >= 3:
-                          stack_attempted = True
-                          stack_path.write_text(json.dumps(capture_stack(pid, ticks), indent=2) + '\n')
-              return {'elapsed_seconds': round(time.monotonic() - start, 3), 'flatpak_ps_status': ps_status, 'instances': len(roots), 'processes': processes}
-          with output.open('w') as stream:
-              while not stop.exists():
-                  stream.write(json.dumps(snapshot(), sort_keys=True) + '\n'); stream.flush()
-                  time.sleep(.25)
-              stream.write(json.dumps({'event': 'complete', 'observed': observed}, sort_keys=True) + '\n')
-          if not stack_attempted: stack_path.write_text(json.dumps({'status': 'stable_proof_worker_not_observed', 'frames': []}) + '\n')
-          PY
           xvfb-run -a -s '-screen 0 1280x800x24' bash <<'SH'
           set -eu
           report="$RUNNER_TEMP/flatpak-verification"
+          trap 'flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true' EXIT
           export XDG_CURRENT_DESKTOP=GNOME
           test -n "$DISPLAY"
           test -r "$XAUTHORITY"
@@ -199,8 +113,8 @@ jobs:
           systemctl --user daemon-reload
           timeout 20s systemctl --user restart xdg-desktop-portal-gtk.service
           timeout 20s systemctl --user restart xdg-desktop-portal.service
-          python3 - <<'PY'
-          import os, pathlib, subprocess, time
+          python3 - <<'PY' > "$report/portal.log"
+          import subprocess, time
           command = ['gdbus', 'call', '--session', '--dest', 'org.freedesktop.portal.Desktop', '--object-path', '/org/freedesktop/portal/desktop', '--method', 'org.freedesktop.portal.Settings.ReadAll', "['org.freedesktop.appearance']"]
           deadline = time.monotonic() + 10
           while time.monotonic() < deadline:
@@ -209,52 +123,71 @@ jobs:
                       print('Portal Settings preflight PASS'); break
               except subprocess.TimeoutExpired: pass
               time.sleep(.2)
-          else:
-              report = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flatpak-verification'
-              for unit in ('xdg-desktop-portal', 'xdg-desktop-portal-gtk'):
-                  log = subprocess.run(['journalctl', '--user', '-u', unit + '.service', '--no-pager', '-o', 'cat', '-n', '50'], capture_output=True, timeout=3)
-                  (report / (unit + '.log')).write_bytes(log.stdout[:65536])
-              raise SystemExit('Portal Settings preflight failed')
+          else: raise SystemExit('Portal Settings preflight failed')
           PY
-          monitor_pid=''
-          monitor_stop=''
-          cleanup() {
-            if [ -n "$monitor_stop" ]; then touch "$monitor_stop"; fi
-            if [ -n "$monitor_pid" ]; then wait "$monitor_pid" || true; fi
-            flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true
-          }
-          trap cleanup EXIT
-          for variant in offscreen; do
-            wrapper="$report/$variant-worker"
-            printf '%s\n' '#!/bin/sh' "exec flatpak run --env=QT_QPA_PLATFORM=$variant --command=videodock io.github.Nezeronxer.VideoDock \"\$@\"" > "$wrapper"
-            chmod +x "$wrapper"
-            for check in proxy; do
-              monitor_stop="$report/$variant-$check.stop"
-              python3 "$report/observe-worker.py" "$monitor_stop" "$report/$variant-$check.processes.jsonl" &
-              monitor_pid=$!
-              status=0
-              python3 crates/desktop/tests/proof_worker.py "$wrapper" "--$check" > "$report/$variant-$check.log" 2>&1 || status=$?
-              printf '%s\n' "$status" > "$report/$variant-$check.exit"
-              flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true
-              touch "$monitor_stop"
-              wait "$monitor_pid"
-              monitor_pid=''
-            done
-          done
+          flatpak run --command=ffmpeg io.github.Nezeronxer.VideoDock -version > "$report/ffmpeg.log" 2>&1
+          flatpak run --command=ffprobe io.github.Nezeronxer.VideoDock -version > "$report/ffprobe.log" 2>&1
+          printf '%s\n' '#!/bin/sh' 'exec flatpak run --env=QT_QPA_PLATFORM=offscreen --command=videodock io.github.Nezeronxer.VideoDock "$@"' > "$report/flatpak-worker"
+          chmod +x "$report/flatpak-worker"
+          python3 crates/desktop/tests/proof_worker.py "$report/flatpak-worker" --proxy --startup > "$report/worker.log" 2>&1
+          flatpak kill io.github.Nezeronxer.VideoDock 2>/dev/null || true
           python3 - <<'PY'
-          import json, os, pathlib
+          import json, os, pathlib, re, subprocess, time, uuid
           report = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flatpak-verification'
-          result = {}
-          for variant in ('offscreen',):
-              result[variant] = {}
-              for check in ('proxy',):
-                  name = f'{variant}-{check}'
-                  events = [json.loads(line) for line in (report / f'{name}.processes.jsonl').read_text().splitlines()]
-                  assert events and events[-1].get('event') == 'complete', 'Incomplete process monitor'
-                  stack = json.loads((report / f'{name}.stack.json').read_text())
-                  result[variant][check] = {'exit': int((report / f'{name}.exit').read_text()), 'observed': events[-1]['observed'], 'stack_status': stack['status'], 'stack_frames': len(stack['frames'])}
-          (report / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
-          raise SystemExit(1 if any(check['exit'] for variant in result.values() for check in variant.values()) else 0)
+          def own_pids():
+              result = subprocess.run(['flatpak', 'ps', '--columns=pid,application'], capture_output=True, text=True, timeout=1)
+              roots = {int(row[0]) for line in result.stdout.splitlines() if len(row := line.split()) == 2 and row[0].isdigit() and row[1] == 'io.github.Nezeronxer.VideoDock'}
+              if result.returncode or len(roots) != 1: return set()
+              parents, starts = {}, {}
+              for path in pathlib.Path('/proc').iterdir():
+                  if not path.name.isdigit(): continue
+                  try:
+                      fields = (path / 'stat').read_text().rpartition(') ')[2].split()
+                      parents[int(path.name)], starts[int(path.name)] = int(fields[1]), int(fields[19])
+                  except (OSError, ValueError, IndexError): pass
+              selected = roots.copy()
+              while children := {pid for pid, parent in parents.items() if parent in selected} - selected: selected.update(children)
+              output = set()
+              for pid in selected:
+                  path = pathlib.Path('/proc') / str(pid)
+                  try:
+                      if starts.get(pid, 0) < launch_tick or (path / 'exe').readlink().name != 'videodock' or b'--youtube-proof' in (path / 'cmdline').read_bytes().split(b'\0'): continue
+                      line = next(line for line in (path / 'status').read_text().splitlines() if line.startswith('NSpid:'))
+                      output.add(int(line.split()[-1]))
+                  except (OSError, ValueError, StopIteration): pass
+              return output
+          def command(*args):
+              return subprocess.run(args, capture_output=True, text=True, timeout=max(.05, min(1, deadline - time.monotonic())))
+          profile = '/tmp/videodock-gui-' + uuid.uuid4().hex
+          launch_tick = int(float(pathlib.Path('/proc/uptime').read_text().split()[0]) * os.sysconf('SC_CLK_TCK'))
+          process = subprocess.Popen(['flatpak', 'run', '--env=QT_QPA_PLATFORM=xcb', '--env=VIDEODOCK_DATA_DIR=' + profile, '--command=videodock', 'io.github.Nezeronxer.VideoDock'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          visible = False
+          try:
+              deadline = time.monotonic() + 10
+              while time.monotonic() < deadline:
+                  if process.poll() is not None: raise RuntimeError('Installed GUI exited before a visible window')
+                  try:
+                      tree = command('xwininfo', '-root', '-tree')
+                      for window in re.findall(r'^\s*(0x[0-9a-fA-F]+)\s+"VideoDock":', tree.stdout, re.M):
+                          info = command('xwininfo', '-id', window)
+                          owner = command('xprop', '-id', window, '_NET_WM_PID')
+                          match = re.search(r'=\s*(\d+)\s*$', owner.stdout)
+                          if info.returncode == 0 and owner.returncode == 0 and match and int(match[1]) in own_pids() and re.search(r'^\s*Map State:\s*IsViewable\s*$', info.stdout, re.M) and time.monotonic() < deadline:
+                              (report / 'gui-window.log').write_text(info.stdout)
+                              visible = True; break
+                      if visible: break
+                  except subprocess.TimeoutExpired: pass
+                  time.sleep(.1)
+              if not visible: raise RuntimeError('Own visible VideoDock window not observed within 10s')
+          finally:
+              try: subprocess.run(['flatpak', 'kill', 'io.github.Nezeronxer.VideoDock'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False)
+              finally:
+                  if process.poll() is None: process.kill()
+                  process.wait(timeout=5)
+          metadata = json.loads((report / 'input.json').read_text())
+          assert set(metadata) == {'version', 'producer_run_id', 'source_sha', 'artifact_id', 'artifact_digest', 'package_name', 'package_sha256'}
+          (report / 'verification.json').write_text(json.dumps({**metadata, 'worker_proxy': True, 'worker_startup': True, 'gui_visible': True}, indent=2) + '\n')
+          print('Installed Flatpak worker, startup and owned visible window PASS')
           PY
           SH
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -277,6 +210,7 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
       WINDOWS_RUN: ${{ inputs.windows_run }}
       LINUX_RUN: ${{ inputs.linux_run }}
+      LINUX_VERIFICATION_RUN: ${{ inputs.linux_verification_run }}
       MACOS_RUN: ${{ inputs.macos_run }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
