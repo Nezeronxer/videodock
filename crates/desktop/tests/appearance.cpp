@@ -20,6 +20,7 @@
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QKeySequence>
 #include <QTest>
 #include <QScopeGuard>
 #include <QTranslator>
@@ -141,6 +142,10 @@ static double luminance(QColor color) {
 int main(int argc, char **argv) {
     qInfo("Appearance startup: entering Qt initialization");
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+#ifdef Q_OS_MACOS
+    // This fixture targets QML menus; the macOS system menu is a separate native smoke check.
+    QCoreApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);
+#endif
     QtWebEngineQuick::initialize();
     QApplication application(argc, argv);
     qInfo("Appearance startup: application initialized");
@@ -265,7 +270,7 @@ int main(int argc, char **argv) {
         check(intro->property("width").toInt() == window->width(), "Onboarding must fill the app instead of opening a small dialog");
         check(intro->property("step").toInt() == 0, "Onboarding must start on the first step");
         auto *introPrimary = qobject_cast<QQuickItem *>(named(window, "onboardingPrimary"));
-        const auto primaryPixel = introPrimary->mapToScene(QPointF(8, introPrimary->height()/2)).toPoint();
+        const auto primaryPixel = (introPrimary->mapToScene(QPointF(8, introPrimary->height()/2)) * window->devicePixelRatio()).toPoint();
         check(window->grabWindow().pixelColor(primaryPixel) == paletteColor(window, "highlight"), "Onboarding primary action lost its accent background");
         click(window, named(window, "onboardingSecondary"));
         check(!intro->property("visible").toBool() && backend->lastAction["command"] == "onboarding_complete", "Skip did not persist completion");
@@ -407,7 +412,7 @@ int main(int argc, char **argv) {
             check(backend->lastAction["action"] == "parse" && backend->lastAction["url"] == url, "Paste Link lost the clipboard source");
             check(evaluate("ui.sortKey==='date' && ui.descending && ui.activeTab==='All' && ui.search===''").toBool(), "Pasting did not reveal the newest download at the top");
             backend->lastAction = {};
-            QTest::keyClick(window, Qt::Key_V, Qt::ControlModifier);
+            QTest::keySequence(window, QKeySequence(QKeySequence::Paste));
             QTest::qWait(150);
             check(backend->lastAction["action"] == "parse" && backend->lastAction["url"] == url, "Ctrl+V lost the clipboard source");
         }
@@ -963,7 +968,7 @@ int main(int argc, char **argv) {
             moveHover(besidePlay);
             check(!playButton->property("hovered").toBool() && window->cursor().shape() == Qt::ArrowCursor, "Play cursor did not reset after leaving the button");
             QApplication::clipboard()->setText(url + "?second=1");
-            QTest::keyClick(window, Qt::Key_V, Qt::ControlModifier);
+            QTest::keySequence(window, QKeySequence(QKeySequence::Paste));
             waitFor([&]() { return backend->state["manual"].toObject()["state"] == "ready"; }, "Second media parsing did not reach ready");
             click(window, named(window, "downloadButton"));
             waitFor([&]() {
@@ -1015,7 +1020,7 @@ int main(int argc, char **argv) {
             click(window, named(window, "pasteButton"));
             check(backend->state["jobs"].toArray().size() == 2 && backend->state["manual"].isNull(), "Smart paste has no immediate queue row");
             QApplication::clipboard()->setText(url + "?smart=second");
-            QTest::keyClick(window, Qt::Key_V, Qt::ControlModifier);
+            QTest::keySequence(window, QKeySequence(QKeySequence::Paste));
             QTest::qWait(100);
             check(backend->state["jobs"].toArray().size() == 3, "Second smart clipboard paste lost a source");
             waitFor([&]() {
