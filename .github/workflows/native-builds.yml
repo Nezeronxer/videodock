@@ -71,7 +71,7 @@ jobs:
       - name: Install only the tested runtime package
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak dbus-user-session xvfb xauth gdb
+          sudo apt-get install -y flatpak dbus-user-session xvfb xauth gdb xdg-desktop-portal-gtk
           sudo loginctl enable-linger "$USER"
           sudo systemctl start "user@$(id -u).service"
           echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
@@ -190,6 +190,11 @@ jobs:
           xvfb-run -a -s '-screen 0 1280x800x24' bash <<'SH'
           set -eu
           report="$RUNNER_TEMP/flatpak-verification"
+          export XDG_CURRENT_DESKTOP=GNOME
+          dbus-update-activation-environment --systemd DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP
+          systemctl --user restart xdg-desktop-portal-gtk.service xdg-desktop-portal.service
+          timeout 10s gdbus call --session --dest org.freedesktop.portal.Desktop --object-path /org/freedesktop/portal/desktop --method org.freedesktop.portal.Settings.ReadAll "['org.freedesktop.appearance']" >/dev/null
+          printf '%s\n' 'Portal Settings preflight PASS'
           monitor_pid=''
           monitor_stop=''
           cleanup() {
