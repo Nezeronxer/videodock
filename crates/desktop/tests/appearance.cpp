@@ -218,12 +218,13 @@ int main(int argc, char **argv) {
         collectIcons(window->contentItem());
         check(serviceIcons.size() == 10, "Service logos missing from the start screen");
         for (auto *image : serviceIcons) {
-            const QUrl source = image->property("source").toUrl();
+            const QUrl source = QQmlEngine::contextForObject(image)->resolvedUrl(image->property("source").toUrl());
             const QString path = source.isLocalFile() ? source.toLocalFile() : source.toString().mid(3);
             const QSize natural = QImageReader(path).size();
             const qreal width = image->property("paintedWidth").toReal();
             const qreal height = image->property("paintedHeight").toReal();
-            check(natural.isValid() && width > 0 && height > 0, "Service logo did not render");
+            check(natural.isValid(), "Service logo source is unreadable: " + source.toString());
+            check(width > 0 && height > 0, "Service logo did not render: " + image->objectName());
             check(std::abs(width / height - qreal(natural.width()) / natural.height()) < 0.03,
                   "Service logo is stretched: " + image->objectName());
         }
