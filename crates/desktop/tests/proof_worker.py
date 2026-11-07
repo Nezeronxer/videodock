@@ -12,6 +12,55 @@ import socket
 import threading
 
 
+def worker_diagnostic(reason, stdout, stderr, requests):
+    lowered = stderr.lower()
+    markers = {
+        "platform_plugin": (b"qt platform plugin",),
+        "display": (b"could not connect to display",),
+        "session_bus": (b"dbus", b"d-bus"),
+        "portal": (b"portal",),
+        "sandbox": (b"sandbox", b"namespace",),
+        "graphics": (b"opengl", b"egl", b"vulkan"),
+    }
+    return json.dumps({"reason": reason, "stdout_bytes": len(stdout), "stderr_bytes": len(stderr),
+                       "proxy_connections": len(requests), "expected_connect_seen": any(requests),
+                       "stderr_markers": [name for name, needles in markers.items()
+                                          if any(needle in lowered for needle in needles)]}, sort_keys=True)
+
+
+def proxy_worker(executable, payload, environment, requests):
+    process = subprocess.Popen([executable, "--youtube-proof"], stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment,
+                               start_new_session=os.name != "nt")
+    try:
+        stdout, stderr = process.communicate(payload, timeout=15)
+    except subprocess.TimeoutExpired as error:
+        if os.name == "nt":
+            try:
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            if process.poll() is None:
+                process.kill()
+        else:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        try:
+            stdout, stderr = process.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=2)
+            process.stdout.close()
+            process.stderr.close()
+            stdout, stderr = error.stdout or b"", error.stderr or b""
+        raise AssertionError("Packaged proof worker exceeded 15s: " +
+                             worker_diagnostic("timeout", stdout, stderr, requests)) from None
+    return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
+
+
 def main():
     executable = str(Path(sys.argv[1]).resolve())
     qpa = "cocoa" if sys.platform == "darwin" else "offscreen"
@@ -65,11 +114,10 @@ def main():
             environment = {**os.environ, "QT_QPA_PLATFORM": qpa}
             routed = {**request, "proxy": f"http://127.0.0.1:{listener.getsockname()[1]}"}
             try:
-                result = subprocess.run([executable, "--youtube-proof"], input=json.dumps(routed).encode(),
-                                        capture_output=True, env=environment, timeout=15)
+                result = proxy_worker(executable, json.dumps(routed).encode(), environment, requests)
                 assert result.returncode == 0 and result.stdout, (
                     f"Packaged proof worker exited without a response: code={result.returncode}, "
-                    f"stdout_bytes={len(result.stdout)}, stderr_bytes={len(result.stderr)}")
+                    + worker_diagnostic("exit", result.stdout, result.stderr, requests))
                 reply = json.loads(result.stdout)
                 assert requests and any(requests), "worker did not use the selected HTTP proxy"
                 assert reply["ok"] is False and reply["stage"] == "homepage", (
