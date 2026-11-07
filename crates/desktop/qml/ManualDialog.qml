@@ -488,7 +488,7 @@ AppDialog {
                         }
                         contentItem: RowLayout {
                             CheckBox {
-                                checked: root.selectedItems.indexOf(modelData.id) >= 0
+                                checked: !!modelData && root.selectedItems.indexOf(modelData.id) >= 0
                                 onClicked: {
                                     root.userSelection = true;
                                     root.selectedItems = root.toggle(root.selectedItems, modelData.id);
