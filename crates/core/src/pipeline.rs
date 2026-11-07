@@ -282,11 +282,78 @@ pub fn preview_output_path(
     );
     let destination = unique_path(output_dir, &output_stem(media, filename), &ext);
     #[cfg(windows)]
-    ensure!(
-        destination.as_os_str().len() < 245,
-        "Слишком длинный путь. Выбери более короткую папку"
-    );
+    {
+        use std::os::windows::ffi::OsStrExt;
+        ensure!(
+            destination.as_os_str().encode_wide().count() < 245,
+            "Слишком длинный путь. Выбери более короткую папку"
+        );
+    }
     Ok(destination)
+}
+
+struct PublishedFiles(Vec<PathBuf>);
+impl Drop for PublishedFiles {
+    fn drop(&mut self) {
+        for path in &self.0 {
+            std::fs::remove_file(path).ok();
+        }
+    }
+}
+
+async fn publish_outputs(
+    assembled: &Path,
+    media: &Media,
+    options: &Options,
+    subtitles: Vec<(String, String, PathBuf, &'static str)>,
+    cancel: &CancellationToken,
+) -> Result<(Vec<PathBuf>, u64)> {
+    let ext = options.selection.container.to_ascii_lowercase();
+    let mut destination = preview_output_path(
+        media,
+        &options.output_dir,
+        options.filename.as_deref(),
+        &ext,
+    )?;
+    let mut published = PublishedFiles(Vec::new());
+    loop {
+        ensure!(!cancel.is_cancelled(), "Загрузка приостановлена");
+        match publish(assembled, &destination).await {
+            Ok(()) => break,
+            Err(error)
+                if error
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|e| e.kind() == std::io::ErrorKind::AlreadyExists) =>
+            {
+                destination = preview_output_path(
+                    media,
+                    &options.output_dir,
+                    options.filename.as_deref(),
+                    &ext,
+                )?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    published.0.push(destination.clone());
+    let stem = destination
+        .file_stem()
+        .context("Не указано имя медиафайла")?
+        .to_string_lossy();
+    if !options.embed_subtitles {
+        for (_, id, path, suffix) in subtitles {
+            ensure!(!cancel.is_cancelled(), "Загрузка приостановлена");
+            let sidecar = unique_path(
+                &options.output_dir,
+                &format!("{stem}.{}", safe_name(&id)),
+                suffix,
+            );
+            publish(&path, &sidecar).await?;
+            published.0.push(sidecar);
+        }
+    }
+    let size = tokio::fs::metadata(&destination).await?.len();
+    Ok((std::mem::take(&mut published.0), size))
 }
 
 pub async fn run(
@@ -681,45 +748,8 @@ pub async fn run(
         "Готовый файл потерял выбранную аудиодорожку"
     );
     ensure!(!cancel.is_cancelled(), "Загрузка приостановлена");
-    let stem = output_stem(&media, options.filename.as_deref());
-    let mut destination = preview_output_path(
-        &media,
-        &options.output_dir,
-        options.filename.as_deref(),
-        &ext,
-    )?;
-    loop {
-        ensure!(!cancel.is_cancelled(), "Загрузка приостановлена");
-        match publish(&assembled, &destination).await {
-            Ok(()) => break,
-            Err(error)
-                if error
-                    .downcast_ref::<std::io::Error>()
-                    .is_some_and(|e| e.kind() == std::io::ErrorKind::AlreadyExists) =>
-            {
-                destination = preview_output_path(
-                    &media,
-                    &options.output_dir,
-                    options.filename.as_deref(),
-                    &ext,
-                )?
-            }
-            Err(error) => return Err(error),
-        }
-    }
-    let mut files = vec![destination.clone()];
-    if !options.embed_subtitles {
-        for (_, id, path, suffix) in subtitles {
-            let sidecar = unique_path(
-                &options.output_dir,
-                &format!("{stem}.{}", safe_name(&id)),
-                suffix,
-            );
-            publish(&path, &sidecar).await?;
-            files.push(sidecar);
-        }
-    }
-    let size = tokio::fs::metadata(&destination).await?.len();
+    let (files, size) = publish_outputs(&assembled, &media, &options, subtitles, &cancel).await?;
+    let destination = files[0].clone();
     on_progress(PipelineProgress {
         phase: "complete".into(),
         downloaded,
@@ -738,6 +768,109 @@ pub async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_preview_measures_utf16_units_instead_of_encoded_bytes() {
+        let media = Media {
+            title: "Ж".repeat(60),
+            ..Default::default()
+        };
+        let folder = PathBuf::from("C:\\").join("Ж".repeat(70));
+        assert!(preview_output_path(&media, &folder, None, "mp4").is_ok());
+        let too_long = PathBuf::from("C:\\").join("Ж".repeat(200));
+        assert!(preview_output_path(&media, &too_long, None, "mp4").is_err());
+    }
+
+    fn output_options(folder: &Path) -> Options {
+        Options {
+            selection: Selection::default(),
+            output_dir: folder.into(),
+            filename: None,
+            embed_subtitles: false,
+            tags: false,
+            skip_duplicates: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn external_subtitles_follow_the_actual_unique_media_name() {
+        let folder = tempfile::tempdir().unwrap();
+        let assembled = folder.path().join("assembled");
+        let subtitle = folder.path().join("subtitle");
+        let occupied = folder.path().join("clip.mp4");
+        let occupied_subtitle = folder.path().join("clip.en.vtt");
+        std::fs::write(&assembled, b"complete media").unwrap();
+        std::fs::write(&subtitle, b"WEBVTT").unwrap();
+        std::fs::write(&occupied, b"previous media").unwrap();
+        std::fs::write(&occupied_subtitle, b"previous subtitles").unwrap();
+        let media = Media {
+            title: "clip".into(),
+            ..Default::default()
+        };
+        let (files, size) = publish_outputs(
+            &assembled,
+            &media,
+            &output_options(folder.path()),
+            vec![("en".into(), "en".into(), subtitle, "vtt")],
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            files,
+            [
+                folder.path().join("clip (1).mp4"),
+                folder.path().join("clip (1).en.vtt")
+            ]
+        );
+        assert_eq!(size, 14);
+        assert_eq!(std::fs::read(occupied).unwrap(), b"previous media");
+        assert_eq!(
+            std::fs::read(occupied_subtitle).unwrap(),
+            b"previous subtitles"
+        );
+        assert!(files.iter().all(|path| path.is_file()));
+    }
+
+    #[tokio::test]
+    async fn failed_sidecar_publication_removes_only_this_attempts_outputs() {
+        let folder = tempfile::tempdir().unwrap();
+        let assembled = folder.path().join("assembled");
+        let subtitle = folder.path().join("subtitle");
+        let occupied = folder.path().join("clip.mp4");
+        std::fs::write(&assembled, b"complete media").unwrap();
+        std::fs::write(&subtitle, b"WEBVTT").unwrap();
+        std::fs::write(&occupied, b"previous media").unwrap();
+        let media = Media {
+            title: "clip".into(),
+            ..Default::default()
+        };
+        let result = publish_outputs(
+            &assembled,
+            &media,
+            &output_options(folder.path()),
+            vec![
+                ("en".into(), "en".into(), subtitle.clone(), "vtt"),
+                (
+                    "ru".into(),
+                    "ru".into(),
+                    folder.path().join("missing-subtitle"),
+                    "vtt",
+                ),
+            ],
+            &CancellationToken::new(),
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(!folder.path().join("clip (1).mp4").exists());
+        assert!(!folder.path().join("clip (1).en.vtt").exists());
+        assert_eq!(std::fs::read(occupied).unwrap(), b"previous media");
+        assert_eq!(std::fs::read(assembled).unwrap(), b"complete media");
+        assert_eq!(std::fs::read(subtitle).unwrap(), b"WEBVTT");
+        assert_eq!(std::fs::read_dir(folder.path()).unwrap().count(), 3);
+    }
+
     #[cfg(unix)]
     #[test]
     fn dangling_symlink_is_an_occupied_output_name() {
