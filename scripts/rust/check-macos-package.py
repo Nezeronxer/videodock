@@ -27,40 +27,48 @@ with tempfile.TemporaryDirectory() as directory:
         'install_name_tool': '#!/bin/sh\nexit 0\n',
         'python3': '#!/bin/sh\nprintf "%s\\n" "$@" >> "$PACKAGE_REPAIR_CALLS"\n',
         'otool': '#!/bin/sh\nprintf "%s:\\n\\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0)\\n" "$2"\n',
+        'brew': '#!/bin/sh\nexit 0\n',
     }
     for name, code in scripts.items():
         path = tools / name
         path.write_text(code)
         path.chmod(0o755)
-    env = dict(os.environ, HOME=str(home), CARGO_TARGET_DIR=str(target), VIDEODOCK_MAC_APP=str(app), PACKAGE_CALLS=str(root / 'calls'), PACKAGE_SIGN_CALLS=str(root / 'sign-calls'), PACKAGE_REPAIR_CALLS=str(root / 'repair-calls'), PATH=str(tools) + os.pathsep + os.environ['PATH'])
-    subprocess.run(['sh', str(project / 'scripts/rust/install.sh')], env=env, check=True, capture_output=True)
+    env = dict(os.environ, HOME=str(home), CARGO_TARGET_DIR=str(target), VIDEODOCK_MAC_APP=str(app), PACKAGE_CALLS=str(root / 'calls'), PACKAGE_SIGN_CALLS=str(root / 'sign-calls'), PACKAGE_REPAIR_CALLS=str(root / 'repair-calls'), PACKAGE_TEST_TOOLS=str(tools), PATH=str(tools) + os.pathsep + os.environ['PATH'])
+    # Keep a real Homebrew Qt installation from shadowing this test's stubs.
+    overrides = '\n'.join(f'{name}() {{ "$PACKAGE_TEST_TOOLS/{name}" "$@"; }}'
+                          for name in scripts if name not in ('uname', 'cargo', 'ffmpeg', 'ffprobe'))
+    installer = ['sh', '-c', overrides + '\n. "$0"', str(project / 'scripts/rust/install.sh')]
+    subprocess.run(installer, env=env, check=True, capture_output=True)
     assert app.is_dir(), 'Installer ignored its isolated staging destination'
     assert not (home / 'Applications').exists(), 'Verification modified the installed application location'
     assert '-codesign=VideoDock Self-Signed' in (root / 'calls').read_text(), 'Qt deployment uses an unrelated or ad-hoc identity'
     assert (root / 'calls').read_text().count('-codesign=VideoDock Self-Signed') == 2, 'Discovered QML plugin dependencies were not deployed'
     assert (root / 'repair-calls').is_file(), 'Nested WebEngine dependency repair was skipped'
     repair_call = (root / 'repair-calls').read_text().splitlines()
-    assert repair_call == [str(project / 'scripts/rust/repair-macos-frameworks.py'), str(app), 'VideoDock Self-Signed']
+    assert repair_call[0] == str(project / 'scripts/rust/repair-macos-frameworks.py')
+    staged_app = Path(repair_call[1])
+    assert staged_app.name == app.name and staged_app.parent.name.startswith('.videodock-install.')
+    assert staged_app.parent.parent == app.parent and repair_call[2] == 'VideoDock Self-Signed'
     assert '--sign VideoDock Self-Signed' in (root / 'sign-calls').read_text(), 'Bundle does not use its own named certificate'
     assert '--sign - ' not in (root / 'sign-calls').read_text(), 'Ad-hoc re-signing replaced the stable identity'
     assert (app / 'Contents/MacOS/VideoDock').read_text() == 'fresh binary', 'Installer reused an old build'
     for name in ('ffmpeg', 'ffprobe'):
         assert (app / 'Contents/MacOS' / name).is_file(), f'{name} was not bundled'
-        assert '-executable=' + str(app / 'Contents/MacOS' / name) in (root / 'calls').read_text()
+        assert '-executable=' + str(staged_app / 'Contents/MacOS' / name) in (root / 'calls').read_text()
     with (app / 'Contents/Info.plist').open('rb') as source:
         assert plistlib.load(source)['CFBundleExecutable'] == 'VideoDock'
     for name in ('GPL-3.0.txt', 'Qt-LGPL-3.0.txt', 'BgUtils-MIT.txt', 'googlevideo-MIT.txt', 'sabr-rs-MIT.txt', 'ffmpeg-license.txt', 'ffmpeg-buildconf.txt'):
         assert (app / 'Contents/Resources/licenses' / name).is_file(), f'Missing license: {name}'
     assert (app / 'Contents/Resources/THIRD-PARTY-NOTICES.md').is_file()
     (tools / 'ffmpeg').write_text('#!/bin/sh\ncase "$1" in -L|-buildconf) exit 0;; *) exit 134;; esac\n')
-    result = subprocess.run(['sh', str(project / 'scripts/rust/install.sh')], env=env, capture_output=True)
+    result = subprocess.run(installer, env=env, capture_output=True)
     assert result.returncode != 0, 'Installer accepted a bundled media executable that cannot start'
     (tools / 'ffmpeg').write_text(scripts['ffmpeg'])
     (tools / 'otool').write_text('#!/bin/sh\nprintf "%s:\\n\\t/opt/homebrew/lib/unbundled.dylib (compatibility version 1.0.0)\\n" "$2"\n')
-    result = subprocess.run(['sh', str(project / 'scripts/rust/install.sh')], env=env, capture_output=True)
+    result = subprocess.run(installer, env=env, capture_output=True)
     assert result.returncode != 0 and b'Unbundled library dependency' in result.stderr, 'External library dependency was accepted'
     env['VIDEODOCK_MAC_APP'] = str(root / 'not-an-app')
-    result = subprocess.run(['sh', str(project / 'scripts/rust/install.sh')], env=env, capture_output=True)
+    result = subprocess.run(installer, env=env, capture_output=True)
     assert result.returncode != 0 and b'absolute .app destination' in result.stderr, 'Invalid staging destination accepted'
     diagnostics = root / 'diagnostics'
     subprocess.run([sys.executable, str(project / 'scripts/rust/diagnose-macos-worker.py'),
