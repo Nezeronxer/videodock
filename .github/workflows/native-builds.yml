@@ -7,7 +7,7 @@ on:
         description: Platform to verify
         type: choice
         default: all
-        options: [all, linux, flatpak, macos, windows, audit]
+        options: [all, native, linux, flatpak, macos, windows, audit]
   push:
     branches: [release/first-stable]
 
@@ -43,19 +43,29 @@ jobs:
           if-no-files-found: warn
 
   linux:
-    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'linux'
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'native' || inputs.platform == 'linux'
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     timeout-minutes: 90
     env:
       # These localhost fixtures run as root in a disposable container.
       QTWEBENGINE_DISABLE_SANDBOX: "1"
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
-      - run: pacman -Syu --noconfirm rust git cmake ninja clang pkgconf qt6-base qt6-declarative qt6-webengine qt6-tools qt6-5compat qt6-svg ffmpeg xorg-server-xvfb xorg-xauth
+      - run: pacman -Syu --noconfirm rust git cmake ninja clang pkgconf qt6-base qt6-declarative qt6-webengine qt6-tools qt6-5compat qt6-svg ffmpeg xdg-utils xorg-server-xvfb xorg-xauth
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - run: echo "QT_VERSION=$(pkg-config --modversion Qt6Core)" >> "$GITHUB_ENV"
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: linux-cache
+        with:
+          path: |
+            ${{ github.workspace }}/target
+            ~/.cargo/registry
+          key: native-arch-x64-${{ env.QT_VERSION }}-${{ hashFiles('Cargo.lock') }}
       - run: python3 -m unittest discover -s scripts/rust/tests -p test_install_staging.py -v
+      - run: PATH="/usr/lib/qt6/bin:$PATH" python3 crates/desktop/tests/check-manual-checkbox.py
       - run: cargo test --workspace --locked
       - run: sh scripts/rust/build.sh
       - name: Verify Linux interface in English and Russian
@@ -77,14 +87,14 @@ jobs:
       - run: sh crates/desktop/tests/check-proof-boundaries.sh
       # Valid proofs require Chromium sandboxing; this root container checks IPC only.
       # Native Windows/macOS jobs also exercise the packaged WebEngine worker.
-      - run: python3 crates/desktop/tests/proof_worker.py "$HOME/.cache/videodock-rust-target/release/videodock-desktop"
+      - run: python3 crates/desktop/tests/proof_worker.py "$CARGO_TARGET_DIR/release/videodock-desktop"
       - name: Package native Arch Linux build
         run: |
           cargo fetch --locked
           python3 LICENSES/generate-rust-licenses.py --check
           package="$RUNNER_TEMP/VideoDock-linux-arch-x86_64"
           mkdir -p "$package/bin" "$package/licenses"
-          install -m755 "$HOME/.cache/videodock-rust-target/release/videodock-desktop" "$package/bin/videodock"
+          install -m755 "$CARGO_TARGET_DIR/release/videodock-desktop" "$package/bin/videodock"
           cp -R LICENSES/. "$package/licenses/"
           cp THIRD-PARTY-NOTICES.md "$package/"
           cp crates/desktop/attestation/bgutils/LICENSE "$package/licenses/BgUtils-MIT.txt"
@@ -92,13 +102,21 @@ jobs:
           cp crates/core/src/sabr/LICENSE.sabr-rs "$package/licenses/sabr-rs-MIT.txt"
           ffmpeg -L > "$package/licenses/ffmpeg-license.txt" 2>&1
           ffmpeg -buildconf > "$package/licenses/ffmpeg-buildconf.txt" 2>&1
-          printf '%s\n' 'Arch Linux x86_64 build. Install matching runtime packages: qt6-base qt6-declarative qt6-webengine qt6-5compat qt6-svg ffmpeg. Run bin/videodock. Other distributions require a matching build or Flatpak; this is not a portable glibc bundle.' > "$package/README.txt"
+          printf '%s\n' 'Arch Linux x86_64 build. Install matching runtime packages: qt6-base qt6-declarative qt6-webengine qt6-5compat qt6-svg ffmpeg xdg-utils. Run bin/videodock. Other distributions require a matching build or Flatpak; this is not a portable glibc bundle.' > "$package/README.txt"
           tar -czf "$RUNNER_TEMP/VideoDock-linux-arch-x86_64.tar.gz" -C "$RUNNER_TEMP" VideoDock-linux-arch-x86_64
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: VideoDock-linux-arch-x86_64
           path: ${{ runner.temp }}/VideoDock-linux-arch-x86_64.tar.gz
           if-no-files-found: error
+
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: always() && steps.linux-cache.outcome == 'success' && steps.linux-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ github.workspace }}/target
+            ~/.cargo/registry
+          key: native-arch-x64-${{ env.QT_VERSION }}-${{ hashFiles('Cargo.lock') }}
 
   linux-flatpak:
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == 'flatpak'
@@ -169,7 +187,7 @@ jobs:
           key: flatpak-x64-1.99.1-${{ env.FLATPAK_SDK_COMMIT }}-${{ env.FLATPAK_BASE_COMMIT }}-${{ hashFiles('Cargo.lock', 'packaging/linux/*') }}
 
   macos:
-    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'macos'
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'native' || inputs.platform == 'macos'
     strategy:
       fail-fast: false
       matrix:
@@ -204,6 +222,8 @@ jobs:
           key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}
       - run: python3 -m unittest discover -s scripts/rust/tests -p test_install_staging.py -v
       - run: python3 scripts/rust/check-macos-package.py
+      - run: python3 crates/desktop/tests/check-manual-checkbox.py
+      - run: sh crates/desktop/tests/check-browser-address-focus.sh
       - run: cargo test --workspace --locked
       - name: Build native release before importing signing identity
         run: sh scripts/rust/build.sh
@@ -294,7 +314,7 @@ jobs:
         run: security delete-keychain "$RUNNER_TEMP/videodock-signing.keychain-db" || true
 
   windows:
-    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'windows'
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'native' || inputs.platform == 'windows'
     runs-on: windows-2022
     timeout-minutes: 120
     env:
