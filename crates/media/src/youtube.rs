@@ -184,8 +184,10 @@ impl YouTube {
     }
 
     fn sabr_http(&self) -> Result<reqwest::Client> {
+        // shortcut: direct CDN HTTP/2 stalls after segments; restore after verified full downloads.
         let mut client = reqwest::Client::builder()
             .no_proxy()
+            .http1_only()
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(Duration::from_secs(20))
             .read_timeout(Duration::from_secs(30))

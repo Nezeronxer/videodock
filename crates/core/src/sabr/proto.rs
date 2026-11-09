@@ -49,6 +49,12 @@ pub(super) struct AbrState {
     pub elapsed_wall_time_ms: Option<i64>,
     #[prost(int32, optional, tag = "40")]
     pub enabled_track_types_bitfield: Option<i32>,
+    #[prost(bool, optional, tag = "46")]
+    pub drc_enabled: Option<bool>,
+    #[prost(string, optional, tag = "69")]
+    pub audio_track_id: Option<String>,
+    #[prost(bool, optional, tag = "76")]
+    pub enable_voice_boost: Option<bool>,
 }
 #[derive(Clone, PartialEq, prost::Message)]
 pub(super) struct ClientInfo {

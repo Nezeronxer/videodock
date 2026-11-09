@@ -149,6 +149,13 @@ pub(super) fn map(
             .filter_map(|v| v.split_once('='))
             .collect();
         let track = &f["audioTrack"];
+        let audio_track_id = text(&track["id"]);
+        ensure!(
+            audio_track_id
+                .as_ref()
+                .is_none_or(|v| v.len() <= 1024 && !v.chars().any(char::is_control)),
+            "Некорректная аудиодорожка SABR"
+        );
         let track_id = text(&track["id"]).or_else(|| audio_codec.as_ref().and(xtags.clone()));
         let language = tags.get("lang").map(|v| (*v).to_owned());
         let original = tags.get("acont").map(|v| *v == "original");
@@ -168,6 +175,9 @@ pub(super) fn map(
                 itag,
                 last_modified,
                 xtags,
+                audio_track_id,
+                drc_enabled: f["isDrc"] == true && f["isVb"] != true,
+                voice_boost: f["isVb"] == true,
                 duration_ms,
                 mime_type: mime.to_owned(),
                 width: integer(&f["width"])
@@ -308,7 +318,17 @@ mod tests {
     #[tokio::test]
     async fn native_metadata_preserves_quality_and_keeps_proof_and_signed_url_out_of_serialization()
     {
-        let data = serde_json::json!({"playabilityStatus":{"status":"OK"},"videoDetails":{"videoId":"fixture0001","lengthSeconds":"2","title":"Fixture"},"streamingData":{"adaptiveFormats":[{"itag":136,"url":"https://r.googlevideo.com/videoplayback?token=synthetic-signed-secret&xtags=fixture%3Dvariant","lastModified":"1","contentLength":"9","approxDurationMs":"2000","mimeType":"video/mp4; codecs=\"avc1.4d401f\"","width":1280,"height":720,"fps":30}]},"playerConfig":{"mediaCommonConfig":{"mediaUstreamerRequestConfig":{"videoPlaybackUstreamerConfig":"YWJj"}}}});
+        let mut data = serde_json::json!({"playabilityStatus":{"status":"OK"},"videoDetails":{"videoId":"fixture0001","lengthSeconds":"2","title":"Fixture"},"streamingData":{"adaptiveFormats":[{"itag":136,"url":"https://r.googlevideo.com/videoplayback?token=synthetic-signed-secret&xtags=fixture%3Dvariant","lastModified":"1","contentLength":"9","approxDurationMs":"2000","mimeType":"video/mp4; codecs=\"avc1.4d401f\"","width":1280,"height":720,"fps":30}]},"playerConfig":{"mediaCommonConfig":{"mediaUstreamerRequestConfig":{"videoPlaybackUstreamerConfig":"YWJj"}}}});
+        for (drc, voice_boost) in [(false, false), (true, false), (true, true)] {
+            data["streamingData"]["adaptiveFormats"]
+                .as_array_mut()
+                .unwrap()
+                .push(serde_json::json!({
+                    "itag":251,"lastModified":"2","contentLength":"9",
+                    "mimeType":"audio/webm; codecs=\"opus\"","audioChannels":2,
+                    "audioTrack":{"id":"en.4"},"isDrc":drc,"isVb":voice_boost
+                }));
+        }
         let media = map(
             data,
             "fixture0001",
@@ -328,6 +348,18 @@ mod tests {
         .unwrap();
         assert_eq!(media.formats[0].height, Some(720));
         assert_eq!(media.formats[0].sabr.as_ref().unwrap().duration_ms, 2000);
+        for (audio, (drc, voice_boost)) in
+            media.formats[1..]
+                .iter()
+                .zip([(false, false), (true, false), (false, true)])
+        {
+            let delivery = audio.sabr.as_ref().unwrap();
+            assert_eq!(delivery.audio_track_id.as_deref(), Some("en.4"));
+            assert_eq!(
+                (delivery.drc_enabled, delivery.voice_boost),
+                (drc, voice_boost)
+            );
+        }
         assert_eq!(
             media.formats[0].sabr.as_ref().unwrap().xtags.as_deref(),
             Some("fixture=variant")

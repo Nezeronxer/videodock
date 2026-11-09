@@ -394,8 +394,13 @@ pub async fn run(
         selected.len()
     ]));
     let permits = Arc::new(tokio::sync::Semaphore::new(4));
+    let sabr_audio = selected
+        .iter()
+        .filter(|format| format.has_audio())
+        .find_map(|format| format.sabr.clone());
     let mut transfers = tokio::task::JoinSet::new();
     for (index, format) in selected.iter().cloned().enumerate() {
+        let sabr_audio = sabr_audio.clone();
         let (client, staging_dir, cancel, limiter) = (
             client.clone(),
             staging_dir.clone(),
@@ -450,7 +455,7 @@ pub async fn run(
                             .sabr
                             .as_ref()
                             .context("Нет временных данных SABR; обновите ссылку")?,
-                        format.has_video(),
+                        sabr_audio.as_ref(),
                         format.size.context("YouTube не указал размер SABR")?,
                         &staging_dir.join(format!("sabr-{index}")),
                         &cancel,

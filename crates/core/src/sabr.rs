@@ -87,6 +87,59 @@ impl State {
         self.url = url;
         Ok(())
     }
+    fn fallback(&mut self) -> Result<bool> {
+        let params: BTreeMap<_, _> = self
+            .url
+            .query_pairs()
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
+        let Some(fvip) = params
+            .get("fvip")
+            .filter(|v| !v.is_empty() && v.len() <= 3 && v.bytes().all(|b| b.is_ascii_digit()))
+        else {
+            return Ok(false);
+        };
+        let count = match params.get("fallback_count") {
+            Some(value) => match value.parse::<usize>() {
+                Ok(n) if n < usize::from(REDIRECT_LIMIT) => n,
+                _ => return Ok(false),
+            },
+            None => 0,
+        };
+        let Some(node) = params.get("mn").and_then(|v| v.split(',').nth(count + 1)) else {
+            return Ok(false);
+        };
+        if !node.starts_with("sn-")
+            || node.len() > 96
+            || !node
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        {
+            return Ok(false);
+        }
+        let prefix = if self.url.host_str().is_some_and(|h| h.starts_with("rr")) {
+            "rr"
+        } else {
+            "r"
+        };
+        let host = format!("{prefix}{fvip}---{node}.googlevideo.com");
+        if self.url.host_str() == Some(&host) {
+            return Ok(false);
+        }
+        let mut next = self.url.clone();
+        next.set_host(Some(&host))
+            .map_err(|_| anyhow::anyhow!("Некорректный резервный узел YouTube"))?;
+        next.query_pairs_mut()
+            .clear()
+            .extend_pairs(
+                params
+                    .iter()
+                    .filter(|(k, _)| k.as_str() != "fallback_count"),
+            )
+            .append_pair("fallback_count", &(count + 1).to_string());
+        self.redirect(next.as_str())?;
+        Ok(true)
+    }
     fn progress(&mut self, before: u64, after: u64) -> Result<()> {
         if after > before {
             self.stalls = 0
@@ -110,8 +163,28 @@ impl State {
         // Short clips may finish while Google's verification is still pending; the stall limit bounds polling.
         Ok(self.attested)
     }
-    fn body(&self, delivery: &Delivery, track: &Track, video: bool) -> Vec<u8> {
+    fn body(
+        &self,
+        delivery: &Delivery,
+        track: &Track,
+        video: bool,
+        audio: &Delivery,
+    ) -> Result<Vec<u8>> {
         let format = track.format.clone();
+        let audio_format = if video {
+            FormatId {
+                itag: Some(
+                    i32::try_from(audio.itag)
+                        .map_err(|_| anyhow::anyhow!("Неверный аудиоформат SABR"))?,
+                ),
+                last_modified: Some(audio.last_modified),
+                xtags: audio.xtags.clone(),
+            }
+        } else {
+            format.clone()
+        };
+        let mut media_capabilities = capabilities(delivery, video);
+        media_capabilities.audio = capabilities(audio, false).audio;
         let mut ranges = Vec::new();
         if track.last_sequence > 0 {
             ranges.push(BufferedRange {
@@ -127,15 +200,19 @@ impl State {
                 }),
             });
         }
-        PlaybackRequest {
+        Ok(PlaybackRequest {
             client_abr_state: Some(AbrState {
-                media_capabilities: Some(capabilities(delivery, video)),
+                media_capabilities: Some(media_capabilities),
                 bandwidth_estimate: Some(100_000_000),
                 player_time_ms: Some(track.end_ms),
                 visibility: Some(2),
                 playback_rate: Some(1.0),
                 elapsed_wall_time_ms: Some(track.end_ms),
-                enabled_track_types_bitfield: Some(if video { 2 } else { 1 }),
+                // SABR video requests require a companion audio format even when we save video separately.
+                enabled_track_types_bitfield: Some(if video { 0 } else { 1 }),
+                audio_track_id: audio.audio_track_id.clone(),
+                drc_enabled: Some(audio.drc_enabled),
+                enable_voice_boost: Some(audio.voice_boost),
             }),
             initialization_format_ids: if track.initialized() {
                 vec![format.clone()]
@@ -144,7 +221,7 @@ impl State {
             },
             buffered_ranges: ranges,
             video_playback_ustreamer_config: Some(delivery.session.config.clone()),
-            selected_audio_format_ids: if video { vec![] } else { vec![format.clone()] },
+            selected_audio_format_ids: vec![audio_format],
             selected_video_format_ids: if video { vec![format] } else { vec![] },
             streamer_context: Some(StreamerContext {
                 client_info: Some(ClientInfo {
@@ -169,7 +246,7 @@ impl State {
                     .collect(),
             }),
         }
-        .encode_to_vec()
+        .encode_to_vec())
     }
     fn update(&mut self, update: ContextUpdate) -> Result<()> {
         let key = update
@@ -475,6 +552,7 @@ async fn commit(
 }
 struct Receiver<'a> {
     delivery: &'a Delivery,
+    audio: &'a Delivery,
     video: bool,
     directory: &'a Path,
     cancel: &'a CancellationToken,
@@ -499,7 +577,7 @@ impl Receiver<'_> {
             self.progress,
             self.started,
         );
-        let body = state.body(delivery, track, video);
+        let body = state.body(delivery, track, video, self.audio)?;
         ensure!(body.len() <= 256 * 1024, "SABR-запрос слишком велик");
         let mut response = response(state, delivery, body, cancel).await?;
         let mut reader = ump::Reader::default();
@@ -626,7 +704,7 @@ impl Receiver<'_> {
 
 pub async fn download(
     delivery: &Delivery,
-    video: bool,
+    audio: Option<&Delivery>,
     expected_bytes: u64,
     directory: &Path,
     cancel: &CancellationToken,
@@ -634,6 +712,18 @@ pub async fn download(
     progress: Arc<dyn Fn(Progress) + Send + Sync>,
 ) -> Result<PathBuf> {
     validate_url(&delivery.session.url)?;
+    let video = delivery.mime_type.starts_with("video/");
+    let audio = if video {
+        let audio =
+            audio.ok_or_else(|| anyhow::anyhow!("Для видео YouTube не выбрана аудиодорожка"))?;
+        ensure!(
+            Arc::ptr_eq(&delivery.session, &audio.session) && audio.mime_type.starts_with("audio/"),
+            "Аудиодорожка относится к другому потоку YouTube"
+        );
+        audio
+    } else {
+        delivery
+    };
     tokio::fs::create_dir_all(directory).await?;
     let format = FormatId {
         itag: Some(
@@ -656,6 +746,7 @@ pub async fn download(
     let mut retries = 0u8;
     let receiver = Receiver {
         delivery,
+        audio,
         video,
         directory,
         cancel,
@@ -682,6 +773,7 @@ pub async fn download(
                 if !error.is::<Retryable>() || retries >= 2 {
                     return Err(error);
                 }
+                state.fallback()?;
                 retries += 1;
                 output.flush().await?;
                 output.set_len(track.bytes).await?;
@@ -709,6 +801,42 @@ pub async fn download(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unavailable_cdn_moves_to_the_next_advertised_googlevideo_node() {
+        let mut s = state();
+        s.url = validate_url("https://rr3---sn-primary.googlevideo.com/videoplayback?mn=sn-primary,sn-secondary&fvip=3&sig=fixture&rn=7").unwrap();
+        assert!(s.fallback().unwrap(), "failed CDN had no recovery path");
+        assert_eq!(s.url.host_str(), Some("rr3---sn-secondary.googlevideo.com"));
+        assert!(
+            s.url
+                .query_pairs()
+                .any(|(k, v)| k == "sig" && v == "fixture")
+        );
+        assert!(
+            s.url
+                .query_pairs()
+                .any(|(k, v)| k == "fallback_count" && v == "1")
+        );
+        assert!(!s.fallback().unwrap(), "exhausted CDN list must not loop");
+    }
+    #[test]
+    fn cdn_fallback_rejects_foreign_hosts_and_invalid_counters() {
+        for query in [
+            "mn=sn-primary,other.example&fvip=3",
+            "mn=sn-primary,sn-secondary&fvip=3&fallback_count=999",
+            "mn=sn-primary,sn-secondary&fvip=bad",
+            "mn=sn-primary,sn-secondary&fvip=3&fallback_count=bad",
+        ] {
+            let mut s = state();
+            s.url = validate_url(&format!(
+                "https://rr3---sn-primary.googlevideo.com/videoplayback?{query}"
+            ))
+            .unwrap();
+            let before = s.url.clone();
+            assert!(!s.fallback().unwrap_or(false));
+            assert_eq!(s.url, before);
+        }
+    }
     #[test]
     fn temporary_format_refusal_is_retryable_but_unknown_refusals_fail_closed() {
         let error = server_error(SabrError {
