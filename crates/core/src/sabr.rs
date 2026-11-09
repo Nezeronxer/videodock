@@ -33,6 +33,13 @@ impl std::fmt::Display for Retryable {
     }
 }
 impl std::error::Error for Retryable {}
+fn server_error(error: SabrError) -> anyhow::Error {
+    // A fresh, identical request can succeed after this backend format refusal.
+    if error.code == Some(2) && error.r#type.as_deref() == Some("sabr.no_available_formats") {
+        return Retryable("YouTube временно не предоставил медиапоток; повторите загрузку").into();
+    }
+    anyhow::anyhow!("YouTube сообщил об ошибке SABR")
+}
 fn decode<T: Message + Default>(data: &[u8]) -> Result<T> {
     ensure!(
         data.len() <= META_LIMIT,
@@ -581,8 +588,7 @@ impl Receiver<'_> {
                         )?;
                     }
                     44 => {
-                        let _: SabrError = decode(&data)?;
-                        bail!("YouTube сообщил об ошибке SABR");
+                        return Err(server_error(decode(&data)?));
                     }
                     57 => state.update(decode(&data)?)?,
                     58 => {
@@ -703,6 +709,32 @@ pub async fn download(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn temporary_format_refusal_is_retryable_but_unknown_refusals_fail_closed() {
+        let error = server_error(SabrError {
+            r#type: Some("sabr.no_available_formats".into()),
+            code: Some(2),
+        });
+        assert!(
+            error.is::<Retryable>(),
+            "temporary format refusal aborted the download"
+        );
+        for (kind, code) in [
+            ("sabr.no_available_formats", Some(3)),
+            ("sabr.unknown", Some(2)),
+            ("private-response", None),
+        ] {
+            let error = server_error(SabrError {
+                r#type: Some(kind.into()),
+                code,
+            });
+            assert!(!error.is::<Retryable>(), "unknown refusal must fail closed");
+            assert!(
+                !error.to_string().contains(kind),
+                "server response leaked into error"
+            );
+        }
+    }
     fn state() -> State {
         State {
             url: validate_url("https://r.googlevideo.com/videoplayback").unwrap(),

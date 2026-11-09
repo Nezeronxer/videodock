@@ -304,3 +304,9 @@ async fn big_buck_bunny_modern_complete_720p() {
 async fn big_buck_bunny_modern_complete_1080p() {
     complete_sample("aqz-KE-bpKQ", 1080, 0.0).await;
 }
+
+#[tokio::test]
+#[ignore = "complete download of the user-reported monitor video with native proof worker"]
+async fn reported_monitor_video_complete_360p() {
+    complete_sample("RINzuNBpPpk", 360, 0.0).await;
+}

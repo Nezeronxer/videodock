@@ -574,3 +574,57 @@ Windows11 повторный ОБЫЧНЫЙboot после завершённо�
 Ограничения: YouTube доступ из CI не считается успешным скачиванием; собственная Mac подпись без Apple notarization, Windows installer без Authenticode. Полная ручная матрица всех дистрибутивов/железа не заявляется. Подробности - docs/cross-platform-audit-2026-11-07.md.
 
 Публичный выпуск: https://github.com/Nezeronxer/videodock/releases/tag/v0.2.0 . Он отмечен Latest, draft=false/prerelease=false. Локальные файлы: dist/0.2.0; build-manifest SHA2565cecc7c4dd49e2ba748fda67903b8af380f5737e7fec7a3fd9ed0cf1e6d8eb50.
+
+
+## Исправления интерфейса Mac после установки - 07.11.2026
+
+Что сделать: иконка Dock, правильные пропорции изображений и значок платформы у Paste Link по буферу при активации. Объём: точечные изменения существующего UI/упаковки, без тяжёлых сборок и ВМ на личном Mac. Проверка: failing/passing packaging contract, Qt UI regression, сборка в CI и проверка установленного окна с сохранением пользовательского профиля.
+
+- [x] Подтверждено отсутствие CFBundleIconFile/ICNS и постоянный icon.source кнопки.
+- [x] По снимку уточнены логотипы сервисов стартового экрана; Qt regression воспроизвёл Service logo is stretched: browserServiceIcon-youtube. Причина: сохранение implicitWidth/implicitHeight меняло sourceSize между чтениями, Image.Stretch искажал результат при масштабе >1.
+- [x] Packaging RED→GREEN: ICNS + CFBundleIconFile. Clipboard RED→GREEN: общий platformIcon, чтение только при активации/старте, hidden buffer очищается, логотип без перекрашивания. Логотипы помещаются в квадрат с PreserveAspectFit и ограничением только sourceSize.width.
+- [x] Локальные проверки и повторный CI42409767775: ARM/Intel UI PASS; ARM bundle/signature/clean-PATH worker/startup PASS, artifact13590316545 получен.
+- [x] Обновлён /Applications/VideoDock.app, проверены пользовательский профиль/история, логотипы и YouTube у Paste Link в настоящем Cocoa окне.
+
+Локальные regression: packaging missing Dock icon RED → PASS. Qt logo aspect RED на YouTube → PASS при том же appearance.rcc. Полный Cocoa harness нельзя совмещать с управлением Chrome: desktop focus влияет на Cmd+V. Проба размера1700x1000 на физическом Mac вывела окно за экран и сломала pixel-check onboarding; новую проверку оставили при реальном исходном размере.
+
+Исходники/регрессии сохранены в GitHub fix/macos-interface, commit2f30847cb70ad7f8c8f763d9ac95aac800dad061. git push недоступен: credential helper ссылается на отсутствующий ~/.local/bin/gh; применён штатный GitHub MCP create_blob/tree/commit/branch. Локальный полный UI прошёл все UI-only разделы; optional Engine section остановился из-за отсутствующего sample argument, не из-за продукта. Для повтора создан локальный sample.mp4.
+
+Локальный финальный Qt/Cocoa EN+RU: PASS, оба с настоящим ui_engine/sample MP4, сохранение истории, повторная вставка, restart, ffprobe. EN transient second-paste failure не воспроизвёлся при одиночном прогоне; desktop automation не совмещать с Cocoa harness. Packaging contract PASS;7 install staging tests PASS; manual checkbox and shell/diff checks PASS. Логи/снимки ~/.local/share/videodock/research/interface-fix-2026-11-07. CI run42406213413, Mac ARM job128504361811, Intel128504361958, source2f30847.
+
+CI ARM cache restore сообщил Cache not found для native-macOS-ARM64-1.99.1-fb5c65d9d22aa814340cfdde2757d33587cb0dca7472db2d8dc083e4520514bc; полная холодная компиляция. На13мин общего времени cargo step7м, последние строки Compiling cxx-qt-lib/videodock-desktop. Не запускать вторую параллельную сборку без причины.
+
+CI ARM workspace tests PASS, началась Build native release before importing signing identity; Intel ещё workspace. Все исходники2f30847 неизменны после локальных EN/RU PASS.
+
+ARM2f CI workspace+release PASS, UI FAIL: Service logo did not render в обоих языках; подпись/упаковка SKIPPED. Причина локально воспроизведена БЕЗ appearance.rcc: новый QImageReader тест трактовал относительный icons/service-*.svg как qrc. При rcc источник абсолютный, поэтому локальные EN/RU PASS это не покрыли. Тест исправлен через QQmlEngine::contextForObject(image)->resolvedUrl. Продуктовые исходники не изменены. Нужен новый CIcommit/run с прогретым ARMкэшем.
+
+Тест URLfix commit8ed02c3f82daf91d27417492aff1b5fe2c9e2772 в fix/macos-interface. Локальный БЕЗrcc полный UI-only EN PASS; сrcc ранее EN/RU+Engine PASS. Повторный workflow пока НЕ запущен: concurrency native-branch-platform/cancel-in-progress=true отменил бы незавершённую холодную Intel сборку до сохранения её кэша. ARM cache уже saved. Дождаться Intel cache save в run42406213413, затем dispatch macos на8ed02c3. В Chrome retryTab форма открыта с выбраннойветкой; финальнаякнопкаещёне нажата.
+
+Intel холодный release тоже PASS, перешёл к UI step. Полный локальный UI безrcc после resolvedUrl fix: PASS (en); лог interface-fallback-en.log сохранён рядом с остальными доказательствами.
+
+Первыйrun42406213413 завершёнfailure из-за неверного пути в тесте; ARM и Intel cache save SUCCESS. Повторныйdispatchmacos на8ed02c3 отправлен после сохранения обоихкэшей. Продуктовый исходник тотже2f30847.
+
+Повторныйrun42409767775 запущен23:10MSK07.11 на8ed02c3. Браузер послеdispatchдваждыдавалPage.getFrameTreetimeout;reload того же boundtab открывает уже правильныйrun. Не повторятьdispatch из-заэтоготаймаута. ТекущийretryTab показываетrun42409767775.
+
+Повторныйrun42409767775: ARM+Intel workspace/release/UI EN+RU PASS. Идёт step15 Build and verify application bundle. ARM journal macdeployQt содержит Cannot resolve rpath QtStateMachine(Qml), пока нет результата. Сравнена предыдущая Mac42395354408/ARMjob128471438861: step15 SUCCESS, duration20m42s (весьjob failure толькоиз-заpublicdownloads step21). Долгая упаковка сама по себе не означает зависание; не ломать проверку из-за этих сообщений до её результата. В Chrome retryTab открыттекущийARMjob, historyTabпредыдущий.
+
+Финальная установка: artifact13590316545 SHA256397384251b1b8169b647155243f3f8dca789f39b5e905a4726bbd2ca4843aa7c совпал. Archive boundaries, ARM64, strict/deep codesign, CFBundleIconFile/ICNS (SHA256e0edf35036d15548c42e2f84925ef83ea17d4faeecce500e13b1d6f44895b293) PASS. Пакет установлен через stage+rename+rollback, LaunchServices refreshed. Старый app и SQLite backup: ~/.local/share/videodock/research/interface-fix-2026-11-07/backup. SQLite bytes не менялись при замене.
+Native CUA: после обновления сохранились1completed job, RU/dark, smartMode,1080p,MP4/Movies. В раскрытом стартовом браузере все логотипы без вытягивания. Через AX setValue→freshAX→CmdA/C скопирована публичная YouTube URL (без перехода/скачивания); полный quit/reopen показал красный YouTube у Paste Link. Простая batch typeText при одновременном раскрытии поля теряла символы, для QA использован проверенный AX setValue.
+Предел проверки Dock: файл ICNS/CFBundleIconFile, подпись и регистрация проверены; доступ к системному Dock через CUA (bundle ID и app path) оба раза timeoutReached, сам Dock визуально не подтверждён.
+Ограничения CI: ARM UI+bundle PASS, весьjob failure на последующем Complete public macOS downloads (как и у предыдущего42395354408); этот исход не выдавать за полныйCI PASS. Транспортные исходники в этой правке не менялись. На личном Mac публичные загрузки не повторялись. Intel UI PASS, упаковка ещё выполнялась при установке ARM. Stable assets0.2.0 не перезаписывались: установлен исправленный Mac build8ed02c3, исходники fix/macos-interface.
+
+
+## Исправления по скриншоту - 09.11.2026 (Arch)
+
+Результат: устранить YouTube SABR error и TikTok missing audio, доставить общие функции (включая значок платформы буфера) на Linux/Windows/macOS. Объём: общий Rust/Qt код и поставка. Проверка: регрессии, полные проблемные загрузки с ffprobe/decode, Qt EN/RU, сборка и нативный Windows QA.
+
+- [x] Восстановлены источники, ошибки реального профиля и доступные Windows QA VM.
+- [ ] Воспроизвести TikTok и YouTube на проблемных публичных ссылках.
+- [ ] Исправить подтверждённые причины и добавить регрессии.
+- [ ] Проверить общий UI буфера и обновить Linux с резервной копией.
+- [ ] Собрать и проверить Windows; отдельно отметить фактические версии ОС и ограничения.
+- [ ] Сохранить доказательства и итоговый отчёт.
+
+09.11 текущая диагностика: TikTok user-reported full download PASS 6947649 B / 148.886 s / video+audio / full decode. YouTube monitor RINzuNBpPpk и контроль Zoo воспроизводят remote code 2 на первом SABR request до сегментов. Ослабление media_capabilities не помогло и отменено; audio_track_id=69 тоже не устранил отказ, пока эксперимент, не готовый fix. Нужна общая причина отказа SABR, не править повторными retry. Доказательства: ~/.local/share/videodock/research/fixes-2026-11-09/current.
+
+09.11 после диагностики: monitor360p дважды полностью загружен и декодирован на исходной заявке, эталон googlevideo5.0.1 также получил оба потока. Изменения capabilities/audioTrackId отменены. Точная причина временного отказа внешнего сервера не установлена; подтверждён дефект обработки известного server code2/no_available_formats как окончательной ошибки. Точечный fix переводит только эту пару type/code в существующий ограниченный retry (до2повторов), с прежними rollback/cancel/проверками полного файла. Новый regression RED→GREEN; core/media215PASS0FAIL48ignored; Clippy alltargets-DwarningsPASS; gitleaks diff0. Финальные live3YouTube, Linuxrelease/UI и nativeWindows/Mac ещё выполняются/ожидаются. Диагностический дамп с временной proof/session удалён; секретов в diff нет.
