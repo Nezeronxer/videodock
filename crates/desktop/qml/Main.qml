@@ -282,7 +282,9 @@ ApplicationWindow {
         }).map(function (job, order) {
             return {job: job, order: order};
         }).sort(function (a, b) {
-            var result = sortKey === "name" ? String(a.job.title || "").localeCompare(String(b.job.title || "")) : (Number(a.job.created_at) || 0) - (Number(b.job.created_at) || 0);
+            var orderA = Number(a.job.added_order === undefined ? a.job.created_at : a.job.added_order) || 0;
+            var orderB = Number(b.job.added_order === undefined ? b.job.created_at : b.job.added_order) || 0;
+            var result = sortKey === "name" ? String(a.job.title || "").localeCompare(String(b.job.title || "")) : orderA - orderB;
             if (!result)
                 result = a.order - b.order;
             return descending ? -result : result;

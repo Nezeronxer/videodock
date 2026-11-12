@@ -3,6 +3,60 @@ use tempfile::TempDir;
 use videodock_core::Engine;
 
 #[test]
+fn added_order_survives_clock_correction_priority_reordering_and_restart() {
+    let data = TempDir::new().unwrap();
+    let database = data.path().join("state.sqlite");
+    let saved = json!({"settings":{"path":data.path().join("output")},"jobs":[
+        {"id":"future-clock","created_at":4102444800u64,"state":"complete","kind":"video"},
+        {"id":"legacy-newer","created_at":1,"state":"complete","kind":"video"}
+    ]});
+    {
+        let store = rusqlite::Connection::open(&database).unwrap();
+        store
+            .execute_batch("CREATE TABLE state (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+            .unwrap();
+        store
+            .execute("INSERT INTO state VALUES(1, ?1)", [saved.to_string()])
+            .unwrap();
+    }
+    let engine = Engine::new(data.path().to_owned()).unwrap();
+    let before = engine.snapshot();
+    assert_eq!(before["jobs"][0]["added_order"], 1);
+    assert_eq!(before["jobs"][1]["added_order"], 2);
+    engine
+        .dispatch(json!({"action":"parse","url":"http://127.0.0.1:9/order.mp4"}))
+        .unwrap();
+    let snapshot = engine.snapshot();
+    let jobs = snapshot["jobs"].as_array().unwrap();
+    let newest = jobs.last().unwrap()["id"].clone();
+    assert_eq!(jobs.last().unwrap()["added_order"], 3);
+    assert!(jobs.last().unwrap()["created_at"].as_u64().unwrap() < 4102444800);
+    drop(engine);
+    // Queue priority can change storage order without changing when links were added.
+    {
+        let store = rusqlite::Connection::open(&database).unwrap();
+        let value: String = store
+            .query_row("SELECT value FROM state", [], |row| row.get(0))
+            .unwrap();
+        let mut state: Value = serde_json::from_str(&value).unwrap();
+        state["jobs"].as_array_mut().unwrap().reverse();
+        store
+            .execute("UPDATE state SET value=?1", [state.to_string()])
+            .unwrap();
+    }
+    let reopened = Engine::new(data.path().to_owned()).unwrap();
+    let after = reopened.snapshot();
+    let row = after["jobs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|job| job["id"] == newest)
+        .unwrap();
+    assert_eq!(row["added_order"], 3);
+    assert_eq!(after["jobs"].as_array().unwrap().len(), 3);
+}
+
+#[test]
 fn changing_library_folder_removes_old_scan_rows_but_keeps_download_history() {
     let data = TempDir::new().unwrap();
     let old = data.path().join("old");

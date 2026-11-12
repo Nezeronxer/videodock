@@ -434,6 +434,14 @@ int main(int argc, char **argv) {
         {
             const auto saved = backend->state["jobs"];
             backend->state["jobs"] = QJsonArray{
+                QJsonObject{{"id", "future-clock"}, {"created_at", 4102444800.0}, {"added_order", 1}, {"kind", "video"}},
+                QJsonObject{{"id", "after-clock-correction"}, {"created_at", 100}, {"added_order", 2}, {"kind", "video"}},
+                QJsonObject{{"id", "library"}, {"created_at", 0}, {"added_order", 0}, {"kind", "video"}}
+            };
+            backend->publish();
+            QTest::qWait(100);
+            check(evaluate("ui.listRows().map(function(j){return j.id}).join(',')").toString() == "after-clock-correction,future-clock,library", "Correcting the clock put a new download below older history");
+            backend->state["jobs"] = QJsonArray{
                 QJsonObject{{"id", "old"}, {"created_at", 100}, {"kind", "video"}},
                 QJsonObject{{"id", "recent"}, {"created_at", 101}, {"kind", "video"}},
                 QJsonObject{{"id", "newest"}, {"created_at", 101}, {"kind", "video"}},

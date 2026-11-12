@@ -39,7 +39,9 @@ fn legacy_outputs_and_download_history_survive_retirement_and_restart() {
             .get("processingNotificationsEnabled")
             .is_none()
     );
-    assert_eq!(snapshot["jobs"][0], history);
+    let mut migrated_history = history.clone();
+    migrated_history["added_order"] = json!(1);
+    assert_eq!(snapshot["jobs"][0], migrated_history);
     assert_eq!(snapshot["settings"]["quality"], 720);
     assert_eq!(snapshot["settings"]["theme"], "light");
     let persisted = stored(data.path());
@@ -61,7 +63,7 @@ fn legacy_outputs_and_download_history_survive_retirement_and_restart() {
     assert_eq!(engine.snapshot()["settings"]["quality"], 720);
     drop(engine);
     let reopened = Engine::new(data.path().to_owned()).unwrap();
-    assert_eq!(reopened.snapshot()["jobs"][0], history);
+    assert_eq!(reopened.snapshot()["jobs"][0], migrated_history);
     assert_eq!(
         stored(data.path())["_legacy_processing"],
         persisted["_legacy_processing"]

@@ -1034,7 +1034,7 @@ async fn run_job(weak: Weak<Inner>, id: String, cancel: CancellationToken) {
                 state["jobs"].as_array_mut().unwrap().retain(|item|item["id"]!=id);
                 add_media(state,&media,&action,&settings,None)?;
                 let replacement=state["jobs"].as_array().unwrap().iter().rev().find(|item|item["_group"]==true&&item["url"]==media.url).map(|item|item["id"].clone()).context("Не создана группа импорта")?;
-                for item in state["jobs"].as_array_mut().unwrap(){if item["id"]==replacement{item["id"]=json!(id);}
+                for item in state["jobs"].as_array_mut().unwrap(){if item["id"]==replacement{item["id"]=json!(id);item["added_order"]=saved["added_order"].clone();}
 if item["_parent"]==replacement{item["_parent"]=json!(id);}}
                 Ok(())
             })?;return Ok(None)

@@ -184,6 +184,7 @@ impl Engine {
                 }
             }
         }
+        let order_changed = initialize_job_order(&mut state);
         state["manual"] = Value::Null;
         state["account"] = json!({"logged_in":false,"user_name":"","avatar_url":""});
         state["capabilities"] = json!({"browser":true,"tray":true,"auto_start":true});
@@ -192,7 +193,7 @@ impl Engine {
             state["capabilities"]["auto_start"] = json!(false);
             state["capabilities"]["prevent_sleep"] = json!(false);
         }
-        if retired_media_tools {
+        if retired_media_tools || order_changed {
             store.save(&persisted(&state))?;
         }
         let shutdown = CancellationToken::new();
@@ -316,11 +317,59 @@ fn persisted(state: &Value) -> Value {
     }
     state
 }
+fn initialize_job_order(state: &mut Value) -> bool {
+    // Addition order must survive clock corrections and execution-priority changes.
+    let jobs = state["jobs"].as_array_mut().unwrap();
+    let mut order = jobs
+        .iter()
+        .enumerate()
+        .filter(|(_, job)| job["_library"] != true)
+        .map(|(index, job)| {
+            (
+                index,
+                job["added_order"].as_u64().unwrap_or(index as u64 + 1),
+            )
+        })
+        .collect::<Vec<_>>();
+    order.sort_by_key(|&(index, rank)| (rank, index));
+    let mut changed = false;
+    for (rank, &(index, _)) in order.iter().enumerate() {
+        let value = json!(rank as u64 + 1);
+        changed |= jobs[index]["added_order"] != value;
+        jobs[index]["added_order"] = value;
+    }
+    for job in jobs.iter_mut().filter(|job| job["_library"] == true) {
+        changed |= job["added_order"] != 0;
+        job["added_order"] = json!(0);
+    }
+    let last = json!(order.len() as u64);
+    changed |= state["_last_added_order"] != last;
+    state["_last_added_order"] = last;
+    changed
+}
+fn stamp_new_jobs(state: &mut Value) -> Result<()> {
+    let mut last = state["_last_added_order"].as_u64().unwrap_or_default();
+    for job in state["jobs"].as_array_mut().unwrap() {
+        if job["added_order"].as_u64().is_some() {
+            continue;
+        }
+        job["added_order"] = if job["_library"] == true {
+            json!(0)
+        } else {
+            last = last.checked_add(1).context("Исчерпан порядок добавления")?;
+            json!(last)
+        };
+    }
+    state["_last_added_order"] = json!(last);
+    Ok(())
+}
+
 fn change<T>(inner: &Inner, operation: impl FnOnce(&mut Value) -> Result<T>) -> Result<T> {
     let mut state = lock(&inner.state);
     ensure!(!inner.shutdown.is_cancelled(), "Операция отменена");
     let mut next = state.clone();
     let result = operation(&mut next)?;
+    stamp_new_jobs(&mut next)?;
     secrets::seal_sources(inner, &mut next)?;
     lock(&inner.store).save(&persisted(&next))?;
     *state = next;
