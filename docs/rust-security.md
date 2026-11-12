@@ -26,3 +26,11 @@
 ## Остаток
 
 Не проверены Windows/macOS, реальные пользовательские аккаунты, все сайты и их layouts, длительные race/stress сценарии и весь native Qt/FFmpeg/TLS исходный код. Живой desktop walkthrough недоступен в текущем computer-use окружении. Исправленные находки не означают завершения полного соответствия оригиналу или готовности релиза.
+
+## Перепроверка 12.11.2026
+
+Scope: собственные Cargo.lock, core SQLite Store и изменённые runtime/packaging пути; тесты на копиях профиля и localhost, без активных проверок чужих систем. PRIMARY: supply-chain-security.
+
+CI43199194885 обнаружил RUSTSEC-2026-0459 в bundled libsqlite3-sys0.30.1. Диапазон подтверждён первичным advisory RustSec: локально подменённая пара DB/WAL с разным размером страниц может раскрыть неинициализированную память. Подмена пользовательской базы не воспроизводилась. Обновлены rusqlite0.41.1/libsqlite3-sys0.39.1, bundledSQLite3.54.1. Схема хранения не менялась. Копия настоящего профиля прошла чтение/запись/restart, сохранены25ID и настройки; старый SQLite повторно прочитал записанную базу, integrity_check=ok.
+
+После обновления:226core/mediaPASS,0failed,52ignored; Clippyworkspace/all-targets PASS. Gitleakscrates:0. Semgrep323rules/130files:3предупреждения в старых Pythonbootstrap scripts/build.py:16,19 и scripts/run.py:31. Перепроверены: subprocess получает массив аргументов, shell=False, значения env используются как отдельные пути/аргументы; command injection не подтверждена. Никакой пользовательский текст не передаётся интерпретатору shell. QtTS(XML) и LanguageOptions.js(.pragma QML) исключены из несовместимых parsers; эти исключения не означают их SASTпокрытие. Отдельный trufflehog не запускался, второй движок секретов Semgrep. Полный source всех nativeзависимостей этим проходом не аудировался. Финальный cargo-audit и пакетные gates отмечаются в отчёте выпуска.
