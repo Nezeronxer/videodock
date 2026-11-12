@@ -925,7 +925,20 @@ Linuxnativef8a5f25built/installedPASS,2GBpeak,3m49s; actualinstalledonboardingst
 ## Выпуск0.2.2 для Windows/macOS, запрос пользователя12.11
 
 - [x] Подготовить отдельную версию0.2.2 и release notes, сохранить опубликованный0.2.1.
-- [ ] Собрать окончательные пакеты и пройти native EN/RU interface+Engine/installer/worker gates.
-- [ ] Проверить новый Windows installer на доступных Windows10/11, сохранить профиль.
-- [ ] Проверить окончательный Flatpak независимым CI без пересборки.
+- [x] Окончательные пакеты CI43254753785: обязательные native EN/RU interface+Engine/installer/worker gates прошли.
+- [x] Новый Setup проверен на Windows10/11: по два обновления, профиль сохранён, clean PATH startup PASS.
+- [x] Независимый Flatpak verifier43272098606 SUCCESS, без пересборки.
 - [ ] Опубликовать0.2.2 и анонимно сверить packages/manifest/checksums.
+
+0.2.2 checkpoint: runtime/version source b59043d5370df1271bc60ffbdf1dbf2a637a4990; producer43254753785(all,main) building. Dependency audit PASS. Windows10/11 running with corrected RTC; Win11 normal QA login+driver ready seq1 PASS. Private controller39709 / console6084 own user units videodock-qa-control-022-20261112 and videodock-qa-console-022-fixed-20261112; stop after QA. Evidence release-0.2.2-2026-11-12. Installer fixture install-022.ps1 adapted from verified linear0.2.1 fixture; awaits new CI manifest/artifact. Untracked media probe untouched.
+
+## Android, дополнительный запрос12.11
+
+- [x] Проверить текущие ограничения: обязательный Qt WebEngine, desktop executable worker, external FFmpeg. QtWebEngine только Windows/Linux/macOS; Android требует native WebView и мобильную упаковку.
+- [x] Изолировать Android в feature/android, worktree ~/.local/share/videodock/worktrees/android на sourceb59043d, desktop0.2.2 продолжаетCI43254753785.
+- [ ] Проверить cross-build ARM64 ядра, подготовить SDK/NDK/Qt.
+- [ ] Адаптировать native WebView/proof, хранение файлов и FFmpeg, мобильный запуск.
+- [ ] Собрать подписанный APK, проверить запуск и полные загрузки на Android.
+- [ ] Передать APK с точными результатами проверки.
+
+0.2.2 Windows final installer verified on10LTSC19044 and11Enterprise26300: two upgrades each, old profile SHA preserved, clean PATH responsive startup. SetupSHA c55a4a697fd7ecef64ece5d35c4fa107029c505ebde9fa991dc84035a6be81b3; exe3bc44edbedac16cf1dc55026408c9129c7e5e959105ff33423aae69a2377fd2e; Rustmanifest94ae1f4537ed05f10f55b516a33fc119715a5037bd6835fe07d03b243bdb9ab1. Own QA app/tasks/driver closed, Win11seq3PASS, shutdown requested, HTTP/control/console units stopped. MacIntel final packaging remains, ARM/Linux mandatory gates PASS.
