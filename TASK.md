@@ -911,3 +911,13 @@ Linuxnativef8a5f25built/installedPASS,2GBpeak,3m49s; actualinstalledonboardingst
 12.11 final gate: producer43235498448 completed, all mandatory platform gates passed. Cloud macOS Intel/ARM TikTok PASS, YouTube/Shorts request confirmation (explicit network limitation). Independent installed Flatpak verifier43246787444 SUCCESS. Runtime source f8a5f25 unchanged; publication next.
 
 Финал12.11: https://github.com/Nezeronxer/videodock/releases/tag/v0.2.1 опубликован/latest, release source25da03b(runtimef8a5f25), public anonymous API+manifest+SHA256SUMS PASS8assets/6packages. Exact tested Setup/Arch/Flatpak match public hashes. Main обновлён fast-forward без force; исходный untracked crates/media/examples/probe_http.rs не включён.
+
+## Значки, уточнение пользователя12.11 после установки
+
+- [x] Найти причину: Paste Link показывал логотип сайта из буфера вместо стабильного значка действия.
+- [x] Переиспользовать векторный значок ссылки20px с контрастным цветом; убрать ненужное чтение буфера при активации окна. Логотипы сервисов в списке сохранены.
+- [x] Qt интерфейс EN/RU прошёл: вставка ссылок, light/dark, narrow window, контраст, настоящий Engine/restart; новый значок20px стабилен для YouTube/TikTok/private clipboard.
+- [x] Release build2m11s, локальная установка обновлена и перезапущена; профиль25IDs/states сохранён.
+- [x] Видимое установленное окно проверено на Wayland по снимку; evidence icons-2026-11-12/installed-window.png и proof.json.
+
+Правка значка установлена локально; опубликованные immutable пакеты0.2.1 не заменялись. Windows/macOS этой косметической правки не пересобирались.

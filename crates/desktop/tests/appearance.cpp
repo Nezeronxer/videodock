@@ -232,25 +232,24 @@ int main(int argc, char **argv) {
                   "Service logo is stretched: " + image->objectName());
         }
         capture("service-icons-proportions");
-        // Returning from a browser updates the button without parsing or retaining clipboard text.
-        for (const auto &sample : QList<QPair<QString, QString>>{
-                 {"https://www.youtube.com/watch?v=fixture", "service-youtube.svg"},
-                 {"https://youtu.be/fixture", "service-youtube.svg"},
-                 {"https://www.tiktok.com/@fixture/video/1", "service-tiktok.svg"},
-                 {"https://youtube.com.example.invalid/", "browser.svg"},
-                 {"private-fixture-marker", "plus.svg"}}) {
-            QApplication::clipboard()->setText(sample.first);
+        // The action stays recognizable regardless of clipboard contents.
+        for (const auto &sample : QStringList{
+                 "https://www.youtube.com/watch?v=fixture",
+                 "https://www.tiktok.com/@fixture/video/1",
+                 "private-fixture-marker"}) {
+            QApplication::clipboard()->setText(sample);
             backend->lastAction = {};
-            invoke(window, "refreshClipboardIcon");
+            window->requestActivate();
+            QTest::qWait(30);
             const auto icon = engine.newQObject(named(window, "pasteButton")).property("icon");
             const QString source = icon.property("source").toString();
-            const QString reference = sample.second == "plus.svg" ? "paste-link.png"
-                : QString(sample.second).replace("service-", "").replace("tiktok", "tik-tok").replace(".svg", "-icon.svg");
-            check(source.endsWith(sample.second) || source.endsWith(reference), "Paste button does not show the clipboard platform");
-            check(!icon.property("color").toVariant().value<QColor>().alpha() || sample.second == "plus.svg", "Platform logo is recolored");
+            check(source.endsWith("icons/connection.svg"), "Paste action icon changed with the clipboard");
+            check(icon.property("color").toVariant().value<QColor>().alpha() == 255, "Paste action icon lost its contrast");
+            check(icon.property("width").toInt() == 20 && icon.property("height").toInt() == 20, "Paste action icon size changed");
             check(backend->lastAction.isEmpty(), "Clipboard preview dispatched private input");
             check(named(window, "clipboardBuffer")->property("text").toString().isEmpty(), "Clipboard preview retained private input");
         }
+        capture("paste-link-action-icon");
         auto paletteColor = [&](QObject *object, const char *role) {
             return engine.newQObject(object).property("palette").property(QString::fromLatin1(role)).toVariant().value<QColor>();
         };

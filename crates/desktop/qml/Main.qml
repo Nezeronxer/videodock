@@ -25,9 +25,6 @@ ApplicationWindow {
 
     readonly property alias theme: colors
     readonly property color green: colors.accent
-    property string clipboardPlatformIcon: ""
-    onActiveChanged: if (active) Qt.callLater(window.refreshClipboardIcon)
-    Component.onCompleted: Qt.callLater(window.refreshClipboardIcon)
     property bool searchVisible: false
 
     UiTheme {
@@ -199,13 +196,6 @@ ApplicationWindow {
             "ids": ids || selectedIds,
             "delete_files": !!deleteFiles
         });
-    }
-
-    function refreshClipboardIcon() {
-        clipboardField.clear();
-        clipboardField.paste();
-        clipboardPlatformIcon = platformIcon(clipboardField.text.trim());
-        clipboardField.clear();
     }
 
     function pasteLink() {
@@ -448,8 +438,10 @@ ApplicationWindow {
                     palette.dark: window.theme.accent
                     objectName: "pasteButton"
                     text: qsTr("Paste Link")
-                    icon.source: window.clipboardPlatformIcon || window.asset("paste-link.png", "icons/plus.svg")
-                    icon.color: window.clipboardPlatformIcon ? "transparent" : window.theme.accentText
+                    icon.source: "icons/connection.svg"
+                    icon.color: window.theme.accentText
+                    icon.width: 20
+                    icon.height: 20
                     font.pixelSize: 14
                     highlighted: true
                     Layout.preferredWidth: window.width < 800 ? 40 : 180
