@@ -24,8 +24,11 @@ try {
     $env:QT_FORCE_STDERR_LOGGING = '1'
     foreach ($language in @('en', 'ru')) {
         New-Item -ItemType Directory -Force "$output/$language" | Out-Null
-        & "$build/videodock-appearance.exe" "$project/crates/desktop/qml/Main.qml" "$output/$language" $language "$env:CARGO_TARGET_DIR/debug/examples/ui_engine.exe" $sample *> "$output/$language.log"
-        $results[$language] = $LASTEXITCODE
+        $arguments = @("`"$project/crates/desktop/qml/Main.qml`"", "`"$output/$language`"", $language,
+                       "`"$env:CARGO_TARGET_DIR/debug/examples/ui_engine.exe`"", "`"$sample`"")
+        $test = Start-Process -FilePath "$build/videodock-appearance.exe" -ArgumentList $arguments -Wait -PassThru `
+            -RedirectStandardOutput "$output/$language-stdout.log" -RedirectStandardError "$output/$language.log"
+        $results[$language] = $test.ExitCode
     }
     $results | ConvertTo-Json | Set-Content -Encoding utf8 "$output/result.json"
     if (@($results.Values | Where-Object { $_ -ne 0 }).Count) { throw 'Windows appearance/real Engine check failed' }
