@@ -11,7 +11,8 @@
 - [x] Окончательный CI Windows Setup: две установки поверх старой на10/11, clean PATH, полные YouTube/TikTok с decode и restart.
 - [x] Окончательные CI Arch Linux/Flatpak: установлены, runtime/worker/proxy/startup прошли; персональная сеть сохранена.
 - [x] Временные Windows QA задачи/сервисы закрыты, машины штатно выключены, исходные устройства восстановлены; исправленный RTC сохранён с rollback.
-- [ ] Завершить macOS packages и независимый CI Flatpak verifier на окончательных артефактах.
+- [x] macOS Intel/ARM: обязательные EN/RU interface, bundle, clean PATH worker/proxy/startup прошли.
+- [x] Независимый CI Flatpak verifier43246787444 на окончательном артефакте прошёл.
 - [ ] Опубликовать v0.2.1, проверить публичные шесть пакетов/манифест/checksums.
 
 Отчёт: [docs/release-2026-11-12.md](docs/release-2026-11-12.md).
@@ -906,3 +907,5 @@ QAclock: Win10PacificUTCбыл+11h,Win11timezoneUTCбыл+3hиз-заlibvirtloca
 Linuxnativef8a5f25built/installedPASS,2GBpeak,3m49s; actualinstalledonboardingstartupпрожил8s(ожидаемыйtimeout),profilecopy25ids+всеcreated_at/pathсохраненыиorderдобавлен. НоваяCI43235498448f8a5f25.
 
 17:53MSK final f8 installer PASS Windows10/11: two upgrades preserve profile, clean PATH startup, real UI Paste YouTube19s+TikTok32s full decode/newest-first/restart, native proxy Save closes+persists on both. Flatpak CI1a325836 installed and proof_worker --proxy --startup exit0. Evidence win{10,11}-ordinal-{install,zoo,tiktok,proxy}-proof.json. macOS producer still packaging; independent verifier must wait entire producer completed.
+
+12.11 final gate: producer43235498448 completed, all mandatory platform gates passed. Cloud macOS Intel/ARM TikTok PASS, YouTube/Shorts request confirmation (explicit network limitation). Independent installed Flatpak verifier43246787444 SUCCESS. Runtime source f8a5f25 unchanged; publication next.
