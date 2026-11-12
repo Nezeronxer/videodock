@@ -921,3 +921,11 @@ Linuxnativef8a5f25built/installedPASS,2GBpeak,3m49s; actualinstalledonboardingst
 - [x] Видимое установленное окно проверено на Wayland по снимку; evidence icons-2026-11-12/installed-window.png и proof.json.
 
 Правка значка установлена локально; опубликованные immutable пакеты0.2.1 не заменялись. Windows/macOS этой косметической правки не пересобирались.
+
+## Выпуск0.2.2 для Windows/macOS, запрос пользователя12.11
+
+- [x] Подготовить отдельную версию0.2.2 и release notes, сохранить опубликованный0.2.1.
+- [ ] Собрать окончательные пакеты и пройти native EN/RU interface+Engine/installer/worker gates.
+- [ ] Проверить новый Windows installer на доступных Windows10/11, сохранить профиль.
+- [ ] Проверить окончательный Flatpak независимым CI без пересборки.
+- [ ] Опубликовать0.2.2 и анонимно сверить packages/manifest/checksums.

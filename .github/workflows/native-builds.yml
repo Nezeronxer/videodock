@@ -11,7 +11,7 @@ on:
       release_tag:
         description: Stable release tag (publish only)
         type: string
-        default: v0.2.1
+        default: v0.2.2
       windows_run:
         description: Validated Windows artifact run (publish only)
         type: string
