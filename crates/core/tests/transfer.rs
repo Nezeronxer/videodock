@@ -7,6 +7,75 @@ use tokio_util::sync::CancellationToken;
 use videodock_core::transfer::{Limiter, download};
 
 #[tokio::test]
+async fn stale_resume_restarts_once_without_appending_or_destroying_on_denial() {
+    for next_status in [200, 401, 403, 416] {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/media", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            for attempt in 0..2 {
+                let (mut socket, _) =
+                    tokio::time::timeout(std::time::Duration::from_secs(2), listener.accept())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    let mut chunk = [0; 1024];
+                    let count = socket.read(&mut chunk).await.unwrap();
+                    assert!(count > 0 && request.len() + count <= 8192);
+                    request.extend_from_slice(&chunk[..count]);
+                }
+                let request = String::from_utf8(request).unwrap().to_ascii_lowercase();
+                if attempt == 0 {
+                    assert!(request.contains("range: bytes=12-"));
+                    assert!(request.contains("if-range: \"old\""));
+                    socket.write_all(b"HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nContent-Range: bytes */6\r\nConnection: close\r\n\r\n").await.unwrap();
+                } else {
+                    assert!(!request.contains("range:"));
+                    let body = if next_status == 200 { "abcdef" } else { "" };
+                    socket.write_all(format!("HTTP/1.1 {next_status} Test\r\nContent-Length: {}\r\nETag: \"new\"\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+                }
+            }
+            assert!(
+                tokio::time::timeout(std::time::Duration::from_millis(100), listener.accept())
+                    .await
+                    .is_err()
+            );
+        });
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("media.part");
+        tokio::fs::write(&path, b"stale-longer").await.unwrap();
+        tokio::fs::write(path.with_extension("http.json"), br#"{"etag":"\"old\""}"#)
+            .await
+            .unwrap();
+        let result = download(
+            &reqwest::Client::new(),
+            &url,
+            &BTreeMap::new(),
+            &path,
+            &CancellationToken::new(),
+            &Limiter::new(0),
+            Arc::new(|_| {}),
+        )
+        .await;
+        assert_eq!(
+            result.is_ok(),
+            next_status == 200,
+            "status {next_status}: {result:?}"
+        );
+        assert_eq!(
+            tokio::fs::read(path).await.unwrap(),
+            if next_status == 200 {
+                &b"abcdef"[..]
+            } else {
+                &b"stale-longer"[..]
+            }
+        );
+        server.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn media_retries_are_bounded_and_do_not_retry_access_denials() {
     for (status, expected_requests) in [(403, 1), (503, 3)] {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

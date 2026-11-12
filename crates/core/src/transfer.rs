@@ -169,7 +169,7 @@ pub async fn download_with_cookies(
         .await
         .map(|m| m.len())
         .unwrap_or_default();
-    let original = offset;
+    let mut original = offset;
     let started = Instant::now();
     let metadata_path = path.with_extension("http.json");
     let mut saved_etag = tokio::fs::read(&metadata_path)
@@ -228,6 +228,17 @@ pub async fn download_with_cookies(
                 .and_then(|value| value.to_str().ok())
                 .and_then(|value| value.strip_prefix("bytes */"))
                 .and_then(|value| value.parse::<u64>().ok());
+            if offset > 0
+                && offset == original
+                && confirmed_total.is_none()
+                && remote != Some(offset)
+            {
+                // A refreshed media lease may select a shorter rendition; replace only after a valid full response.
+                offset = 0;
+                original = 0;
+                saved_etag = None;
+                continue;
+            }
             ensure!(
                 remote == Some(offset) && offset > 0,
                 "Сервер не подтвердил размер частичного файла"

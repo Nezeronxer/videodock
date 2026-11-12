@@ -41,6 +41,20 @@ use tokio::{
 };
 
 const IPC_LIMIT: usize = 32 * 1024;
+#[derive(Debug)]
+pub enum AttestationRetryable {
+    Failed,
+    Timeout,
+}
+impl std::fmt::Display for AttestationRetryable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Failed => "Google не подтвердил анонимную проверку; повторите загрузку",
+            Self::Timeout => "Проверка Google превысила время ожидания",
+        })
+    }
+}
+impl std::error::Error for AttestationRetryable {}
 #[derive(Serialize)]
 struct Bootstrap {
     host: String,
@@ -137,14 +151,27 @@ fn response(bytes: &[u8], id: &str) -> Result<Proof> {
                 && data.user_agent.is_none(),
             "Некорректный отказ проверки Google"
         );
-        let message = match data
+        let stage = data
             .stage
-            .ok_or_else(|| anyhow::anyhow!("Нет причины отказа проверки Google"))?
-        {
+            .ok_or_else(|| anyhow::anyhow!("Нет причины отказа проверки Google"))?;
+        if matches!(
+            &stage,
+            Stage::Homepage
+                | Stage::Challenge
+                | Stage::Interpreter
+                | Stage::Snapshot
+                | Stage::Integrity
+                | Stage::Mint
+        ) {
+            return Err(AttestationRetryable::Failed.into());
+        }
+        if matches!(&stage, Stage::Timeout) {
+            return Err(AttestationRetryable::Timeout.into());
+        }
+        let message = match stage {
             Stage::Validation => {
                 "Проверка Google поддерживает HTTP (включая вход) и SOCKS5 без логина; HTTPS и SOCKS4 не поддерживаются"
             }
-            Stage::Timeout => "Проверка Google превысила время ожидания",
             Stage::Network => "Проверке Google недоступна сеть через выбранный маршрут",
             _ => "Google не подтвердил анонимную проверку; повторите загрузку",
         };
@@ -418,6 +445,42 @@ use windows::Tree;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn transient_worker_failures_require_fresh_attestation_but_invalid_requests_do_not() {
+        for (stage, retryable) in [
+            ("homepage", true),
+            ("challenge", true),
+            ("interpreter", true),
+            ("snapshot", true),
+            ("integrity", true),
+            ("mint", true),
+            ("timeout", true),
+            ("validation", false),
+            ("network", false),
+            ("internal", false),
+        ] {
+            let mut data = serde_json::to_vec(&serde_json::json!({
+                "version":1,"request_id":"fixture","ok":false,"stage":stage
+            }))
+            .unwrap();
+            data.push(b'\n');
+            let error = super::response(&data, "fixture").unwrap_err();
+            assert_eq!(
+                error.is::<super::AttestationRetryable>(),
+                retryable,
+                "stage {stage}"
+            );
+        }
+        let mut data = serde_json::to_vec(&serde_json::json!({
+            "version":1,"request_id":"fixture","ok":false,"stage":"mint",
+            "content_po":"synthetic-private-value"
+        }))
+        .unwrap();
+        data.push(b'\n');
+        let error = super::response(&data, "fixture").unwrap_err();
+        assert!(!error.is::<super::AttestationRetryable>());
+        assert!(!error.to_string().contains("synthetic-private-value"));
+    }
     use super::*;
     fn good() -> serde_json::Value {
         serde_json::json!({"version":1,"request_id":"fixture","ok":true,"content_po":"YWJj","session_po":"ZGVm","visitor_data":"fixture-visitor","user_agent":"Fixture Agent"})

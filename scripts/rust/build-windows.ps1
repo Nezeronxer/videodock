@@ -29,6 +29,7 @@ try {
     foreach ($dll in @('vcruntime140.dll', 'msvcp140.dll', 'platforms\qoffscreen.dll', 'platforms\qwindows.dll', 'QtWebEngineProcess.exe')) {
         if (-not (Test-Path (Join-Path $destination $dll) -PathType Leaf)) { throw "Incomplete portable runtime: $dll" }
     }
+    & (Join-Path $PSScriptRoot 'check-windows-binaries.ps1') -Directory $destination
     $licenses = Join-Path $destination 'licenses'
     New-Item -ItemType Directory -Force $licenses | Out-Null
     Copy-Item (Join-Path $project 'LICENSES/*') $licenses -Recurse -Force

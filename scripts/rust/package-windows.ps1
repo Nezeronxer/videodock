@@ -5,6 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $project = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $source = (Resolve-Path $SourceDirectory).Path
+& (Join-Path $PSScriptRoot 'check-windows-binaries.ps1') -Directory $source
 foreach ($file in @('VideoDock.exe', 'QtWebEngineProcess.exe', 'ffmpeg.exe', 'ffprobe.exe', 'msvcp140.dll', 'vcruntime140.dll', 'platforms/qwindows.dll', 'licenses/GPL-3.0.txt', 'licenses/rust/manifest.json', 'THIRD-PARTY-NOTICES.md', 'videodock.ico')) {
     if (-not (Test-Path (Join-Path $source $file) -PathType Leaf)) { throw "Incomplete application package: $file" }
 }

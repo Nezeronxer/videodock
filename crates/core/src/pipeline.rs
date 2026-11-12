@@ -5,6 +5,7 @@ use crate::{
 use anyhow::{Context, Result, bail, ensure};
 use reqwest::Client;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -356,6 +357,32 @@ async fn publish_outputs(
     Ok((std::mem::take(&mut published.0), size))
 }
 
+async fn prepare_http_partial(path: &Path, identity: &str) -> Result<()> {
+    let identity_path = path.with_extension("identity");
+    match tokio::fs::File::open(&identity_path).await {
+        Ok(file) => {
+            let mut saved = Vec::new();
+            file.take(65).read_to_end(&mut saved).await?;
+            if saved == identity.as_bytes() {
+                return Ok(());
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).context("Не удалось проверить частичную загрузку"),
+    }
+    for stale in [path.to_path_buf(), path.with_extension("http.json")] {
+        match tokio::fs::remove_file(stale).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).context("Не удалось очистить старую частичную загрузку");
+            }
+        }
+    }
+    tokio::fs::write(identity_path, identity).await?;
+    Ok(())
+}
+
 pub async fn run(
     mut media: Media,
     client: Client,
@@ -397,9 +424,20 @@ pub async fn run(
     let sabr_audio = selected
         .iter()
         .filter(|format| format.has_audio())
-        .find_map(|format| format.sabr.clone());
+        .find_map(|format| format.sabr.clone().zip(format.size));
     let mut transfers = tokio::task::JoinSet::new();
     for (index, format) in selected.iter().cloned().enumerate() {
+        // Index-based provider IDs can point to another rendition after metadata refresh.
+        let identity = format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_vec(&serde_json::json!({
+                "source": [&media.id, &media.url], "id": &format.id, "ext": &format.ext,
+                "width": format.width, "height": format.height, "fps": format.fps,
+                "video_codec": &format.video_codec, "audio_codec": &format.audio_codec,
+                "audio_track": &format.audio_track_id, "audio_language": &format.audio_language,
+                "size": format.size, "bitrate": format.bitrate,
+            }))?)
+        );
         let sabr_audio = sabr_audio.clone();
         let (client, staging_dir, cancel, limiter) = (
             client.clone(),
@@ -455,7 +493,9 @@ pub async fn run(
                             .sabr
                             .as_ref()
                             .context("Нет временных данных SABR; обновите ссылку")?,
-                        sabr_audio.as_ref(),
+                        sabr_audio
+                            .as_ref()
+                            .map(|(delivery, bytes)| (delivery, *bytes)),
                         format.size.context("YouTube не указал размер SABR")?,
                         &staging_dir.join(format!("sabr-{index}")),
                         &cancel,
@@ -465,6 +505,7 @@ pub async fn run(
                     .await?
                 }
                 Protocol::Http => {
+                    prepare_http_partial(&partial, &identity).await?;
                     transfer::download_with_cookies(
                         &client,
                         &format.url,
@@ -773,7 +814,58 @@ pub async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    #[tokio::test]
+    async fn matching_partial_identity_preserves_resume_and_other_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let partial = temp.path().join("stream.part");
+        let metadata = partial.with_extension("http.json");
+        let finished = temp.path().join("finished.mp4");
+        tokio::fs::write(&finished, b"keep completed output")
+            .await
+            .unwrap();
+        prepare_http_partial(&partial, "first-rendition")
+            .await
+            .unwrap();
+        tokio::fs::write(&partial, b"resume these bytes")
+            .await
+            .unwrap();
+        tokio::fs::write(&metadata, b"keep validator")
+            .await
+            .unwrap();
+        prepare_http_partial(&partial, "first-rendition")
+            .await
+            .unwrap();
+        assert_eq!(
+            tokio::fs::read(&partial).await.unwrap(),
+            b"resume these bytes"
+        );
+        assert_eq!(tokio::fs::read(&metadata).await.unwrap(), b"keep validator");
+        prepare_http_partial(&partial, "another-rendition")
+            .await
+            .unwrap();
+        assert!(!partial.exists());
+        assert!(!metadata.exists());
+        assert_eq!(
+            tokio::fs::read(&finished).await.unwrap(),
+            b"keep completed output"
+        );
+        let blocked = temp.path().join("blocked.part");
+        tokio::fs::write(&blocked, b"preserve on identity read failure")
+            .await
+            .unwrap();
+        tokio::fs::create_dir(blocked.with_extension("identity"))
+            .await
+            .unwrap();
+        assert!(
+            prepare_http_partial(&blocked, "first-rendition")
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            tokio::fs::read(&blocked).await.unwrap(),
+            b"preserve on identity read failure"
+        );
+    }
     #[cfg(windows)]
     #[test]
     fn windows_preview_measures_utf16_units_instead_of_encoded_bytes() {

@@ -989,6 +989,30 @@ fn kick(inner: &Arc<Inner>) -> Result<()> {
     }
     Ok(())
 }
+const ATTESTATION_REFRESH_LIMIT: u64 = 4;
+fn refresh_pending_attestation(item: &mut Value, error: &anyhow::Error) -> bool {
+    let refreshes = item["_attestation_refreshes"]
+        .as_u64()
+        .unwrap_or(u64::from(item["_sabr_refreshed"] == true));
+    if !(error.is::<crate::sabr::PendingAttestation>()
+        || error.is::<crate::sabr::Retryable>()
+        || error.is::<videodock_media::AttestationRetryable>())
+        || refreshes >= ATTESTATION_REFRESH_LIMIT
+        || item["state"] == "paused"
+        || item.get("_remove").is_some()
+    {
+        return false;
+    }
+    item.as_object_mut().unwrap().remove("_sabr_refreshed");
+    item["_attestation_refreshes"] = json!(refreshes + 1);
+    item["_reset_stage"] = json!(true);
+    item["state"] = json!("queued");
+    item["error"] = json!("");
+    item["progress"] = json!(0);
+    item["downloaded"] = json!(0);
+    item["remaining"] = json!("");
+    true
+}
 async fn run_job(weak: Weak<Inner>, id: String, cancel: CancellationToken) {
     let Some(inner) = weak.upgrade() else { return };
     let staging = inner
@@ -1116,7 +1140,7 @@ if item["_parent"]==replacement{item["_parent"]=json!(id);}}
                                 if item["state"] != "queued" {
                                     item["state"] = json!("paused");
                                 }
-                            } else {
+                            } else if !refresh_pending_attestation(item, &error) {
                                 item["state"] = json!("error");
                                 item["error"] = json!(message);
                             }
@@ -1128,8 +1152,7 @@ if item["_parent"]==replacement{item["_parent"]=json!(id);}}
             }
         }
         let reset = job(&lock(&inner.state), &id).is_some_and(|job| job["_reset_stage"] == true);
-        if reset {
-            tokio::fs::remove_dir_all(&staging).await.ok();
+        if reset && (tokio::fs::remove_dir_all(&staging).await.is_ok() || !staging.exists()) {
             let _ = change(&inner, |state| {
                 if let Some(item) = job_mut(state, &id) {
                     item.as_object_mut().unwrap().remove("_reset_stage");
@@ -1253,6 +1276,8 @@ pub(super) fn jobs(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
                                 {
                                     item["state"] = json!("queued");
                                     item["error"] = json!("");
+                                    item.as_object_mut().unwrap().remove("_sabr_refreshed");
+                                    item.as_object_mut().unwrap().remove("_attestation_refreshes");
                                 }
                             }
                             "redownload" => {
@@ -1260,6 +1285,8 @@ pub(super) fn jobs(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
                                 item["progress"] = json!(0);
                                 item["error"] = json!("");
                                 item["_reset_stage"] = json!(true);
+                                item.as_object_mut().unwrap().remove("_sabr_refreshed");
+                                item.as_object_mut().unwrap().remove("_attestation_refreshes");
                                 item["_spec"]["skip_duplicates"] = json!(false);
                             }
                             _ => {}
@@ -1749,6 +1776,43 @@ if let Some(paths)=item["files"].as_array(){for path in paths.iter().filter_map(
 #[cfg(test)]
 mod user_error_tests {
     use super::*;
+    #[test]
+    fn attestation_refresh_is_bounded_and_preserves_job_identity() {
+        for error in [
+            anyhow::Error::new(crate::sabr::PendingAttestation).context("transfer"),
+            anyhow::Error::new(crate::sabr::Retryable("Соединение SABR прервано"))
+                .context("transfer"),
+            videodock_media::AttestationRetryable::Failed.into(),
+            videodock_media::AttestationRetryable::Timeout.into(),
+        ] {
+            let mut item = json!({"id":"same-job","state":"downloading","progress":80,"downloaded":42});
+            for expected in 1..=ATTESTATION_REFRESH_LIMIT {
+                assert!(refresh_pending_attestation(&mut item, &error));
+                assert_eq!(item["id"], "same-job");
+                assert_eq!(item["state"], "queued");
+                assert_eq!(item["progress"], 0);
+                assert_eq!(item["downloaded"], 0);
+                assert_eq!(item["_reset_stage"], true);
+                assert_eq!(item["_attestation_refreshes"], expected);
+            }
+            let after = item.clone();
+            assert!(!refresh_pending_attestation(&mut item, &error));
+            assert_eq!(item, after);
+        }
+    }
+    #[test]
+    fn attestation_refresh_never_retries_rejection_paused_or_removed_jobs() {
+        for message in ["Google отклонил PO; повторите проверку", "HTTP 403", "disk full"] {
+            let mut item = json!({"state":"downloading"});
+            assert!(!refresh_pending_attestation(&mut item, &anyhow::anyhow!(message)));
+            assert_eq!(item, json!({"state":"downloading"}));
+        }
+        for mut item in [json!({"state":"paused"}), json!({"state":"downloading","_remove":false})] {
+            let before = item.clone();
+            assert!(!refresh_pending_attestation(&mut item, &crate::sabr::PendingAttestation.into()));
+            assert_eq!(item, before);
+        }
+    }
     #[test]
     fn batch_preview_preserves_child_subtitles_and_audio_languages() {
         let clip = |language: &str| Media {

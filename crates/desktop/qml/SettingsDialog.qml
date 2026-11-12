@@ -10,6 +10,7 @@ AppDialog {
     property int tab: 0
     property bool proxyEditing: false
     property bool proxyEnableRequested: false
+    property string proxyError: ""
     readonly property var tabTitles: [qsTr("General"), qsTr("Advanced"), qsTr("Connection"), qsTr("Notification"), qsTr("Authorization")]
     readonly property int sidebarExtra: {
         let longest = 0;
@@ -173,6 +174,8 @@ AppDialog {
     function cancelProxy() {
         proxyEditing = false;
         proxyEnableRequested = false;
+        proxyError = "";
+        proxyType.currentIndex = Math.max(0, proxyType.model.indexOf(app.settings.proxyType || "SOCKS5"));
         proxyHost.text = app.settings.proxyHost || "";
         proxyPort.text = String(app.settings.proxyPort || "");
         proxyLogin.text = app.settings.proxyLogin || "";
@@ -182,6 +185,8 @@ AppDialog {
     onOpened: {
         proxyEditing = false;
         proxyEnableRequested = false;
+        proxyError = "";
+        proxyType.currentIndex = Math.max(0, proxyType.model.indexOf(app.settings.proxyType || "SOCKS5"));
         proxyHost.text = app.settings.proxyHost || "";
         proxyPort.text = String(app.settings.proxyPort || "");
         proxyLogin.text = app.settings.proxyLogin || "";
@@ -671,12 +676,13 @@ AppDialog {
 
                                         ComboBox {
                                             id: proxyType
+                                            objectName: "proxyType"
                                             palette.dark: root.app.theme.secondary
 
                                             Layout.preferredWidth: 258
                                             implicitHeight: 40
                                             model: ["HTTP", "HTTPS", "SOCKS5", "SOCKS4"]
-                                            currentIndex: Math.max(0, model.indexOf(root.app.settings.proxyType || "HTTPS"))
+                                            onActivated: root.proxyError = ""
                                         }
 
                                         Label {
@@ -691,6 +697,7 @@ AppDialog {
                                             Layout.preferredWidth: 258
                                             implicitHeight: 40
                                             text: root.app.settings.proxyHost || ""
+                                            onTextEdited: root.proxyError = ""
                                             placeholderText: "127.0.0.1"
                                             selectByMouse: true
                                         }
@@ -707,6 +714,7 @@ AppDialog {
                                             Layout.preferredWidth: 258
                                             implicitHeight: 40
                                             text: String(root.app.settings.proxyPort || "")
+                                            onTextEdited: root.proxyError = ""
                                             placeholderText: "1080"
 
                                             validator: IntValidator {
@@ -722,10 +730,12 @@ AppDialog {
 
                                         TextField {
                                             id: proxyLogin
+                                            objectName: "proxyLogin"
 
                                             Layout.preferredWidth: 258
                                             implicitHeight: 40
                                             text: root.app.settings.proxyLogin || ""
+                                            onTextEdited: root.proxyError = ""
                                             selectByMouse: true
                                         }
 
@@ -736,12 +746,25 @@ AppDialog {
 
                                         TextField {
                                             id: proxyPassword
+                                            objectName: "proxyPassword"
+                                            onTextEdited: root.proxyError = ""
 
                                             Layout.preferredWidth: 258
                                             implicitHeight: 40
                                             echoMode: TextInput.Password
                                             placeholderText: root.app.settings.proxyPasswordSet ? qsTr("Password saved") : ""
                                         }
+                                    }
+
+                                    Label {
+                                        objectName: "proxySaveError"
+                                        Layout.fillWidth: true
+                                        visible: root.proxyError.length > 0
+                                        text: root.proxyError
+                                        textFormat: Text.PlainText
+                                        wrapMode: Text.Wrap
+                                        color: root.app.theme.dark ? "#ff9b85" : "#b32d16"
+                                        Accessible.role: Accessible.AlertMessage
                                     }
 
                                     RowLayout {
@@ -780,10 +803,12 @@ AppDialog {
                                                     "action": "settings",
                                                     "values": values
                                                 });
+                                                root.proxyError = result.error || "";
                                                 if (!result.error) {
                                                     proxyPassword.clear();
                                                     root.proxyEditing = false;
                                                     root.proxyEnableRequested = false;
+                                                    root.close();
                                                 }
                                             }
                                         }

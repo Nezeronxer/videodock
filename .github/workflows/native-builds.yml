@@ -11,7 +11,7 @@ on:
       release_tag:
         description: Stable release tag (publish only)
         type: string
-        default: v0.2.0
+        default: v0.2.1
       windows_run:
         description: Validated Windows artifact run (publish only)
         type: string
@@ -583,7 +583,10 @@ jobs:
             ~/.cargo/registry
           key: native-${{ runner.os }}-${{ runner.arch }}-1.99.1-${{ hashFiles('Cargo.lock') }}
       - name: Verify Windows package staging rollback
-        run: powershell -NoProfile -File scripts/rust/tests/check-windows-staging.ps1
+        run: |
+          powershell -NoProfile -File scripts/rust/tests/check-windows-binaries.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Windows binary header checks failed' }
+          powershell -NoProfile -File scripts/rust/tests/check-windows-staging.ps1
       - name: Test and build Windows package
         id: windows-tests
         shell: cmd

@@ -29,6 +29,9 @@
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
 #include <cmath>
 #include <functional>
+#ifdef Q_OS_WIN
+#include <QtCore/qt_windows.h>
+#endif
 #include <stdexcept>
 
 class FixtureBackend : public QObject {
@@ -929,23 +932,41 @@ int main(int argc, char **argv) {
             click(window, named(window, "preferencesButton"));
             settings->setProperty("tab", 2);
             settings->setProperty("proxyEditing", true);
+            auto *proxyType = named(window, "proxyType");
+            proxyType->setProperty("currentIndex", 0);
+            QMetaObject::invokeMethod(proxyType, "activated", Q_ARG(int, 0));
             auto *speed = named(window, "speedLimitChoice");
             speed->setProperty("currentIndex", 5);
             QMetaObject::invokeMethod(speed, "activated", Q_ARG(int, 5));
             QTest::qWait(100);
             check(backend->state["settings"].toObject()["speedLimit"].toInt() == 125000, "1 Mbps was not normalized by real Engine");
             check(speed->property("currentIndex").toInt() == 5, "UI displays Unlimited after saving a 1 Mbps speed limit");
+            check(proxyType->property("currentIndex").toInt() == 0, "Unsaved proxy protocol was reset by a settings refresh");
             auto *host = named(window, "proxyHost");
             host->setProperty("text", "invalid host");
             click(window, named(window, "saveProxySettings"));
             check(!evaluate("ui.localNotice").toString().isEmpty(), "Real validation error is not visible");
+            check(named(window, "proxySaveError")->property("visible").toBool()
+                && !named(window, "proxySaveError")->property("text").toString().isEmpty(), "Proxy validation error is hidden behind preferences");
             check(backend->state["settings"].toObject()["proxyHost"].toString().isEmpty(), "Invalid proxy host was saved");
             host->setProperty("text", "127.0.0.1");
             named(window, "proxyPort")->setProperty("text", "70000");
             check(!named(window, "saveProxySettings")->property("enabled").toBool(), "Invalid proxy port can be submitted");
             named(window, "proxyPort")->setProperty("text", "1080");
+            named(window, "proxyLogin")->setProperty("text", "fixture-proxy-user");
+            named(window, "proxyPassword")->setProperty("text", "fixture-proxy-password");
             click(window, named(window, "saveProxySettings"));
             check(backend->state["settings"].toObject()["proxyHost"] == "127.0.0.1", "Proxy fields did not reach real Engine");
+            check(backend->state["settings"].toObject()["proxyType"] == "HTTP", "Selected proxy protocol was not saved");
+            check(!settings->property("visible").toBool(), "Successful proxy save left preferences open");
+            check(named(window, "proxyPassword")->property("text").toString().isEmpty(), "Saved proxy password remains in the editor");
+            backend->stopEngine();
+            backend->startEngine(driver, profile.path());
+            check(backend->state["settings"].toObject()["proxyHost"] == "127.0.0.1"
+                && backend->state["settings"].toObject()["proxyPort"].toInt() == 1080
+                && backend->state["settings"].toObject()["proxyType"] == "HTTP"
+                && backend->state["settings"].toObject()["proxyLogin"] == "fixture-proxy-user"
+                && backend->state["settings"].toObject()["proxyPasswordSet"] == true, "Proxy settings did not survive actual Engine restart");
             capture("real-engine-settings");
             invoke(settings, "close");
             backend->theme("dark");
@@ -1014,6 +1035,13 @@ int main(int argc, char **argv) {
                 const auto global = window->mapToGlobal(point);
                 // QWindow's QTest mouseMove injects an event without moving the native cursor.
                 QCursor::setPos(global);
+#ifdef Q_OS_WIN
+                // Windows also needs an OS move to update native hover in the virtual desktop.
+                INPUT nativeMove{};
+                nativeMove.type = INPUT_MOUSE;
+                nativeMove.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_MOVE_NOCOALESCE;
+                qInfo("Native hover input %s: delivered=%u", stage, SendInput(1, &nativeMove, sizeof(nativeMove)));
+#endif
                 QTest::mouseMove(window, point);
                 auto settled = [&]() {
                     return playButton->property("hovered").toBool() == hovered

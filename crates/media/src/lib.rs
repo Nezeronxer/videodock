@@ -7,6 +7,7 @@ pub mod youtube;
 pub mod sabr;
 pub use dns::anonymous_dns_bootstrap;
 pub use model::*;
+pub use proof::AttestationRetryable;
 pub use selection::choose_formats;
 
 pub fn scoped_headers(

@@ -28,9 +28,7 @@ async fn complete_sample(id: &str, quality: u32, expected_duration: f64) {
     }
     let start = Instant::now();
     let address = if id.starts_with("https://") { id.to_owned() } else { format!("https://www.youtube.com/watch?v={id}") };
-    let auth = if id.contains("/shorts/") {
-        Auth {cookie_header:"VISITOR_INFO1_LIVE=fixture; YSC=fixture; CONSENT=YES".into()}
-    } else { Auth::default() };
+    let auth = Auth::default();
     let media = tokio::time::timeout(
         Duration::from_secs(90),
         adapter.inspect(
@@ -309,4 +307,10 @@ async fn big_buck_bunny_modern_complete_1080p() {
 #[ignore = "complete download of the user-reported monitor video with native proof worker"]
 async fn reported_monitor_video_complete_360p() {
     complete_sample("RINzuNBpPpk", 360, 0.0).await;
+}
+
+#[tokio::test]
+#[ignore = "complete anonymous download of the screenshot-reported YouTube short"]
+async fn reported_philosophy_short_complete_original_quality() {
+    complete_sample("a9oJKJeHVeY", 0, 0.0).await;
 }

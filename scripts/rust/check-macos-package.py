@@ -5,6 +5,7 @@ import plistlib
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 project = Path(__file__).resolve().parents[2]
 with tempfile.TemporaryDirectory() as directory:
@@ -58,6 +59,9 @@ with tempfile.TemporaryDirectory() as directory:
     with (app / 'Contents/Info.plist').open('rb') as source:
         info = plistlib.load(source)
         assert info['CFBundleExecutable'] == 'VideoDock'
+        version = tomllib.loads((project / 'Cargo.toml').read_text())['workspace']['package']['version']
+        assert info['CFBundleShortVersionString'] == version, 'Mac version differs from the release'
+        assert info['CFBundleVersion'] == version, 'Mac build version differs from the release'
         icon = app / 'Contents/Resources' / info.get('CFBundleIconFile', '')
         assert icon.is_file() and icon.read_bytes().startswith(b'icns'), 'Dock icon is missing from the Mac bundle'
     for name in ('GPL-3.0.txt', 'Qt-LGPL-3.0.txt', 'BgUtils-MIT.txt', 'googlevideo-MIT.txt', 'sabr-rs-MIT.txt', 'ffmpeg-license.txt', 'ffmpeg-buildconf.txt'):

@@ -251,7 +251,10 @@ Item {
 
                 ToolButton {
                     text: qsTr("Show in Folder")
-                    visible: !!row.modelData.path && (hover.hovered || row.current)
+                    // Keep action geometry stable while hover changes, before the next layout polish.
+                    opacity: !!row.modelData.path && (hover.hovered || row.current) ? 1 : 0
+                    enabled: opacity > 0
+                    Accessible.ignored: !enabled
                     display: AbstractButton.IconOnly
                     icon.source: "icons/folder.svg"
                     Accessible.name: text
@@ -260,7 +263,9 @@ Item {
                 ToolButton {
                     id: moreButton
                     text: qsTr("More actions")
-                    visible: hover.hovered || row.current
+                    opacity: hover.hovered || row.current ? 1 : 0
+                    enabled: opacity > 0
+                    Accessible.ignored: !enabled
                     display: AbstractButton.IconOnly
                     palette.button: "transparent"
                     icon.source: "icons/more.svg"

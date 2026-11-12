@@ -13,7 +13,6 @@ try {
     $env:VIDEODOCK_STAGING_FIXTURE_FAIL = $null
     $crt = Join-Path $env:VCToolsRedistDir 'x64/Microsoft.VC143.CRT'
     New-Item -ItemType Directory -Force $crt | Out-Null
-    foreach ($name in @('vcruntime140.dll', 'msvcp140.dll')) { Set-Content (Join-Path $crt $name) 'fixture runtime' }
     $source = Join-Path $tools 'fixture.cs'
     @'
 using System;
@@ -34,7 +33,8 @@ class Fixture {
             string stage = Path.GetDirectoryName(args[args.Length - 1]);
             Directory.CreateDirectory(Path.Combine(stage, "platforms"));
             foreach (string file in new [] {"QtWebEngineProcess.exe", "platforms/qoffscreen.dll", "platforms/qwindows.dll"})
-                File.WriteAllText(Path.Combine(stage, file), "fixture Qt runtime");
+                File.Copy(Assembly.GetExecutingAssembly().Location, Path.Combine(stage, file), true);
+            if (fail == "binary") File.WriteAllBytes(Path.Combine(stage, "platforms/qwindows.dll"), new byte[128]);
             if (fail == "deploy") return 17;
         } else if (name == "ffmpeg" && args.Length > 0 && args[0] == "-L" && fail == "license") {
             return 18;
@@ -50,8 +50,9 @@ class Fixture {
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
     if (-not (Test-Path $compiler -PathType Leaf)) { throw 'Windows .NET Framework C# fixture compiler absent' }
     $fixture = Join-Path $tools 'fixture.exe'
-    & $compiler /nologo /target:exe "/out:$fixture" $source
+    & $compiler /nologo /target:exe /platform:x64 "/out:$fixture" $source
     if ($LASTEXITCODE -ne 0) { throw 'Fixture compilation failed' }
+    foreach ($name in @('vcruntime140.dll', 'msvcp140.dll')) { Copy-Item $fixture (Join-Path $crt $name) }
     foreach ($name in @('cargo', 'git', 'ffmpeg', 'ffprobe', 'windeployqt', 'qmake')) {
         Copy-Item $fixture (Join-Path $tools "$name.exe")
     }
@@ -69,17 +70,20 @@ class Fixture {
         }
     }
     $manifest = @(PackageManifest)
-    foreach ($failure in @('deploy', 'license')) {
+    foreach ($failure in @('deploy', 'license', 'binary')) {
         $env:VIDEODOCK_STAGING_FIXTURE_FAIL = $failure
         $failed = $false
-        try { & $script } catch { $failed = $true }
+        try { & $script } catch {
+            if ($failure -eq 'binary' -and $_.Exception.Message -notlike 'Invalid Windows x64 binary:*') { throw }
+            $failed = $true
+        }
         if (-not $failed) { throw "Expected $failure to fail" }
         if (@(Compare-Object $manifest @(PackageManifest)).Count) { throw "$failure changed the previous package" }
         if (@(Get-ChildItem (Split-Path $published) -Directory | Where-Object Name -Match '^VideoDock-(stage|backup)-').Count) {
             throw "$failure left a staging or backup directory"
         }
     }
-    Write-Output 'Windows package staging: stale files excluded; deployment/license failure preserves the validated package.'
+    Write-Output 'Windows package staging: stale files excluded; deployment/license/binary failure preserves the validated package.'
 } finally {
     foreach ($key in $keys) { [Environment]::SetEnvironmentVariable($key, $previous[$key]) }
     if (Test-Path $root) { Remove-Item -LiteralPath $root -Recurse -Force }

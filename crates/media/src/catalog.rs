@@ -215,6 +215,39 @@ impl Catalog {
             media.thumbnail = meta(&text, "og:image").unwrap_or(media.thumbnail);
             return Ok(media);
         }
+        if let Some((title, publisher, aggregator)) = videohub_embed(&text)? {
+            let mut api = Url::parse("https://plapi.cdnvideohub.com/api/v1/player/sv/playlist")?;
+            api.query_pairs_mut()
+                .append_pair("pub", &publisher.to_string())
+                .append_pair("id", &title.to_string())
+                .append_pair("aggr", &aggregator);
+            let playlist = self.get_json(api).await?;
+            ensure!(
+                playlist["isSerial"] != true,
+                "Для сериала нужна ссылка на отдельную серию"
+            );
+            let items = playlist["items"]
+                .as_array()
+                .ok_or_else(|| anyhow!("Плеер не вернул варианты видео"))?;
+            ensure!(
+                items.len() <= ENTRY_LIMIT,
+                "Плеер вернул слишком много вариантов видео"
+            );
+            let video = items
+                .iter()
+                .find_map(|item| uint(&item["vkId"]).filter(|id| *id > 0))
+                .ok_or_else(|| anyhow!("Плеер не предоставил доступное видео"))?;
+            let video_api = Url::parse(&format!(
+                "https://plapi.cdnvideohub.com/api/v1/player/sv/video/{video}"
+            ))?;
+            // Delivery URLs bind to the requesting User-Agent; keep it identical to media requests.
+            let data = json_response(
+                self.source_get(&video_api, &video_api, &Auth::default())
+                    .await?,
+            )
+            .await?;
+            return parse_videohub(&final_url, &playlist, &data);
+        }
         let media = parse_html(&final_url, &text)?;
         if !media.formats.is_empty() || !media.entries.is_empty() {
             return finish(media);
@@ -2176,6 +2209,7 @@ fn parse_tiktok(origin: &Url, html: &str) -> Result<Media> {
                     false,
                 )?;
                 stream.bitrate = uint(&item["Bitrate"]);
+                stream.size = uint(&item["PlayAddr"]["DataSize"]).filter(|size| *size > 0);
                 stream.width = uint(&item["PlayAddr"]["Width"]).map(|v| v as u32);
                 stream.height = uint(&item["PlayAddr"]["Height"]).map(|v| v as u32);
                 if text(item, "Format").eq_ignore_ascii_case("dash") {
@@ -2607,6 +2641,63 @@ fn parse_jsonld(origin: &Url, data: &Value, media: &mut Media) {
         }
     });
 }
+fn videohub_embed(html: &str) -> Result<Option<(u64, u64, String)>> {
+    let document = Html::parse_document(html);
+    let selector = Selector::parse("video-player[data-title-id][data-publisher-id]").unwrap();
+    let Some(player) = document.select(&selector).next() else {
+        return Ok(None);
+    };
+    let number = |key| {
+        player
+            .value()
+            .attr(key)
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|id| *id > 0)
+    };
+    let title = number("data-title-id")
+        .ok_or_else(|| anyhow!("Некорректный идентификатор видео плеера"))?;
+    let publisher = number("data-publisher-id")
+        .ok_or_else(|| anyhow!("Некорректный идентификатор поставщика плеера"))?;
+    let aggregator = player.value().attr("data-aggregator").unwrap_or("kp");
+    ensure!(
+        !aggregator.is_empty()
+            && aggregator.len() <= 16
+            && aggregator
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'-'),
+        "Некорректный каталог плеера"
+    );
+    Ok(Some((title, publisher, aggregator.to_owned())))
+}
+
+fn parse_videohub(origin: &Url, playlist: &Value, data: &Value) -> Result<Media> {
+    let mut media = base_media(origin);
+    media.title = text(playlist, "titleName");
+    media.duration =
+        number(&data["duration"]).filter(|seconds| seconds.is_finite() && *seconds > 0.0);
+    media.thumbnail = text(data, "thumbUrl");
+    for (key, height) in [
+        ("mpeg4kUrl", 2160),
+        ("mpeg2kUrl", 1440),
+        ("mpegFullHdUrl", 1080),
+        ("mpegHighUrl", 720),
+        ("mpegMediumUrl", 480),
+        ("mpegLowUrl", 360),
+        ("mpegLowestUrl", 240),
+        ("mpegTinyUrl", 144),
+    ] {
+        if let Some(address) = data["sources"][key]
+            .as_str()
+            .filter(|address| !address.is_empty())
+        {
+            let mut stream = format(origin, key, address, "video/mp4", false)?;
+            stream.height = Some(height);
+            media.formats.push(stream);
+        }
+    }
+    finish(media)
+}
+
 fn embedded_player(origin: &Url, html: &str) -> Option<Url> {
     let document = Html::parse_document(html);
     let selector = Selector::parse("iframe[src],embed[src]").ok()?;
@@ -2975,6 +3066,30 @@ fn parse_flickr(origin: &Url, info: &Value, payload: &Value) -> Result<Media> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn embedded_videohub_preserves_source_and_rejects_invalid_provider_data() {
+        let source = origin("example.com");
+        assert_eq!(videohub_embed("<video-player data-title-id='42' data-publisher-id='17' data-aggregator='kp'></video-player>").unwrap(), Some((42, 17, "kp".into())));
+        for invalid in [
+            "<video-player data-title-id='0' data-publisher-id='17'></video-player>",
+            "<video-player data-title-id='42&evil=1' data-publisher-id='17'></video-player>",
+            "<video-player data-title-id='42' data-publisher-id='17' data-aggregator='../bad'></video-player>",
+        ] {
+            assert!(videohub_embed(invalid).is_err());
+        }
+        let playlist = json!({"titleName":"Public sample"});
+        let mut data = json!({"duration":60,"thumbUrl":"https://cdn.example.com/thumb.jpg","sources":{"mpegFullHdUrl":"https://cdn.example.com/video.mp4"}});
+        let media = parse_videohub(&source, &playlist, &data).unwrap();
+        assert_eq!(media.url, source.as_str());
+        assert_eq!(media.title, "Public sample");
+        assert_eq!(media.duration, Some(60.));
+        assert_eq!(media.formats.len(), 1);
+        assert_eq!(media.formats[0].height, Some(1080));
+        assert!(media.formats[0].has_audio());
+        data["sources"]["mpegFullHdUrl"] = json!("file:///etc/passwd");
+        assert!(parse_videohub(&source, &playlist, &data).is_err());
+        assert!(parse_videohub(&source, &playlist, &json!({"sources":{}})).is_err());
+    }
     fn fixture(name: &str) -> Value {
         let data: Value =
             serde_json::from_str(include_str!("../tests/catalog/fixtures.json")).unwrap();

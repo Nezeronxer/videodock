@@ -25,8 +25,17 @@ use videodock_media::sabr::{Delivery, validate_url};
 const META_LIMIT: usize = 64 * 1024;
 const CONTEXT_LIMIT: usize = 64;
 const REDIRECT_LIMIT: u8 = 8;
+const ATTESTATION_WAIT: Duration = Duration::from_secs(30);
 #[derive(Debug)]
-struct Retryable(&'static str);
+pub(crate) struct PendingAttestation;
+impl std::fmt::Display for PendingAttestation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("YouTube SABR не подтвердил проверку Google вовремя")
+    }
+}
+impl std::error::Error for PendingAttestation {}
+#[derive(Debug)]
+pub(crate) struct Retryable(pub(crate) &'static str);
 impl std::fmt::Display for Retryable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0)
@@ -62,6 +71,7 @@ struct State {
     attested: bool,
     last_protection: i32,
     stalls: u8,
+    pending_since: Option<Instant>,
 }
 impl State {
     fn new(delivery: &Delivery) -> Result<Self> {
@@ -75,6 +85,7 @@ impl State {
             attested: false,
             last_protection: 0,
             stalls: 0,
+            pending_since: None,
         })
     }
     fn redirect(&mut self, value: &str) -> Result<()> {
@@ -140,11 +151,21 @@ impl State {
         self.redirect(next.as_str())?;
         Ok(true)
     }
-    fn progress(&mut self, before: u64, after: u64) -> Result<()> {
-        if after > before {
-            self.stalls = 0
+    fn progress(&mut self, before: (u64, u64, bool), after: (u64, u64, bool)) -> Result<()> {
+        // A paired response may advance only companion audio or finish attestation.
+        if after != before {
+            self.stalls = 0;
+            self.pending_since = None;
         } else {
-            self.stalls += 1;
+            self.stalls = self.stalls.saturating_add(1);
+            if self.last_protection == 2 && !self.attested {
+                let since = self.pending_since.get_or_insert_with(Instant::now);
+                if since.elapsed() >= ATTESTATION_WAIT {
+                    return Err(PendingAttestation.into());
+                }
+                self.backoff = self.backoff.max(250);
+                return Ok(());
+            }
         }
         ensure!(
             self.stalls < 3,
@@ -160,7 +181,7 @@ impl State {
             track.complete(),
             "Размер SABR-потока не совпадает с метаданными"
         );
-        // Short clips may finish while Google's verification is still pending; the stall limit bounds polling.
+        // Complete media still needs a positive verification; pending polling has a time limit.
         Ok(self.attested)
     }
     fn body(
@@ -169,6 +190,7 @@ impl State {
         track: &Track,
         video: bool,
         audio: &Delivery,
+        companion: Option<&Track>,
     ) -> Result<Vec<u8>> {
         let format = track.format.clone();
         let audio_format = if video {
@@ -186,9 +208,13 @@ impl State {
         let mut media_capabilities = capabilities(delivery, video);
         media_capabilities.audio = capabilities(audio, false).audio;
         let mut ranges = Vec::new();
-        if track.last_sequence > 0 {
+        for track in [Some(track), companion]
+            .into_iter()
+            .flatten()
+            .filter(|t| t.last_sequence > 0)
+        {
             ranges.push(BufferedRange {
-                format_id: format.clone(),
+                format_id: track.format.clone(),
                 start_time_ms: 0,
                 duration_ms: track.end_ms,
                 start_segment_index: 1,
@@ -214,11 +240,12 @@ impl State {
                 drc_enabled: Some(audio.drc_enabled),
                 enable_voice_boost: Some(audio.voice_boost),
             }),
-            initialization_format_ids: if track.initialized() {
-                vec![format.clone()]
-            } else {
-                vec![]
-            },
+            initialization_format_ids: [Some(track), companion]
+                .into_iter()
+                .flatten()
+                .filter(|t| t.initialized())
+                .map(|t| t.format.clone())
+                .collect(),
             buffered_ranges: ranges,
             video_playback_ustreamer_config: Some(delivery.session.config.clone()),
             selected_audio_format_ids: vec![audio_format],
@@ -370,12 +397,28 @@ fn capabilities(d: &Delivery, video: bool) -> MediaCapabilities {
 struct Ignored {
     length: u64,
     expected: Option<u64>,
+    selected: bool,
 }
 #[derive(Default)]
-struct OtherTracks(BTreeMap<u8, Ignored>);
+struct OtherTracks {
+    pending: BTreeMap<u8, Ignored>,
+    companion: Option<Track>,
+}
 impl OtherTracks {
+    fn initialize(&mut self, meta: &FormatInit) -> Result<()> {
+        if let Some(track) = &mut self.companion {
+            initialize(track, meta.clone())?;
+        }
+        Ok(())
+    }
+    fn rollback(&mut self) {
+        self.pending.clear();
+        if let Some(track) = &mut self.companion {
+            track.rollback();
+        }
+    }
     fn header(&mut self, h: MediaHeader, video_id: &str) -> Result<()> {
-        if let Some(id) = h.video_id {
+        if let Some(id) = &h.video_id {
             ensure!(id == video_id, "SABR вернул другое видео");
         }
         let id = u8::try_from(
@@ -384,7 +427,7 @@ impl OtherTracks {
         )
         .map_err(|_| anyhow::anyhow!("Неверный номер заголовка SABR"))?;
         ensure!(
-            self.0.len() < 16 && !self.0.contains_key(&id),
+            self.pending.len() < 16 && !self.pending.contains_key(&id),
             "SABR смешал дополнительные сегменты"
         );
         let expected = h
@@ -396,17 +439,24 @@ impl OtherTracks {
             expected.is_none_or(|n| n > 0 && n <= track::SEGMENT_LIMIT),
             "Дополнительный сегмент SABR слишком велик"
         );
-        self.0.insert(
+        let selected = self.companion.as_ref().is_some_and(|track| {
+            h.itag.or_else(|| h.format_id.as_ref().and_then(|f| f.itag)) == track.format.itag
+        });
+        if let Some(track) = self.companion.as_mut().filter(|_| selected) {
+            track.header(h)?;
+        }
+        self.pending.insert(
             id,
             Ignored {
                 length: 0,
                 expected,
+                selected,
             },
         );
         Ok(())
     }
     fn data(&mut self, id: u8, data: &[u8]) -> Result<bool> {
-        let Some(part) = self.0.get_mut(&id) else {
+        let Some(part) = self.pending.get_mut(&id) else {
             return Ok(false);
         };
         part.length = part
@@ -417,16 +467,23 @@ impl OtherTracks {
             part.length <= track::SEGMENT_LIMIT && part.expected.is_none_or(|n| part.length <= n),
             "Размер дополнительного сегмента SABR не совпадает"
         );
+        if let Some(track) = self.companion.as_mut().filter(|_| part.selected) {
+            track.data(id, data)?;
+        }
         Ok(true)
     }
     fn finish(&mut self, id: u8) -> Result<bool> {
-        let Some(part) = self.0.remove(&id) else {
+        let Some(part) = self.pending.remove(&id) else {
             return Ok(false);
         };
         ensure!(
             part.length > 0 && part.expected.is_none_or(|n| part.length == n),
             "Оборван дополнительный сегмент SABR"
         );
+        if let Some(track) = self.companion.as_mut().filter(|_| part.selected) {
+            let segment = track.finish_segment(id)?;
+            track.commit(segment)?;
+        }
         Ok(true)
     }
 }
@@ -567,6 +624,7 @@ impl Receiver<'_> {
         track: &mut Track,
         output: &mut File,
         pending: &mut Option<PendingFile>,
+        other: &mut OtherTracks,
     ) -> Result<()> {
         let (delivery, video, directory, cancel, limiter, progress, started) = (
             self.delivery,
@@ -577,12 +635,11 @@ impl Receiver<'_> {
             self.progress,
             self.started,
         );
-        let body = state.body(delivery, track, video, self.audio)?;
+        let body = state.body(delivery, track, video, self.audio, other.companion.as_ref())?;
         ensure!(body.len() <= 256 * 1024, "SABR-запрос слишком велик");
         let mut response = response(state, delivery, body, cancel).await?;
         let mut reader = ump::Reader::default();
         let mut received = 0u64;
-        let mut other = OtherTracks::default();
         loop {
             let chunk = tokio::select! {_ = cancel.cancelled()=>bail!("Загрузка приостановлена"),r=response.chunk()=>r.map_err(|_|anyhow::Error::new(Retryable("Оборван ответ SABR")))?};
             let Some(chunk) = chunk else { break };
@@ -594,7 +651,11 @@ impl Receiver<'_> {
             reader.push(&chunk)?;
             while let Some((kind, data)) = reader.next()? {
                 match kind {
-                    42 => initialize(track, decode(&data)?)?,
+                    42 => {
+                        let meta: FormatInit = decode(&data)?;
+                        other.initialize(&meta)?;
+                        initialize(track, meta)?;
+                    }
                     20 => {
                         let h: MediaHeader = decode(&data)?;
                         let itag = h
@@ -690,7 +751,7 @@ impl Receiver<'_> {
         reader
             .finish()
             .map_err(|_| anyhow::Error::new(Retryable("Оборван UMP-кадр SABR")))?;
-        if track.pending() || !other.0.is_empty() {
+        if track.pending() || !other.pending.is_empty() {
             return Err(Retryable("Ответ SABR закончился внутри сегмента").into());
         }
         #[cfg(debug_assertions)]
@@ -704,7 +765,7 @@ impl Receiver<'_> {
 
 pub async fn download(
     delivery: &Delivery,
-    audio: Option<&Delivery>,
+    audio: Option<(&Delivery, u64)>,
     expected_bytes: u64,
     directory: &Path,
     cancel: &CancellationToken,
@@ -713,16 +774,16 @@ pub async fn download(
 ) -> Result<PathBuf> {
     validate_url(&delivery.session.url)?;
     let video = delivery.mime_type.starts_with("video/");
-    let audio = if video {
-        let audio =
+    let (audio, audio_bytes) = if video {
+        let (audio, bytes) =
             audio.ok_or_else(|| anyhow::anyhow!("Для видео YouTube не выбрана аудиодорожка"))?;
         ensure!(
             Arc::ptr_eq(&delivery.session, &audio.session) && audio.mime_type.starts_with("audio/"),
             "Аудиодорожка относится к другому потоку YouTube"
         );
-        audio
+        (audio, bytes)
     } else {
-        delivery
+        (delivery, expected_bytes)
     };
     tokio::fs::create_dir_all(directory).await?;
     let format = FormatId {
@@ -740,6 +801,24 @@ pub async fn download(
             .map_err(|_| anyhow::anyhow!("Неверная длительность SABR"))?,
     )?;
     let mut state = State::new(delivery)?;
+    // A paired request must acknowledge verified audio too, even though its bytes are saved by the audio transfer.
+    let mut other = OtherTracks {
+        companion: if video {
+            Some(Track::new(
+                FormatId {
+                    itag: Some(i32::try_from(audio.itag)?),
+                    last_modified: Some(audio.last_modified),
+                    xtags: audio.xtags.clone(),
+                },
+                audio.session.video_id.clone(),
+                audio_bytes,
+                i64::try_from(audio.duration_ms)?,
+            )?)
+        } else {
+            None
+        },
+        ..Default::default()
+    };
     let (mut output, path) = new_file(directory).await?;
     let mut pending = None;
     let started = Instant::now();
@@ -755,9 +834,19 @@ pub async fn download(
         started,
     };
     loop {
-        let before = track.bytes;
+        let before = (
+            track.bytes,
+            other.companion.as_ref().map_or(0, |track| track.bytes),
+            state.attested,
+        );
         match receiver
-            .cycle(&mut state, &mut track, &mut output, &mut pending)
+            .cycle(
+                &mut state,
+                &mut track,
+                &mut output,
+                &mut pending,
+                &mut other,
+            )
             .await
         {
             Ok(()) => {
@@ -765,10 +854,18 @@ pub async fn download(
                 if state.finished(&track)? {
                     break;
                 }
-                state.progress(before, track.bytes)?;
+                state.progress(
+                    before,
+                    (
+                        track.bytes,
+                        other.companion.as_ref().map_or(0, |track| track.bytes),
+                        state.attested,
+                    ),
+                )?;
             }
             Err(error) => {
                 track.rollback();
+                other.rollback();
                 pending = None;
                 if !error.is::<Retryable>() || retries >= 2 {
                     return Err(error);
@@ -874,7 +971,75 @@ mod tests {
             attested: false,
             last_protection: 0,
             stalls: 0,
+            pending_since: None,
         }
+    }
+    #[test]
+    fn companion_audio_keeps_verified_ranges_across_responses_and_rollback() {
+        let format = FormatId {
+            itag: Some(251),
+            last_modified: Some(2),
+            xtags: None,
+        };
+        let mut other = OtherTracks {
+            companion: Some(Track::new(format.clone(), "fixture0001".into(), 3, 2000).unwrap()),
+            ..Default::default()
+        };
+        other
+            .initialize(&FormatInit {
+                video_id: Some("fixture0001".into()),
+                format_id: Some(format.clone()),
+                end_time_ms: Some(2000),
+                end_segment_number: Some(2),
+                mime_type: None,
+            })
+            .unwrap();
+        let header = |init, sequence, start, duration, size| MediaHeader {
+            header_id: Some(9),
+            video_id: Some("fixture0001".into()),
+            format_id: Some(format.clone()),
+            is_init_seg: Some(init),
+            sequence_number: sequence,
+            start_ms: Some(start),
+            duration_ms: Some(duration),
+            content_length: Some(size),
+            ..Default::default()
+        };
+        for (h, bytes) in [
+            (header(true, None, 0, 0, 1), b"a"),
+            (header(false, Some(1), 0, 1000, 1), b"b"),
+        ] {
+            other.header(h, "fixture0001").unwrap();
+            assert!(other.data(9, bytes).unwrap());
+            assert!(other.finish(9).unwrap());
+        }
+        assert!(other.pending.is_empty());
+        let audio = other.companion.as_ref().unwrap();
+        assert!(audio.initialized());
+        assert_eq!(
+            (audio.bytes, audio.last_sequence, audio.end_ms),
+            (2, 1, 1000)
+        );
+        // Replayed audio must not advance the buffer twice.
+        other
+            .header(header(false, Some(1), 0, 1000, 1), "fixture0001")
+            .unwrap();
+        other.data(9, b"b").unwrap();
+        other.finish(9).unwrap();
+        assert_eq!(other.companion.as_ref().unwrap().bytes, 2);
+        other
+            .header(header(false, Some(2), 1000, 1000, 2), "fixture0001")
+            .unwrap();
+        other.data(9, b"c").unwrap();
+        assert!(other.finish(9).is_err());
+        other.rollback();
+        assert_eq!(other.companion.as_ref().unwrap().end_ms, 1000);
+        other
+            .header(header(false, Some(2), 1000, 1000, 1), "fixture0001")
+            .unwrap();
+        other.data(9, b"c").unwrap();
+        other.finish(9).unwrap();
+        assert!(other.companion.as_ref().unwrap().complete());
     }
     #[test]
     fn extra_format_descriptors_do_not_change_the_selected_track() {
@@ -940,13 +1105,30 @@ mod tests {
     #[test]
     fn stalled_attestation_does_not_become_success_or_spin_forever() {
         let mut a = state();
-        a.progress(0, 1).unwrap();
-        a.progress(1, 1).unwrap();
-        a.progress(1, 1).unwrap();
-        assert!(a.progress(1, 1).is_err());
+        a.progress((0, 0, false), (1, 0, false)).unwrap();
+        a.progress((1, 0, false), (1, 0, false)).unwrap();
+        a.progress((1, 0, false), (1, 0, false)).unwrap();
+        assert!(a.progress((1, 0, false), (1, 0, false)).is_err());
         let mut b = state();
-        b.progress(0, 5).unwrap();
+        b.progress((0, 0, false), (5, 0, false)).unwrap();
         assert_eq!(b.stalls, 0);
+    }
+    #[test]
+    fn companion_progress_and_new_attestation_do_not_count_as_video_stalls() {
+        let mut state = state();
+        let mut before = (1024, 0, false);
+        for audio in 1..=4 {
+            let after = (1024, audio, false);
+            state.progress(before, after).unwrap();
+            before = after;
+        }
+        state.progress(before, before).unwrap();
+        state.progress(before, before).unwrap();
+        let verified = (1024, 4, true);
+        state.progress(before, verified).unwrap();
+        state.progress(verified, verified).unwrap();
+        state.progress(verified, verified).unwrap();
+        assert!(state.progress(verified, verified).is_err());
     }
     #[test]
     fn complete_media_waits_for_pending_attestation_before_publication() {
@@ -989,7 +1171,20 @@ mod tests {
             !state.finished(&track).unwrap(),
             "pending verification is not a rejection or success"
         );
-        state.progress(2, 2).unwrap();
+        state.progress((2, 0, false), (2, 0, false)).unwrap();
+        // Pending verification may outlive several empty responses after all media arrived.
+        for _ in 0..260 {
+            state.progress((2, 0, false), (2, 0, false)).unwrap();
+            assert!(!state.finished(&track).unwrap());
+        }
+        assert!(state.backoff >= 250, "pending polls must not spin");
+        state.pending_since = Some(Instant::now() - ATTESTATION_WAIT);
+        assert!(
+            state
+                .progress((2, 0, false), (2, 0, false))
+                .unwrap_err()
+                .is::<PendingAttestation>()
+        );
         state.attested = true;
         assert!(state.finished(&track).unwrap());
         track.bytes -= 1;

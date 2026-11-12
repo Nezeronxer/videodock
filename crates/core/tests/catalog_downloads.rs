@@ -52,7 +52,7 @@ async fn full_sample(service: &str, address: &str, audio: bool) {
                 selection: Selection {
                     media_type: if audio { "audio" } else { "video" }.into(),
                     container: if audio { "m4a" } else { "mp4" }.into(),
-                    quality: 1080,
+                    quality: if service.starts_with("TikTok") { 0 } else { 1080 },
                     ..Default::default()
                 },
                 output_dir: std::env::var_os("VIDEODOCK_TEST_OUTPUT_DIR")
@@ -144,6 +144,53 @@ macro_rules! sample {
         }
     };
 }
+
+#[tokio::test]
+#[ignore = "inspects the user-reported public page and its embedded player API"]
+async fn four_k_film_embedded_player_formats() {
+    let proxy = std::env::var("VIDEODOCK_TEST_PROXY").ok();
+    let media = Catalog::new(proxy.as_deref())
+        .unwrap()
+        .inspect(
+            "https://4kfilm.fans/655-sherlok-holms-2009-smotret-onlajn-4k.html",
+            &Auth::default(),
+        )
+        .await
+        .expect("public embedded video metadata");
+    let formats = videodock_media::choose_formats(
+        &media.formats,
+        &Selection {
+            quality: 1080,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(formats.iter().any(|format| format.height == Some(1080)));
+    assert!(formats.iter().any(|format| format.has_audio()));
+    assert!(
+        media
+            .duration
+            .is_some_and(|seconds| (7600.0..7800.0).contains(&seconds))
+    );
+    let format = &formats[0];
+    let catalog = Catalog::new(proxy.as_deref()).unwrap();
+    let mut request = catalog
+        .client()
+        .get(&format.url)
+        .header("Range", "bytes=0-1023");
+    for (name, value) in &format.headers {
+        request = request.header(name, value);
+    }
+    let response = request.send().await;
+    assert!(response.is_ok(), "public media request failed");
+    let response = response.unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::PARTIAL_CONTENT);
+    assert_eq!(response.content_length(), Some(1024));
+    let bytes = response.bytes().await;
+    assert!(bytes.is_ok(), "public media response interrupted");
+    assert_eq!(&bytes.unwrap()[4..8], b"ftyp");
+}
+
 sample!(vimeo, "Vimeo", "https://vimeo.com/76979871", false);
 sample!(
     facebook_public,
@@ -228,6 +275,18 @@ sample!(
     tiktok_adaptive_audio,
     "TikTok-adaptive-audio",
     "https://www.tiktok.com/@an1mu_official/video/7699773233578495250",
+    false
+);
+sample!(
+    tiktok_reported_kitashura,
+    "TikTok-reported-kitashura",
+    "https://www.tiktok.com/@kitashura/video/7706220565195017505",
+    false
+);
+sample!(
+    tiktok_reported_shintaro,
+    "TikTok-reported-shintaro",
+    "https://www.tiktok.com/@shintaro.editor/video/7701930464302435615",
     false
 );
 sample!(

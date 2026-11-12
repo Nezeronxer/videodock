@@ -12,6 +12,126 @@ use videodock_core::{
 use videodock_media::{Format, Media, Protocol, Selection};
 
 #[tokio::test]
+async fn legacy_partial_cannot_be_resumed_as_a_newly_selected_rendition() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("sample.mp4");
+    let status = Command::new("ffmpeg")
+        .args([
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=blue:s=160x90:r=10",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440",
+            "-t",
+            "1",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-movflags",
+            "+faststart",
+        ])
+        .arg(&source)
+        .status()
+        .await
+        .unwrap();
+    assert!(status.success());
+    let bytes = tokio::fs::read(source).await.unwrap();
+    let size = bytes.len() as u64;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/video", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = Vec::new();
+        while !request.ends_with(b"\r\n\r\n") {
+            let mut chunk = [0; 1024];
+            let n = socket.read(&mut chunk).await.unwrap();
+            assert!(n > 0 && request.len() + n <= 8192);
+            request.extend_from_slice(&chunk[..n]);
+        }
+        if String::from_utf8(request)
+            .unwrap()
+            .to_ascii_lowercase()
+            .contains("range:")
+        {
+            socket
+                .write_all(
+                    b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await
+                .unwrap();
+        } else {
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {size}\r\nConnection: close\r\n\r\n"
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+            socket.write_all(&bytes).await.unwrap();
+        }
+    });
+    let staging = temp.path().join("staging");
+    tokio::fs::create_dir(&staging).await.unwrap();
+    tokio::fs::write(
+        staging.join("stream-0-fixture.part"),
+        b"unverified legacy partial",
+    )
+    .await
+    .unwrap();
+    let output = pipeline::run(
+        Media {
+            id: "same-video".into(),
+            url: url.clone(),
+            title: "Sample".into(),
+            duration: Some(1.0),
+            formats: vec![Format {
+                id: "fixture".into(),
+                url,
+                protocol: Protocol::Http,
+                ext: "mp4".into(),
+                width: Some(160),
+                height: Some(90),
+                video_codec: Some("avc1".into()),
+                audio_codec: Some("mp4a".into()),
+                size: Some(size),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        reqwest::Client::builder().no_proxy().build().unwrap(),
+        Options {
+            selection: Selection::default(),
+            output_dir: temp.path().join("output"),
+            filename: None,
+            embed_subtitles: false,
+            tags: false,
+            skip_duplicates: false,
+        },
+        staging,
+        CancellationToken::new(),
+        Arc::new(Limiter::new(0)),
+        Arc::new(|_| {}),
+    )
+    .await
+    .expect("a new rendition must start with a fresh request");
+    let info = pipeline::probe(&output.path).await.unwrap();
+    let streams = info["streams"].as_array().unwrap();
+    assert!(streams.iter().any(|s| s["codec_type"] == "video"));
+    assert!(streams.iter().any(|s| s["codec_type"] == "audio"));
+    server.await.unwrap();
+}
+
+#[tokio::test]
 async fn rust_hls_download_is_muxed_from_local_segments_only() {
     let temp = tempfile::tempdir().unwrap();
     let source = temp.path().join("source");

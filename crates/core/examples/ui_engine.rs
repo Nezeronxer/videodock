@@ -4,6 +4,9 @@ use std::io::{self, BufRead, Write};
 use videodock_core::Engine;
 
 fn main() -> anyhow::Result<()> {
+    if let Some(worker) = std::env::var_os("VIDEODOCK_TEST_PROOF_WORKER") {
+        videodock_media::youtube::register_proof_worker(worker.into())?;
+    }
     let directory = std::env::args_os()
         .nth(1)
         .ok_or_else(|| anyhow::anyhow!("Missing isolated test profile"))?;
