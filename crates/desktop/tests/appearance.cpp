@@ -1128,16 +1128,26 @@ int main(int argc, char **argv) {
             QApplication::clipboard()->setText(url + "?smart=first");
             click(window, named(window, "pasteButton"));
             check(backend->state["jobs"].toArray().size() == 2 && backend->state["manual"].isNull(), "Smart paste has no immediate queue row");
+            const auto firstPasted = backend->state["jobs"].toArray().last().toObject()["id"].toString();
+            check(evaluate("ui.listRows()[0].id").toString() == firstPasted, "Pasted download appeared below existing history");
             QApplication::clipboard()->setText(url + "?smart=second");
             focusGlobalPaste(window);
             QTest::keySequence(window, QKeySequence(QKeySequence::Paste));
             QTest::qWait(100);
             check(backend->state["jobs"].toArray().size() == 3, "Second smart clipboard paste lost a source");
+            const auto lastPasted = backend->state["jobs"].toArray().last().toObject()["id"].toString();
+            check(evaluate("ui.listRows()[0].id").toString() == lastPasted, "Newest pasted download is not the first row");
             waitFor([&]() {
                 const auto jobs = backend->state["jobs"].toArray();
                 for (const auto &value : jobs) if (value.toObject()["state"] != "complete") return false;
                 return jobs.size() == 3;
             }, "Smart clipboard downloads did not complete");
+            check(evaluate("ui.listRows()[0].id").toString() == lastPasted, "Completed download moved into the middle of history");
+            const auto orderedIds = evaluate("ui.listRows().map(function(j){return j.id}).join(',')").toString();
+            backend->stopEngine();
+            backend->startEngine(driver, profile.path());
+            QTest::qWait(100);
+            check(evaluate("ui.listRows().map(function(j){return j.id}).join(',')").toString() == orderedIds, "Newest-first download order changed after restart");
             capture("real-engine-smart-paste");
             backend->stopEngine();
             qInfo("Real Engine: theme/restart, validation, settings, local UI download, ffprobe, durable history, context copy and safe removal passed.");
