@@ -13,7 +13,7 @@
 - [x] Временные Windows QA задачи/сервисы закрыты, машины штатно выключены, исходные устройства восстановлены; исправленный RTC сохранён с rollback.
 - [x] macOS Intel/ARM: обязательные EN/RU interface, bundle, clean PATH worker/proxy/startup прошли.
 - [x] Независимый CI Flatpak verifier43246787444 на окончательном артефакте прошёл.
-- [ ] Опубликовать v0.2.1, проверить публичные шесть пакетов/манифест/checksums.
+- [x] Опубликован v0.2.1, publisher43247232172 SUCCESS; анонимно проверены latest/public, шесть пакетов+манифест+checksums, все digest/size совпали.
 
 Отчёт: [docs/release-2026-11-12.md](docs/release-2026-11-12.md).
 
@@ -909,3 +909,5 @@ Linuxnativef8a5f25built/installedPASS,2GBpeak,3m49s; actualinstalledonboardingst
 17:53MSK final f8 installer PASS Windows10/11: two upgrades preserve profile, clean PATH startup, real UI Paste YouTube19s+TikTok32s full decode/newest-first/restart, native proxy Save closes+persists on both. Flatpak CI1a325836 installed and proof_worker --proxy --startup exit0. Evidence win{10,11}-ordinal-{install,zoo,tiktok,proxy}-proof.json. macOS producer still packaging; independent verifier must wait entire producer completed.
 
 12.11 final gate: producer43235498448 completed, all mandatory platform gates passed. Cloud macOS Intel/ARM TikTok PASS, YouTube/Shorts request confirmation (explicit network limitation). Independent installed Flatpak verifier43246787444 SUCCESS. Runtime source f8a5f25 unchanged; publication next.
+
+Финал12.11: https://github.com/Nezeronxer/videodock/releases/tag/v0.2.1 опубликован/latest, release source25da03b(runtimef8a5f25), public anonymous API+manifest+SHA256SUMS PASS8assets/6packages. Exact tested Setup/Arch/Flatpak match public hashes. Main обновлён fast-forward без force; исходный untracked crates/media/examples/probe_http.rs не включён.
