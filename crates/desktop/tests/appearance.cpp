@@ -1151,9 +1151,14 @@ int main(int argc, char **argv) {
             }, "Smart clipboard downloads did not complete");
             check(evaluate("ui.listRows()[0].id").toString() == lastPasted, "Completed download moved into the middle of history");
             const auto orderedIds = evaluate("ui.listRows().map(function(j){return j.id}).join(',')").toString();
+            const auto orderedJobs = backend->state["jobs"];
             backend->stopEngine();
             backend->startEngine(driver, profile.path());
             QTest::qWait(100);
+            if (evaluate("ui.listRows().map(function(j){return j.id}).join(',')").toString() != orderedIds) {
+                qInfo().noquote() << "Before restart:" << QJsonDocument(orderedJobs.toArray()).toJson(QJsonDocument::Compact);
+                qInfo().noquote() << "After restart:" << QJsonDocument(backend->state["jobs"].toArray()).toJson(QJsonDocument::Compact);
+            }
             check(evaluate("ui.listRows().map(function(j){return j.id}).join(',')").toString() == orderedIds, "Newest-first download order changed after restart");
             capture("real-engine-smart-paste");
             backend->stopEngine();

@@ -273,10 +273,11 @@ pub fn install_on_exit(path: &Path, update: &Update) -> Result<()> {
         )
     };
     let script = format!(
-        "$ErrorActionPreference='Stop'; Wait-Process -Id {} -Timeout 120 -ErrorAction SilentlyContinue; if(Get-Process -Id {} -ErrorAction SilentlyContinue){{exit 1}}; $p=Start-Process -FilePath {} -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CLOSEAPPLICATIONS',('/DIR='+[char]34+{}+[char]34)) -Wait -PassThru; if($p.ExitCode -eq 0){{Start-Process -FilePath {}}}",
+        "$ErrorActionPreference='Stop'; Write-Output 'Waiting for application exit'; Wait-Process -Id {} -Timeout 120 -ErrorAction SilentlyContinue; if(Get-Process -Id {} -ErrorAction SilentlyContinue){{throw 'Application did not exit'}}; Write-Output 'Starting installer'; $p=Start-Process -FilePath {} -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CLOSEAPPLICATIONS',('/LOG='+[char]34+{}+[char]34),('/DIR='+[char]34+{}+[char]34)) -Wait -PassThru; Write-Output ('Installer exit code: '+$p.ExitCode); if($p.ExitCode -ne 0){{throw 'Installer failed'}}; Start-Process -FilePath {}; Write-Output 'Application restart requested'",
         std::process::id(),
         std::process::id(),
         quote(path),
+        quote(&path.with_extension("setup.log")),
         quote(directory),
         quote(&executable)
     );

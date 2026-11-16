@@ -170,13 +170,15 @@ async fn full_verified_windows_update_handoff() {
         }
         if std::time::Instant::now() >= deadline {
             use std::io::Read;
-            if let Ok(log) = std::fs::File::open(installer.with_extension("install.log")) {
-                let mut bytes = Vec::new();
-                let _ = log.take(8192).read_to_end(&mut bytes);
-                println!(
-                    "Installer handoff diagnostic: {}",
-                    String::from_utf8_lossy(&bytes)
-                );
+            for extension in ["install.log", "setup.log"] {
+                if let Ok(log) = std::fs::File::open(installer.with_extension(extension)) {
+                    let mut bytes = Vec::new();
+                    let _ = log.take(8192).read_to_end(&mut bytes);
+                    println!(
+                        "Installer {extension} diagnostic: {}",
+                        String::from_utf8_lossy(&bytes)
+                    );
+                }
             }
             panic!("installer did not restart a responsive packaged VideoDock window");
         }
