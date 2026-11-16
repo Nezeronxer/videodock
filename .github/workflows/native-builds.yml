@@ -669,6 +669,15 @@ jobs:
           }
           $results | ConvertTo-Json | Set-Content -Encoding utf8 "$report/result.json"
           if (@($results.Values | Where-Object { $_ -ne 0 }).Count) { throw 'Public Windows download/decode failed; inspect windows-public-downloads' }
+      - name: Verify automatic update installer handoff
+        if: always() && steps.windows-worker.outcome == 'success'
+        timeout-minutes: 10
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
+          if errorlevel 1 exit /b 1
+          cargo test -p videodock-core --test update_handoff full_verified_windows_update_handoff --locked -- --ignored --exact --nocapture
+          if errorlevel 1 exit /b 1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

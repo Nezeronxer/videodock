@@ -186,7 +186,8 @@ def validate_producer(repo, number, source, kind):
     elif kind == 'windows':
         needed = ['Verify Windows package staging rollback', 'Test and build Windows package',
                   'Verify installed worker with clean PATH', 'Build Windows installer',
-                  'Verify native Windows interface and real Engine in English and Russian']
+                  'Verify native Windows interface and real Engine in English and Russian',
+                  'Verify automatic update installer handoff']
         require(any(job['name'] == 'windows' and succeeded(job, needed) for job in jobs),
                 'Windows package gates did not pass')
     else:
