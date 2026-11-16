@@ -66,6 +66,7 @@ ApplicationWindow {
         auto *hideButton = window->findChild<QQuickItem *>("hideBrowserButton");
         auto *state = window->findChild<QObject *>("state");
         check(field && hideButton && state, "Fixture controls unavailable");
+        check(QTest::qWaitForWindowExposed(window, 3000), "Fixture window is not exposed");
         window->requestActivate();
         check(QTest::qWaitForWindowActive(window, 3000), "Fixture window is not active");
         auto click = [&](QQuickItem *item) {
