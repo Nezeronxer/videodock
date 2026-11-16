@@ -281,6 +281,10 @@ pub fn install_on_exit(path: &Path, update: &Update) -> Result<()> {
         quote(&executable)
     );
     let system = std::env::var_os("SystemRoot").context("Нет системной папки Windows")?;
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path.with_extension("install.log"))?;
     Command::new(PathBuf::from(system).join("System32/WindowsPowerShell/v1.0/powershell.exe"))
         .args([
             "-NoProfile",
@@ -291,8 +295,8 @@ pub fn install_on_exit(path: &Path, update: &Update) -> Result<()> {
             &script,
         ])
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(Stdio::from(log.try_clone()?))
+        .stderr(Stdio::from(log))
         .creation_flags(0x08000000)
         .spawn()?;
     Ok(())
