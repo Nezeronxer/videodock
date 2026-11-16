@@ -1123,43 +1123,55 @@ int main(int argc, char **argv) {
             check(!deleteFiles->property("checked").toBool(), "Delete-files checkbox leaked from previous dialog");
             evaluate("ui.selectedIds = []");
             auto *confirm = removeFooter.property("standardButton").call({int(QDialogButtonBox::Ok)}).toQObject();
+            auto downloadRows = [&]() {
+                QJsonArray result;
+                for (const auto &value : backend->state["jobs"].toArray())
+                    if (value.toObject()["added_order"].toInt() > 0) result.append(value);
+                return result;
+            };
             click(window, confirm);
-            waitFor([&]() { return backend->state["jobs"].toArray().size() == 1; }, "Removing one entry also removed its neighbor");
+            waitFor([&]() { return downloadRows().size() == 1; }, "Removing one entry also removed its neighbor");
             check(backend->lastAction["ids"].toArray().size() == 1, "Confirmation dispatched an unscoped removal");
             check(QFileInfo::exists(path), "Removing history without the checkbox deleted the file");
-            check(backend->state["jobs"].toArray().first().toObject()["id"] != job["id"], "Wrong history entry was removed");
+            check(downloadRows().first().toObject()["id"] != job["id"], "Wrong history entry was removed");
             invoke(remove, "accept");
-            check(backend->state["jobs"].toArray().size() == 1, "Repeated confirmation removed another entry");
+            check(downloadRows().size() == 1, "Repeated confirmation removed another entry");
             capture("real-engine-history-preserved");
             backend->dispatch("{\"action\":\"settings\",\"values\":{\"smartMode\":true}}");
             QApplication::clipboard()->setText(url + "?smart=first");
             click(window, named(window, "pasteButton"));
-            check(backend->state["jobs"].toArray().size() == 2 && backend->state["manual"].isNull(), "Smart paste has no immediate queue row");
-            const auto firstPasted = backend->state["jobs"].toArray().last().toObject()["id"].toString();
+            check(downloadRows().size() == 2 && backend->state["manual"].isNull(), "Smart paste has no immediate queue row");
+            const auto firstPasted = downloadRows().last().toObject()["id"].toString();
             check(evaluate("ui.listRows()[0].id").toString() == firstPasted, "Pasted download appeared below existing history");
             QApplication::clipboard()->setText(url + "?smart=second");
             focusGlobalPaste(window);
             QTest::keySequence(window, QKeySequence(QKeySequence::Paste));
             QTest::qWait(100);
-            check(backend->state["jobs"].toArray().size() == 3, "Second smart clipboard paste lost a source");
-            const auto lastPasted = backend->state["jobs"].toArray().last().toObject()["id"].toString();
+            check(downloadRows().size() == 3, "Second smart clipboard paste lost a source");
+            const auto lastPasted = downloadRows().last().toObject()["id"].toString();
             check(evaluate("ui.listRows()[0].id").toString() == lastPasted, "Newest pasted download is not the first row");
             waitFor([&]() {
-                const auto jobs = backend->state["jobs"].toArray();
+                const auto jobs = downloadRows();
                 for (const auto &value : jobs) if (value.toObject()["state"] != "complete") return false;
                 return jobs.size() == 3;
             }, "Smart clipboard downloads did not complete");
             check(evaluate("ui.listRows()[0].id").toString() == lastPasted, "Completed download moved into the middle of history");
-            const auto orderedIds = evaluate("ui.listRows().map(function(j){return j.id}).join(',')").toString();
-            const auto orderedJobs = backend->state["jobs"];
+            const auto orderedIds = evaluate("ui.listRows().filter(function(j){return j.added_order>0}).map(function(j){return j.id}).join(',')").toString();
+            check(orderedIds.split(',').size() == 3, "Smart clipboard download history is incomplete");
+            // A restart can discover local files without changing download addition order.
+            const auto discoveredPath = QDir(profile.path()).filePath("downloads/new-library-fixture.mp4");
+            check(QFile::copy(path, discoveredPath), "Could not prepare a newly discovered library file");
             backend->stopEngine();
             backend->startEngine(driver, profile.path());
-            QTest::qWait(100);
-            if (evaluate("ui.listRows().map(function(j){return j.id}).join(',')").toString() != orderedIds) {
-                qInfo().noquote() << "Before restart:" << QJsonDocument(orderedJobs.toArray()).toJson(QJsonDocument::Compact);
-                qInfo().noquote() << "After restart:" << QJsonDocument(backend->state["jobs"].toArray()).toJson(QJsonDocument::Compact);
-            }
-            check(evaluate("ui.listRows().map(function(j){return j.id}).join(',')").toString() == orderedIds, "Newest-first download order changed after restart");
+            waitFor([&]() {
+                for (const auto &value : backend->state["jobs"].toArray()) {
+                    const auto row = value.toObject();
+                    if (QDir::fromNativeSeparators(row["path"].toString()).endsWith("/new-library-fixture.mp4"))
+                        return row["added_order"].toInt() == 0;
+                }
+                return false;
+            }, "Restart did not discover the new local library file");
+            check(evaluate("ui.listRows().slice(0,3).map(function(j){return j.id}).join(',')").toString() == orderedIds, "Newest-first downloads changed or a library file appeared above them after restart");
             capture("real-engine-smart-paste");
             backend->stopEngine();
             qInfo("Real Engine: theme/restart, validation, settings, local UI download, ffprobe, durable history, context copy and safe removal passed.");

@@ -30,3 +30,13 @@ A previous native Windows snapshot reached the real Google Sign in form through 
 A single hidden Windows 11 clone is used, with 4 GiB guest RAM and a cgroup hard limit of 4 GiB plus 256 MiB swap. Original disk/managedsave and user profiles are preserved. No concurrent local Rust build is run. Temporary QA transfer is restricted to the existing VM addresses; remote-viewer runs in Xvfb.
 
 Evidence directory: `~/.local/share/videodock/research/windows-bugs-2026-11-16/`, including `native-installer-command-proof.json`, `native-canonical-restart-path-proof.json`, `native-canonical-restart-green-proof.json`, `ci-7513-final.log`, and the downloaded interface/public-download artifacts.
+
+## Confirmed continuation
+
+Windows CI43949321067 passed the corrected full installer handoff in32.90seconds: verified stable installer, exited bootstrap, responsive packaged restart, locked fixture profile, preserved history and existing file. Native Windows10/11 checks still remain.
+
+The interface failure retained identical backend job snapshots before/after restart: three downloads with positive addition order and a discovered local-library entry with order zero. The fixture now counts download entries independently, creates another untracked file, waits for library discovery, and checks that all three downloads retain their order above library entries. Compilation passed; the new runtime scenario is pending.
+
+Linux CI43947890945 and independent Flatpak verifier43953486115 passed. The native candidate was installed locally with binary/profile backups; all38personal entries and their state/path/date/order were preserved. Installed worker checks passed. In a separate real Wayland profile, Paste Link completed a19.063583second YouTube video (744478bytes,H264320x240+AAC) and a52.594second Shorts sample (24130310bytes,H2641080x1200+Opus). Both files passed fullFFmpeg decoding. The first completed entry also survived restart. The prepared local VPN route was used; personal history was not used for synthetic QA jobs.
+
+Both Mac architectures passed the browser-focus fixture and EN/RU actualEngine stages after waiting for window exposure. Bundle verification was still running at this checkpoint.
