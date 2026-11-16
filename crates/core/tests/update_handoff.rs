@@ -102,7 +102,15 @@ async fn full_verified_windows_update_handoff() {
     let bootstrap_hash = Sha256::digest(std::fs::read(&executable).unwrap());
     let system = PathBuf::from(std::env::var_os("SystemRoot").unwrap());
     let powershell = system.join("System32/WindowsPowerShell/v1.0/powershell.exe");
-    let quoted = format!("'{}'", executable.display().to_string().replace('\'', "''"));
+    // The updater resolves Windows 8.3 aliases before restarting the application.
+    let canonical = executable.canonicalize().unwrap();
+    let quoted = format!(
+        "'{}'",
+        canonical
+            .to_string_lossy()
+            .trim_start_matches(r"\\?\")
+            .replace('\'', "''")
+    );
     struct CloseFixture {
         shell: PathBuf,
         path: String,

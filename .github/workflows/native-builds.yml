@@ -703,6 +703,14 @@ jobs:
           path: ${{ runner.temp }}/windows-appearance
           if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: windows-native-tests
+          path: |
+            target/debug/deps/update_handoff-*.exe
+            target/debug/examples/ui_engine.exe
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && steps.windows-installer.outcome == 'success'
         with:
           name: VideoDock-windows-x64
