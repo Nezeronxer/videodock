@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use reqwest::Client;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -374,39 +374,11 @@ impl Drop for SleepGuard {
 }
 
 pub async fn check_updates(client: &Client) -> Result<Option<Value>> {
-    let Some(url) = option_env!("VIDEODOCK_UPDATE_URL") else {
-        bail!("Для этой локальной сборки не задан источник обновлений")
-    };
-    let url = videodock_media::validate_url(url)?;
-    ensure!(
-        url.scheme() == "https",
-        "Источник обновлений должен использовать HTTPS"
-    );
-    let mut response = client
-        .get(url)
-        .timeout(std::time::Duration::from_secs(30))
-        .send()
+    crate::updater::check(client)
         .await?
-        .error_for_status()?;
-    ensure!(
-        response
-            .content_length()
-            .is_none_or(|length| length <= 1024 * 1024),
-        "Слишком большой ответ обновлений"
-    );
-    let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await? {
-        ensure!(
-            body.len() + chunk.len() <= 1024 * 1024,
-            "Слишком большой ответ обновлений"
-        );
-        body.extend_from_slice(&chunk);
-    }
-    let value: Value = serde_json::from_slice(&body)?;
-    let version = value["version"]
-        .as_str()
-        .context("Не указан номер версии обновления")?;
-    Ok((version != env!("CARGO_PKG_VERSION")).then_some(value))
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(Into::into)
 }
 
 #[cfg(test)]

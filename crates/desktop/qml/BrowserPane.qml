@@ -16,7 +16,7 @@ Rectangle {
     readonly property var web: webLoader.item
     readonly property bool compact: !app.browserVisible && app.hasMedia
     readonly property bool proxyBlocked: root.app.state.browserProxySupported === false
-    readonly property string proxyMessage: root.app.state.browserProxyRestartRequired ? qsTr("Restart VideoDock to apply the browser proxy settings.") : qsTr("The browser supports HTTP proxies and SOCKS5 without authentication. Downloads support the configured proxy.")
+    readonly property string proxyMessage: root.app.state.browserProxyRestartRequired ? qsTr("Restart VideoDock to apply the browser proxy settings.") : qsTr("The browser supports HTTP and SOCKS5 proxies, including authentication. HTTPS and SOCKS4 are not supported by the browser.")
     property var services: [
         {
             "name": "YouTube",

@@ -439,8 +439,8 @@ pub(super) fn update(inner: &Inner, values: &Value) -> Result<()> {
         );
         password.clear();
     }
-    if values.get("autoUpdate") == Some(&json!(true)) {
-        bail!("Автообновление требует настроенного подписанного источника релизов")
+    if !cfg!(windows) && values.get("autoUpdate") == Some(&json!(true)) {
+        bail!("Автоматическая установка обновлений доступна в Windows")
     }
     if values.contains_key("autoStart") {
         crate::platform::set_autostart(settings["autoStart"] == true)?;

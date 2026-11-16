@@ -69,7 +69,6 @@ def main():
     invalid = [b"{}\n", b"x" * (32 * 1024 + 1),
                json.dumps({**request, "video_id": "../bad"}).encode(),
                json.dumps({**request, "request_id": "bad\nvalue"}).encode(),
-               json.dumps({**request, "proxy": "socks5h://user:private@localhost:8080"}).encode(),
                json.dumps({**request, "proxy": "https://localhost:8080"}).encode(),
                json.dumps({**request, "proxy": "http://localhost:8080/path"}).encode(),
                json.dumps({**request, "unexpected": True}).encode()]

@@ -8,6 +8,10 @@
 #include <cstdint>
 #include <QNetworkCookie>
 #include <QNetworkProxy>
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QTimer>
+#include <QHostAddress>
 #include <QUrl>
 #include <QTranslator>
 #include <QLibraryInfo>
@@ -44,6 +48,91 @@ std::unique_ptr<QGuiApplication> create_proof_application(const QString &resolve
     return application;
 }
 
+namespace {
+// Chromium cannot authenticate SOCKS; Qt tunnels it without exposing upstream credentials to pages.
+class SocksBridge final : public QTcpServer {
+public:
+    explicit SocksBridge(const QNetworkProxy &upstream) : QTcpServer(QCoreApplication::instance()) {
+        setProxy(QNetworkProxy::NoProxy);
+        connect(this, &QTcpServer::newConnection, this, [this, upstream] {
+            while (hasPendingConnections()) {
+                auto *client = nextPendingConnection();
+                if (connections >= 32) { client->deleteLater(); continue; }
+                ++connections;
+                connect(client, &QObject::destroyed, this, [this] { --connections; });
+                auto *remote = new QTcpSocket(client);
+                remote->setProxy(upstream);
+                client->setReadBufferSize(64 * 1024);
+                remote->setReadBufferSize(64 * 1024);
+                auto *timer = new QTimer(client);
+                timer->setSingleShot(true);
+                timer->start(30000);
+                connect(timer, &QTimer::timeout, client, &QObject::deleteLater);
+                connect(remote, &QTcpSocket::connected, client, [client, remote, timer] {
+                    timer->stop();
+                    client->setProperty("phase", 2);
+                    client->write(QByteArray::fromHex("050000017f0000010000"));
+                    remote->write(client->readAll());
+                });
+                connect(remote, &QTcpSocket::readyRead, client, [client, remote] {
+                    if (client->bytesToWrite() < 256 * 1024) client->write(remote->readAll());
+                });
+                connect(client, &QTcpSocket::bytesWritten, remote, [client, remote] {
+                    if (client->bytesToWrite() < 256 * 1024) client->write(remote->readAll());
+                });
+                connect(remote, &QTcpSocket::bytesWritten, client, [client, remote] {
+                    if (remote->bytesToWrite() < 256 * 1024) remote->write(client->readAll());
+                });
+                connect(client, &QTcpSocket::disconnected, client, &QObject::deleteLater);
+                connect(remote, &QTcpSocket::disconnected, client, &QTcpSocket::disconnectFromHost);
+                connect(remote, &QTcpSocket::errorOccurred, client, [client] { client->disconnectFromHost(); });
+                connect(client, &QTcpSocket::readyRead, client, [client, remote] {
+                    int phase = client->property("phase").toInt();
+                    if (phase == 2) {
+                        if (remote->bytesToWrite() < 256 * 1024) remote->write(client->readAll());
+                        return;
+                    }
+                    if (phase == 3) return;
+                    auto bytes = client->peek(1024);
+                    if (phase == 0) {
+                        if (bytes.size() < 2 || bytes.size() < 2 + quint8(bytes[1])) return;
+                        if (quint8(bytes[0]) != 5 || !bytes.mid(2, quint8(bytes[1])).contains(char(0))) { client->deleteLater(); return; }
+                        client->read(2 + quint8(bytes[1]));
+                        client->write(QByteArray::fromHex("0500"));
+                        client->setProperty("phase", 1);
+                        bytes = client->peek(1024);
+                    }
+                    if (bytes.size() < 5) return;
+                    if (bytes.left(3) != QByteArray::fromHex("050100")) { client->deleteLater(); return; }
+                    const auto kind = quint8(bytes[3]);
+                    const int length = kind == 3 ? 1 + quint8(bytes[4]) : kind == 1 ? 4 : kind == 4 ? 16 : 0;
+                    if (!length) { client->deleteLater(); return; }
+                    if (bytes.size() < 6 + length) return;
+                    QString host;
+                    if (kind == 3) host = QString::fromLatin1(bytes.mid(5, length - 1));
+                    else if (kind == 1) {
+                        quint32 ip = 0;
+                        for (int i = 4; i < 8; ++i) ip = (ip << 8) | quint8(bytes[i]);
+                        host = QHostAddress(ip).toString();
+                    } else {
+                        Q_IPV6ADDR ip;
+                        for (int i = 0; i < 16; ++i) ip[i] = quint8(bytes[4 + i]);
+                        host = QHostAddress(ip).toString();
+                    }
+                    const quint16 port = (quint8(bytes[4 + length]) << 8) | quint8(bytes[5 + length]);
+                    if (host.isEmpty() || !port || host.contains(QChar(0))) { client->deleteLater(); return; }
+                    client->read(6 + length);
+                    client->setProperty("phase", 3);
+                    remote->connectToHost(host, port);
+                });
+            }
+        });
+    }
+private:
+    int connections = 0;
+};
+}
+
 bool configure_browser_proxy(const QString &address) {
     QNetworkProxy proxy(QNetworkProxy::NoProxy);
     if (!address.isEmpty()) {
@@ -52,15 +141,23 @@ bool configure_browser_proxy(const QString &address) {
         const bool socks = scheme == QStringLiteral("socks5h") || scheme == QStringLiteral("socks5");
         const auto port = url.port(socks ? -1 : 80);
         if (!url.isValid() || url.host().isEmpty() || port <= 0
-            || (scheme != QStringLiteral("http") && !socks)
-            || (socks && !url.userName().isEmpty())) {
-            // WebEngine lacks HTTPS/SOCKS4 proxies and SOCKS authentication; never fall back to direct.
+            || (scheme != QStringLiteral("http") && !socks)) {
+            // Unsupported transports never fall back to a direct connection.
             QNetworkProxy::setApplicationProxy(QNetworkProxy(QNetworkProxy::HttpProxy,
                                                              QStringLiteral("127.0.0.1"), 9));
             return false;
         }
         proxy = QNetworkProxy(socks ? QNetworkProxy::Socks5Proxy : QNetworkProxy::HttpProxy,
-                              url.host(), quint16(port), url.userName(), url.password());
+                              url.host(), quint16(port), url.userName(QUrl::FullyDecoded), url.password(QUrl::FullyDecoded));
+        if (socks && (!url.userName().isEmpty() || !url.password().isEmpty())) {
+            auto *bridge = new SocksBridge(proxy);
+            if (!bridge->listen(QHostAddress::LocalHost)) {
+                delete bridge;
+                QNetworkProxy::setApplicationProxy(QNetworkProxy(QNetworkProxy::HttpProxy, QStringLiteral("127.0.0.1"), 9));
+                return false;
+            }
+            proxy = QNetworkProxy(QNetworkProxy::Socks5Proxy, QStringLiteral("127.0.0.1"), bridge->serverPort());
+        }
     }
     QNetworkProxy::setApplicationProxy(proxy);
     return true;

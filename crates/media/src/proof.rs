@@ -170,7 +170,7 @@ fn response(bytes: &[u8], id: &str) -> Result<Proof> {
         }
         let message = match stage {
             Stage::Validation => {
-                "Проверка Google поддерживает HTTP (включая вход) и SOCKS5 без логина; HTTPS и SOCKS4 не поддерживаются"
+                "Проверка Google поддерживает HTTP и SOCKS5, включая вход; HTTPS и SOCKS4 не поддерживаются"
             }
             Stage::Network => "Проверке Google недоступна сеть через выбранный маршрут",
             _ => "Google не подтвердил анонимную проверку; повторите загрузку",

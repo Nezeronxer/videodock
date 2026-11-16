@@ -3,6 +3,76 @@ use tempfile::TempDir;
 use videodock_core::Engine;
 
 #[test]
+fn cached_update_survives_startup_and_failed_network_check() {
+    use sha2::{Digest, Sha256};
+    let data = TempDir::new().unwrap();
+    std::fs::create_dir(data.path().join("updates")).unwrap();
+    std::fs::write(
+        data.path().join("updates/VideoDock-999.0.0-Setup.exe"),
+        b"fixture",
+    )
+    .unwrap();
+    let update = json!({"status":"ready","version":"999.0.0","url":"https://github.com/Nezeronxer/videodock/releases/download/v999.0.0/VideoDock-999.0.0-windows-x64-Setup.exe","bytes":7,"sha256":format!("{:x}",Sha256::digest(b"fixture"))});
+    let saved = json!({"_automatic_updates_v1":true,"update":update,"settings":{"autoUpdate":false,"path":data.path().join("output"),"proxyEnabled":true,"proxyType":"HTTP","proxyHost":"127.0.0.1","proxyPort":9}});
+    let store = rusqlite::Connection::open(data.path().join("state.sqlite")).unwrap();
+    store
+        .execute_batch("CREATE TABLE state (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+        .unwrap();
+    store
+        .execute("INSERT INTO state VALUES(1,?1)", [saved.to_string()])
+        .unwrap();
+    drop(store);
+    let engine = Engine::new(data.path().to_owned()).unwrap();
+    assert_eq!(engine.snapshot()["update"], update);
+    engine
+        .dispatch(json!({"action":"app","command":"check_updates"}))
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let snapshot = engine.snapshot();
+        if snapshot["notice"]
+            .as_str()
+            .is_some_and(|notice| notice.contains("Не удалось получить обновление"))
+        {
+            assert_eq!(
+                snapshot["update"], update,
+                "offline check discarded the verified installer"
+            );
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "local proxy refusal was not handled"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    drop(engine);
+    let reopened = Engine::new(data.path().to_owned()).unwrap();
+    assert_eq!(reopened.snapshot()["update"], update);
+}
+
+#[cfg(windows)]
+#[test]
+fn automatic_updates_can_be_disabled_enabled_and_survive_restart() {
+    let data = TempDir::new().unwrap();
+    let engine = Engine::new(data.path().to_owned()).unwrap();
+    assert_eq!(engine.snapshot()["settings"]["autoUpdate"], true);
+    for enabled in [false, true, false] {
+        engine
+            .dispatch(json!({"action":"settings","values":{"autoUpdate":enabled}}))
+            .unwrap();
+        assert_eq!(engine.snapshot()["settings"]["autoUpdate"], enabled);
+    }
+    drop(engine);
+    let reopened = Engine::new(data.path().to_owned()).unwrap();
+    assert_eq!(reopened.snapshot()["settings"]["autoUpdate"], false);
+    reopened
+        .dispatch(json!({"action":"settings","values":{"autoUpdate":true}}))
+        .unwrap();
+    assert_eq!(reopened.snapshot()["settings"]["autoUpdate"], true);
+}
+
+#[test]
 fn added_order_survives_clock_correction_priority_reordering_and_restart() {
     let data = TempDir::new().unwrap();
     let database = data.path().join("state.sqlite");

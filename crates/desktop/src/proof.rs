@@ -63,8 +63,6 @@ fn request(bytes: &[u8]) -> Option<Value> {
         if !matches!(address.scheme(), "http" | "socks5" | "socks5h")
             || address.host_str().is_none()
             || address.port_or_known_default().is_none_or(|port| port == 0)
-            || address.scheme() != "http"
-                && (!address.username().is_empty() || address.password().is_some())
             || !matches!(address.path(), "" | "/")
             || address.query().is_some()
             || address.fragment().is_some()
@@ -237,7 +235,6 @@ mod tests {
         mapped["proxy"] = json!("socks5h://127.0.0.1:1080");
         assert!(request(&serde_json::to_vec(&mapped).unwrap()).is_none());
         for proxy in [
-            "socks5h://user:private@localhost:8080",
             "https://localhost:8080",
             "socks4://localhost:1080",
             "http://localhost:80/path",
@@ -249,6 +246,8 @@ mod tests {
         }
         let mut authenticated_http = valid.clone();
         authenticated_http["proxy"] = json!("http://proof:synthetic@127.0.0.1:8080");
+        assert!(request(&serde_json::to_vec(&authenticated_http).unwrap()).is_some());
+        authenticated_http["proxy"] = json!("socks5h://proof:synthetic@127.0.0.1:8080");
         assert!(request(&serde_json::to_vec(&authenticated_http).unwrap()).is_some());
         let result = response(r#"{"ok":false,"stage":"private remote message"}"#, "id");
         assert_eq!(result["stage"], "internal");

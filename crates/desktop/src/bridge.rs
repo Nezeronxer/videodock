@@ -81,6 +81,13 @@ fn data_directory() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(ffi::application_data_directory().to_string()))
 }
+pub fn finish() {
+    if let Some(engine) = ENGINE.get() {
+        if engine.finish().is_err() {
+            eprintln!("Не удалось установить обновление VideoDock");
+        }
+    }
+}
 pub fn initialize_webengine() {
     ffi::initialize_webengine();
 }
@@ -210,7 +217,11 @@ impl ffi::Backend {
             .and_then(|action| {
                 let logout = action["action"] == "account" && action["command"] == "logout";
                 let settings = action["action"] == "settings";
-                let response = self
+                let proxy_settings = settings
+                    && action["values"]
+                        .as_object()
+                        .is_some_and(|values| values.keys().any(|key| key.starts_with("proxy")));
+                let mut response = self
                     .rust()
                     .engine
                     .as_ref()
@@ -223,6 +234,9 @@ impl ffi::Backend {
                     self.as_mut().rust_mut().browser_proxy_restart_required = changed;
                     self.as_mut().rust_mut().browser_proxy_supported =
                         !changed && original.is_some_and(|(_, supported)| *supported);
+                    if proxy_settings && changed {
+                        response["browserProxyRestartRequired"] = json!(true);
+                    }
                 }
                 if logout {
                     ffi::clear_browser_cookies();

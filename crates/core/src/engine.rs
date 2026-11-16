@@ -2,6 +2,7 @@ mod exchange;
 mod queue;
 mod secrets;
 mod settings;
+mod updates;
 
 use crate::{store::Store, transfer::Limiter};
 use anyhow::{Context, Result, anyhow, ensure};
@@ -62,6 +63,7 @@ struct Inner {
     limiter: Arc<Limiter>,
     library_last: AtomicU64,
     library_scanning: AtomicBool,
+    updating: AtomicBool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -149,6 +151,14 @@ impl Engine {
                 }
             }
         }
+        #[cfg(windows)]
+        if state["_automatic_updates_v1"] != true {
+            settings["autoUpdate"] = json!(true);
+            state["_automatic_updates_v1"] = json!(true);
+        }
+        if crate::updater::cached(&directory, &state["update"]).is_none() {
+            state["update"] = Value::Null;
+        }
         settings["speedLimit"] = json!(0);
         #[cfg(target_os = "linux")]
         if crate::platform::flatpak() {
@@ -187,7 +197,8 @@ impl Engine {
         let order_changed = initialize_job_order(&mut state);
         state["manual"] = Value::Null;
         state["account"] = json!({"logged_in":false,"user_name":"","avatar_url":""});
-        state["capabilities"] = json!({"browser":true,"tray":true,"auto_start":true});
+        state["capabilities"] =
+            json!({"browser":true,"tray":true,"auto_start":true,"auto_update":cfg!(windows)});
         #[cfg(target_os = "linux")]
         if crate::platform::flatpak() {
             state["capabilities"]["auto_start"] = json!(false);
@@ -216,6 +227,7 @@ impl Engine {
             limiter: Arc::new(Limiter::new(0)),
             library_last: AtomicU64::new(0),
             library_scanning: AtomicBool::new(false),
+            updating: AtomicBool::new(false),
         });
         runtime()?;
         let engine = Self {
@@ -228,7 +240,28 @@ impl Engine {
         };
         queue::start(&inner)?;
         secrets::verify_debounced(&inner);
+        updates::start(&inner)?;
         Ok(engine)
+    }
+
+    /// Called after the GUI event loop ends; the installer waits for this process to exit.
+    pub fn finish(&self) -> Result<()> {
+        #[cfg(windows)]
+        {
+            let state = lock(&self.inner.state).clone();
+            if state["settings"]["autoUpdate"] == true && state["update"]["status"] == "ready" {
+                let update: crate::updater::Update =
+                    serde_json::from_value(state["update"].clone())?;
+                let path = self
+                    .inner
+                    .directory
+                    .join("updates")
+                    .join(format!("VideoDock-{}-Setup.exe", update.version));
+                crate::updater::install_on_exit(&path, &update)?;
+            }
+        }
+        self.inner.shutdown.cancel();
+        Ok(())
     }
 
     pub fn snapshot(&self) -> Value {
@@ -242,6 +275,9 @@ impl Engine {
         match kind {
             "settings" => {
                 settings::update(&self.inner, &action["values"])?;
+                if cfg!(windows) && action["values"]["autoUpdate"] == true {
+                    updates::check(&self.inner, false)?;
+                }
                 Ok(json!({}))
             }
             "parse" => queue::parse(&self.inner, &action),
@@ -417,27 +453,7 @@ fn app_action(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
             std::fs::create_dir_all(&path)?;
             crate::platform::open_path(&path)?;
         }
-        "check_updates" => {
-            let inner = inner.clone();
-            runtime()?.spawn(async move {
-                let result = async {
-                    let catalog = queue::catalog(&inner)?;
-                    crate::platform::check_updates(&catalog.client()).await
-                }
-                .await;
-                match result {
-                    Ok(Some(update)) => {
-                        let _ = change(&inner, |state| {
-                            state["update"] = update;
-                            state["notice"] = json!("Доступна новая версия");
-                            Ok(())
-                        });
-                    }
-                    Ok(None) => notice(&inner, "Установлена актуальная версия"),
-                    Err(error) => notice(&inner, error),
-                }
-            });
-        }
+        "check_updates" => updates::check(inner, true)?,
         _ => anyhow::bail!("Неизвестное действие приложения"),
     }
     Ok(json!({}))

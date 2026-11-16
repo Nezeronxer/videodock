@@ -10,8 +10,8 @@
     </message>
     <message>
         <location filename="../BrowserPane.qml" line="19"/>
-        <source>The browser supports HTTP proxies and SOCKS5 without authentication. Downloads support the configured proxy.</source>
-        <translation>Браузер поддерживает HTTP-прокси и SOCKS5 без авторизации. Скачивание работает с выбранным прокси.</translation>
+        <source>The browser supports HTTP and SOCKS5 proxies, including authentication. HTTPS and SOCKS4 are not supported by the browser.</source>
+        <translation>Браузер поддерживает HTTP и SOCKS5, в том числе с авторизацией. HTTPS и SOCKS4 в браузере не поддерживаются.</translation>
     </message>
     <message>
         <location filename="../BrowserPane.qml" line="131"/>
@@ -306,6 +306,10 @@
 </context>
 <context>
     <name>Main</name>
+    <message>
+        <source>Proxy saved. Restart VideoDock to apply it to the browser. New downloads use it immediately.</source>
+        <translation>Прокси сохранён. Перезапустите VideoDock, чтобы применить его для браузера. Новые загрузки уже используют его.</translation>
+    </message>
     <message>
         <location filename="../Main.qml" line="47"/>
         <source>All</source>

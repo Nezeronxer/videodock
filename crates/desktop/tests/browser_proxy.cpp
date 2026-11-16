@@ -28,8 +28,8 @@ int main(int argc, char **argv) {
     assert(directory.isValid());
     const int selected = argc > 1 ? std::atoi(argv[1]) : 0;
     for (int mode = selected; mode <= selected; ++mode) {
-        const bool socks = mode == 2;
-        const bool auth = mode == 1;
+        const bool socks = mode >= 2;
+        const bool auth = mode == 1 || mode == 3;
         QTcpServer server;
         assert(server.listen(QHostAddress::LocalHost));
         int requests = 0;
@@ -46,7 +46,19 @@ int main(int argc, char **argv) {
                     }
                     assert(quint8(bytes[0]) == 5);
                     bytes.remove(0, 2 + quint8(bytes[1]));
-                    socket->write(QByteArray::fromHex("0500"));
+                    socket->write(QByteArray::fromHex(auth ? "0502" : "0500"));
+                    phase = auth ? -1 : 1;
+                }
+                if (phase == -1) {
+                    if (bytes.size() < 2) { socket->setProperty("phase", phase); socket->setProperty("buffer", bytes); return; }
+                    const int userSize = quint8(bytes[1]);
+                    if (bytes.size() < 3 + userSize) { socket->setProperty("phase", phase); socket->setProperty("buffer", bytes); return; }
+                    const int passSize = quint8(bytes[2 + userSize]);
+                    if (bytes.size() < 3 + userSize + passSize) { socket->setProperty("phase", phase); socket->setProperty("buffer", bytes); return; }
+                    assert(bytes.mid(2, userSize) == "test" && bytes.mid(3 + userSize, passSize) == "synthetic");
+                    ++authorized;
+                    bytes.remove(0, 3 + userSize + passSize);
+                    socket->write(QByteArray::fromHex("0100"));
                     phase = 1;
                 }
                 if (phase == 1) {
@@ -64,7 +76,7 @@ int main(int argc, char **argv) {
                 if (phase != 2 || !bytes.contains("\r\n\r\n")) return;
                 ++requests;
                 const bool valid = bytes.toLower().contains("proxy-authorization: basic dgvzddpzew50agv0awm=");
-                if (auth && !valid) {
+                if (auth && !socks && !valid) {
                     socket->write("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"synthetic\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                 } else {
                     if (valid) ++authorized;
@@ -88,15 +100,18 @@ int main(int argc, char **argv) {
         QQmlApplicationEngine engine;
         engine.rootContext()->setContextProperty(QStringLiteral("probe"), &probe);
         engine.loadData(QStringLiteral(
-            "import QtQuick\nimport QtWebEngine\nWindow { width:320; height:200; visible:true; WebEngineView { anchors.fill:parent; url: \"http://proxy-routing-%1.invalid/probe\"; onLoadingChanged:function(request) { if(request.status===WebEngineView.LoadSucceededStatus) probe.finish(true); else if(request.status===WebEngineView.LoadFailedStatus) probe.finish(false); } } }").arg(mode).toUtf8());
+            "import QtQuick\nimport QtWebEngine\nWindow { width:320; height:200; visible:true; WebEngineView { objectName: \"probeWeb\"; anchors.fill:parent; url: \"http://proxy-routing-%1.invalid/probe\"; onLoadingChanged:function(request) { if(request.status===WebEngineView.LoadSucceededStatus) probe.finish(true); else if(request.status===WebEngineView.LoadFailedStatus) probe.finish(false); } } }").arg(mode).toUtf8());
         QTimer::singleShot(10000, &probe.loop, &QEventLoop::quit);
         probe.loop.exec();
         assert(probe.loaded && requests > 0);
         if (auth) assert(authorized > 0);
         std::printf("PASS: WebEngine %s auth=%s requests=%d authorized=%d\n", socks ? "SOCKS5" : "HTTP", auth ? "yes" : "no", requests, authorized);
+
     }
-    for (const auto &address : {QStringLiteral("socks5h://test:synthetic@127.0.0.1:1080"),
-                                 QStringLiteral("https://127.0.0.1:1080"), QStringLiteral("socks4://127.0.0.1:1080")}) {
+    assert(configure_browser_proxy(QStringLiteral("http://user%40fixture:synthetic%3Afixture@127.0.0.1:8080")));
+    assert(QNetworkProxy::applicationProxy().user() == QStringLiteral("user@fixture"));
+    assert(QNetworkProxy::applicationProxy().password() == QStringLiteral("synthetic:fixture"));
+    for (const auto &address : {QStringLiteral("https://127.0.0.1:1080"), QStringLiteral("socks4://127.0.0.1:1080")}) {
         assert(!configure_browser_proxy(address));
         assert(QNetworkProxy::applicationProxy().type() != QNetworkProxy::NoProxy);
     }

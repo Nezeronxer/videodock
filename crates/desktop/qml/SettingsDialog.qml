@@ -366,6 +366,7 @@ AppDialog {
                             Layout.topMargin: 20
                             text: qsTr("Install updates automatically")
                             settingKey: "autoUpdate"
+                            enabled: (root.app.state.capabilities || {}).auto_update !== false
                         }
 
                         Toggle {

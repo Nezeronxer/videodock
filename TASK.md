@@ -944,3 +944,22 @@ Linuxnativef8a5f25built/installedPASS,2GBpeak,3m49s; actualinstalledonboardingst
 0.2.2 Windows final installer verified on10LTSC19044 and11Enterprise26300: two upgrades each, old profile SHA preserved, clean PATH responsive startup. SetupSHA c55a4a697fd7ecef64ece5d35c4fa107029c505ebde9fa991dc84035a6be81b3; exe3bc44edbedac16cf1dc55026408c9129c7e5e959105ff33423aae69a2377fd2e; Rustmanifest94ae1f4537ed05f10f55b516a33fc119715a5037bd6835fe07d03b243bdb9ab1. Own QA app/tasks/driver closed, Win11seq3PASS, shutdown requested, HTTP/control/console units stopped. MacIntel final packaging remains, ARM/Linux mandatory gates PASS.
 
 0.2.2 published https://github.com/Nezeronxer/videodock/releases/tag/v0.2.2 ; source9b25d2d, runtimeb59043d. Public Setup matches tested SHA c55a4a...; all API digests/sizes/checksums match. Windows/macOS links delivered in commentary; Android task remains active and isolated. Android Core ARM64 release cross-build PASS after official Rust SDK compiler + rquickjs-sys bindgen target feature + Android OS adapters. SDK36/NDK27c/JDK21/Qt6.12 kits installed; emulator image ready.
+
+## Windows proxy / Google sign-in / YouTube failures - 16.11.2026
+
+- [ ] Reproduce current release failures with isolated profiles; preserve existing user data and untracked examples.
+- [ ] Trace proxy settings through Rust, browser and proof worker; add regressions and fix confirmed causes.
+- [ ] Reproduce Google sign-in navigation and provide a working account authorization path.
+- [ ] Verify repeated complete YouTube downloads, audio/video and decode.
+- [ ] Check Windows 10/11 using existing VMs with bounded resources, Linux GUI, available macOS CI.
+- [ ] Run relevant workspace, Qt and package checks; record exact evidence and remaining limitations.
+
+Effort: full investigation at current model/effort; no new VM images. Evidence: ~/.local/share/videodock/research/windows-bugs-2026-11-16/.
+
+Scope expanded by owner: full Windows 10/11 QA, all discovered reproducible defects (including images), release delivery, real automatic updates instead of manual reinstall. Preserve Linux/macOS compatibility. Existing autoUpdate toggle currently has no installer implementation; update source absent by default. Public anonymous YouTube baseline with selected HTTP proxy fails at LOGIN_REQUIRED (same user screenshot). Initial headless SIGABRT was QA missing display, not established desktop defect; offscreen baseline reaches YouTube.
+
+16.11 owner requested hidden testing: keep Windows VM and native UIAutomation tests running, close only our remote-viewer windows on host, capture evidence via libvirt/guest. Do not raise visible VM/browser windows on the host.
+
+16.11 resource correction: owner reported RAM pressure. Saved videodock-win11-qa with libvirt managedsave and stopped own hidden viewer; no cargo/rustc left running. At intervention Firefox content PID92648 used about16GiB resident and swap was nearly full. Owner explicitly approved closing only that process; identity(Name/PPid) verified and SIGTERM sent. Future local heavy commands must use jobs=1 and cgroup MemoryMax<=2GiB/MemorySwapMax<=512MiB; no parallel VM/build. Prefer remote CI; do not resume6GiB managedsave blindly. Keep saved state intact.
+
+16.11 source checkpoint0.2.3: Qt real HTTP/SOCKS5 routing with/without auth PASS; reserved HTTP credential decoding regression added. Anonymous bot challenge now typed retryable; real public zoo and reportedShorts full video+audio/ffprobe/fullFFmpeg decode PASS through currently working SOCKS1086. Earlier11086 test route later refused connections; no user network strategy changed. NativeWin11 baseline actualLogIn reproduced unreachable Google page through the refused route; working-route form verification remains pending. Linux EN UI/realEngine suite PASS; workspace231passed/0failed/53ignored before final updater changes. Updater4offline tests plus actualEngine cached update startup/failed local proxy/restart regression PASS. Reviewer found and fixed autoUpdate toggle rejection and ready-cache loss after network failure/restart. Clippy latest passing before final notice/version/test changes; rerun required in bounded scope/CI. Currentlocal resource work paused at VM managedsave; remote builds preferred. Not yet released; no final Windows updater/runtime claim.

@@ -167,6 +167,8 @@ ApplicationWindow {
             localNotice = response.error;
         else
             localNotice = "";
+        if (response && response.browserProxyRestartRequired)
+            localNotice = qsTr("Proxy saved. Restart VideoDock to apply it to the browser. New downloads use it immediately.");
         if (response && response.url) {
             browserVisible = true;
             browser.go(response.url);

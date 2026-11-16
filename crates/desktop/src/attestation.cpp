@@ -114,10 +114,6 @@ QString run_youtube_proof(const QString &video_id, const QString &proxy, const Q
     if (!proxy.isEmpty() && !google_address.isEmpty()) return encoded({{"ok", false}, {"stage", "validation"}});
     if (!configure_browser_proxy(proxy)) return encoded({{"ok", false}, {"stage", "network"}});
     auto selected_proxy = QNetworkProxy::applicationProxy();
-    const QUrl proxy_url(proxy);
-    selected_proxy.setUser(proxy_url.userName(QUrl::FullyDecoded));
-    selected_proxy.setPassword(proxy_url.password(QUrl::FullyDecoded));
-    QNetworkProxy::setApplicationProxy(selected_proxy);
     QString result = encoded({{"ok", false}, {"stage", "internal"}});
     bool finished = false;
     QEventLoop loop;

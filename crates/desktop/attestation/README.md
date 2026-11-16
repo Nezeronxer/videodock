@@ -14,8 +14,9 @@ HTTP Host while dialing the supplied address; HTTP/2 is disabled because its
 authority otherwise follows the dial address. A selected proxy disables all
 bootstrap mappings. HTTP proxy credentials remain in the private request and
 are supplied only to the selected proxy, with bounded authentication retries;
-website authentication receives none. HTTPS and authenticated SOCKS proof
-proxies fail closed.
+website authentication receives none. Authenticated SOCKS5 uses a bounded
+loopback bridge whose Qt socket authenticates only to the selected upstream.
+HTTPS and SOCKS4 proof proxies fail closed.
 
 The checked-in bundle needs no JavaScript tool at application runtime or normal
 Cargo build. To reproduce it with esbuild 0.28.2:

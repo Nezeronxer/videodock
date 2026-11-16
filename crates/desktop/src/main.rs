@@ -30,5 +30,6 @@ fn main() {
     }
     if let Some(application) = application.as_mut() {
         application.exec();
+        bridge::finish();
     }
 }

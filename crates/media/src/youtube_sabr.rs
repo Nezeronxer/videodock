@@ -47,6 +47,13 @@ fn binary(value: &str) -> Result<Vec<u8>> {
 pub(super) fn delivery_url(data: &Value) -> Result<&str> {
     match data["playabilityStatus"]["status"].as_str() {
         Some("OK") => {}
+        Some("LOGIN_REQUIRED")
+            if data["playabilityStatus"]["reason"]
+                .as_str()
+                .is_some_and(|reason| reason.to_ascii_lowercase().contains("not a bot")) =>
+        {
+            return Err(crate::proof::AttestationRetryable::Failed.into());
+        }
         Some("LOGIN_REQUIRED" | "AGE_CHECK_REQUIRED" | "CONTENT_CHECK_REQUIRED") => {
             anyhow::bail!(
                 "YouTube просит подтвердить доступ. Откройте видео во встроенном браузере; при необходимости выберите вход в аккаунт YouTube в настройках."
@@ -292,6 +299,32 @@ mod tests {
                 .is_none()
         );
         assert!(format_tags(&serde_json::json!({"url":"x".repeat(64 * 1024 + 1)})).is_none());
+    }
+    #[test]
+    fn bot_confirmation_refreshes_proof_but_private_and_age_restrictions_do_not() {
+        for reason in [
+            "Sign in to confirm you’re not a bot",
+            "Sign in to confirm you're not a bot",
+        ] {
+            let data = serde_json::json!({"playabilityStatus":{"status":"LOGIN_REQUIRED","reason":reason}});
+            assert!(
+                delivery_url(&data)
+                    .unwrap_err()
+                    .is::<crate::proof::AttestationRetryable>()
+            );
+        }
+        for (status, reason) in [
+            ("LOGIN_REQUIRED", "This video is private"),
+            ("AGE_CHECK_REQUIRED", "Confirm your age"),
+            ("LOGIN_REQUIRED", "Sign in"),
+        ] {
+            let data = serde_json::json!({"playabilityStatus":{"status":status,"reason":reason}});
+            assert!(
+                !delivery_url(&data)
+                    .unwrap_err()
+                    .is::<crate::proof::AttestationRetryable>()
+            );
+        }
     }
     #[test]
     fn player_refusal_is_reported_before_looking_for_stream_url() {

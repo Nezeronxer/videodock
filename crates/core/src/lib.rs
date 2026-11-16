@@ -10,5 +10,6 @@ pub mod sabr;
 mod store;
 pub mod subtitles;
 pub mod transfer;
+pub mod updater;
 
 pub use engine::Engine;
