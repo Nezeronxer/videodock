@@ -672,6 +672,8 @@ jobs:
       - name: Verify automatic update installer handoff
         if: always() && steps.windows-worker.outcome == 'success'
         timeout-minutes: 10
+        env:
+          VIDEODOCK_DISPOSABLE_UPDATE_TEST: "1"
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64

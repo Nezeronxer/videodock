@@ -9,6 +9,11 @@ use videodock_core::updater::{Update, download, install_on_exit};
 #[test]
 #[ignore = "child process of the isolated Windows installer handoff test"]
 fn install_handoff_child() {
+    assert_eq!(
+        std::env::var("VIDEODOCK_DISPOSABLE_UPDATE_TEST").as_deref(),
+        Ok("1"),
+        "real installer test requires an explicitly disposable Windows environment"
+    );
     let file =
         std::env::var_os("VIDEODOCK_HANDOFF_METADATA").expect("parent handoff fixture required");
     let update: Update = serde_json::from_slice(&std::fs::read(file).unwrap()).unwrap();
@@ -19,6 +24,11 @@ fn install_handoff_child() {
 #[tokio::test]
 #[ignore = "downloads and installs the real public Windows package into an isolated temporary directory"]
 async fn full_verified_windows_update_handoff() {
+    assert_eq!(
+        std::env::var("VIDEODOCK_DISPOSABLE_UPDATE_TEST").as_deref(),
+        Ok("1"),
+        "real installer test changes per-user app registration; use only a disposable Windows environment"
+    );
     use std::process::{Command, Stdio};
     let temp = tempfile::Builder::new()
         .prefix("VideoDock update ' ")
@@ -168,6 +178,15 @@ async fn full_verified_windows_update_handoff() {
         Sha256::digest(std::fs::read(&executable).unwrap()),
         bootstrap_hash,
         "installer did not replace the bootstrap executable"
+    );
+    let lease = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(profile.join("state.lock"))
+        .expect("restarted app did not open the fixture profile");
+    assert!(
+        lease.try_lock().is_err(),
+        "restarted app is not holding the fixture profile lease"
     );
     let db = rusqlite::Connection::open(profile.join("state.sqlite")).unwrap();
     let state: String = db
