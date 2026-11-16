@@ -22,6 +22,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Appearance sample generation failed' }
     $results = [ordered]@{}
     $env:QT_FORCE_STDERR_LOGGING = '1'
+    $proxyResults = [ordered]@{}
+    foreach ($mode in 0,1,2,3) {
+        $probe = Start-Process -FilePath "$build/videodock-browser-proxy.exe" -ArgumentList @("$mode") -Wait -PassThru `
+            -RedirectStandardOutput "$output/proxy-$mode-stdout.log" -RedirectStandardError "$output/proxy-$mode.log"
+        $proxyResults["$mode"] = $probe.ExitCode
+        if ($probe.ExitCode -ne 0) { throw "Native browser proxy mode $mode failed" }
+    }
+    $proxyResults | ConvertTo-Json | Set-Content -Encoding utf8 "$output/proxy-routing-result.json"
     foreach ($language in @('en', 'ru')) {
         New-Item -ItemType Directory -Force "$output/$language" | Out-Null
         $arguments = @("`"$project/crates/desktop/qml/Main.qml`"", "`"$output/$language`"", $language,

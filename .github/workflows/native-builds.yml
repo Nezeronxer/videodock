@@ -644,6 +644,16 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
           if errorlevel 1 exit /b 1
           pwsh -NoProfile -File crates/desktop/tests/check-appearance.ps1 "%RUNNER_TEMP%/windows-appearance"
+      - name: Verify Windows browser proxy routing
+        if: always() && steps.windows-worker.outcome == 'success'
+        shell: pwsh
+        run: |
+          $result = Get-Content "$env:RUNNER_TEMP/windows-appearance/proxy-routing-result.json" -Raw | ConvertFrom-Json
+          foreach ($mode in '0','1','2','3') {
+            $value = $result.PSObject.Properties[$mode]
+            if (!$value -or $value.Value -ne 0) { throw "Missing successful native proxy mode $mode" }
+          }
+          'Native HTTP/SOCKS5, with and without authentication: PASS'
       - name: Complete public Windows downloads with the packaged worker
         if: always() && steps.windows-worker.outcome == 'success'
         shell: pwsh
