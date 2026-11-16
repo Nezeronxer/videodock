@@ -708,6 +708,8 @@ jobs:
           name: windows-native-tests
           path: |
             target/debug/deps/update_handoff-*.exe
+            target/debug/deps/youtube_downloads-*.exe
+            target/debug/deps/catalog_downloads-*.exe
             target/debug/examples/ui_engine.exe
           if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
