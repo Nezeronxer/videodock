@@ -648,7 +648,11 @@ mod tests {
     #[test]
     fn links_cannot_escape_bundle() {
         let directory = tempfile::tempdir().unwrap();
-        let app = directory.path().join("VideoDock.app");
+        let app = directory
+            .path()
+            .canonicalize()
+            .unwrap()
+            .join("VideoDock.app");
         fs::create_dir(&app).unwrap();
         fs::write(app.join("real"), "data").unwrap();
         std::os::unix::fs::symlink("real", app.join("link")).unwrap();
@@ -660,8 +664,9 @@ mod tests {
     #[test]
     fn rollback_restores_database_browser_and_secrets_without_touching_downloads() {
         let directory = tempfile::tempdir().unwrap();
-        let stage = directory.path().join("stage");
-        let profile = directory.path().join("profile");
+        let root = directory.path().canonicalize().unwrap();
+        let stage = root.join("stage");
+        let profile = root.join("profile");
         fs::create_dir(&stage).unwrap();
         fs::create_dir(&profile).unwrap();
         fs::write(profile.join("state.sqlite"), "old history").unwrap();
@@ -774,16 +779,17 @@ mod tests {
     #[test]
     fn staging_must_be_private_and_not_a_symlink() {
         let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().canonicalize().unwrap();
         let stage = tempfile::Builder::new()
             .prefix(STAGE_PREFIX)
-            .tempdir_in(parent.path())
+            .tempdir_in(&root)
             .unwrap();
         fs::set_permissions(stage.path(), fs::Permissions::from_mode(0o700)).unwrap();
         assert!(private_stage(stage.path()).is_ok());
         fs::set_permissions(stage.path(), fs::Permissions::from_mode(0o755)).unwrap();
         assert!(private_stage(stage.path()).is_err());
         fs::set_permissions(stage.path(), fs::Permissions::from_mode(0o700)).unwrap();
-        let alias = parent.path().join(".videodock-update-alias");
+        let alias = root.join(".videodock-update-alias");
         std::os::unix::fs::symlink(stage.path(), &alias).unwrap();
         assert!(private_stage(&alias).is_err());
     }

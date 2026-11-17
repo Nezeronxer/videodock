@@ -170,7 +170,7 @@ def main():
     report = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else Path(os.environ.get('RUNNER_TEMP', tempfile.gettempdir())) / 'macos-update-report'
     report.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='videodock-native-update-') as directory:
-        root = Path(directory)
+        root = Path(directory).resolve()
         new = root / 'candidate/VideoDock.app'
         new.parent.mkdir()
         run(['/usr/bin/ditto', package, new], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)

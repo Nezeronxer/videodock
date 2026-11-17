@@ -29,7 +29,8 @@ def api(path):
 
 def nonruntime(path):
     return (path in {'README.md', 'TASK.md', 'crates/desktop/TASK.md',
-                     'scripts/rust/publish-release.py', 'scripts/rust/check-macos-frameworks.py'}
+                     'scripts/rust/publish-release.py', 'scripts/rust/check-macos-frameworks.py',
+                     'scripts/rust/check-macos-update.py'}
             or path == '.github/workflows/native-builds.yml'
             or path.startswith(('docs/', 'crates/core/tests/',
                                 'crates/media/tests/', 'crates/desktop/tests/',
@@ -37,7 +38,8 @@ def nonruntime(path):
 
 
 def producer_sources_match(paths, kind):
-    return all(nonruntime(path) or (kind != 'macos' and path == 'scripts/rust/repair-macos-frameworks.py')
+    return all(nonruntime(path) or (kind != 'macos' and path in {
+        'scripts/rust/repair-macos-frameworks.py', 'crates/core/src/updater/macos.rs'})
                for path in paths)
 
 
@@ -245,6 +247,9 @@ def main():
         assert producer_sources_match(['scripts/rust/repair-macos-frameworks.py'], 'windows')
         assert producer_sources_match(['scripts/rust/repair-macos-frameworks.py'], 'linux')
         assert not producer_sources_match(['scripts/rust/repair-macos-frameworks.py'], 'macos')
+        assert producer_sources_match(['crates/core/src/updater/macos.rs'], 'windows')
+        assert producer_sources_match(['crates/core/src/updater/macos.rs'], 'linux')
+        assert not producer_sources_match(['crates/core/src/updater/macos.rs'], 'macos')
         print('Release gate self-check passed')
         return
     repo, source = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
