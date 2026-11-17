@@ -1002,7 +1002,7 @@ Mac producer43950356238/e42199d: both Intel/ARM browser-focus and EN/RU actualEn
 
 Результат: проверить окончательные Windows-пакеты и выпустить Windows/macOS Intel/ARM без замены старых релизов. Effort текущий; remote CI, одна скрытая VM за раз, пользовательские профили и исходный managedsave сохраняются.
 
-- [ ] Зафиксировать проверенный audio-language source и запустить CI native/Flatpak/audit.
+- [x] Зафиксировать проверенный audio-language source и запустить CI native/Flatpak/audit.
 - [ ] Пройти mandatory Windows/macOS package/interface/worker gates, проверить подписи и контрольные суммы.
 - [ ] Проверить installer, профиль/restart, полные RU/EN загрузки и updater на клиентских Windows 10/11.
 - [ ] Подтвердить Linux/Flatpak source-compatible package gates, подготовить manifest/release notes.
@@ -1025,3 +1025,7 @@ Mac producer43950356238/e42199d: both Intel/ARM browser-focus and EN/RU actualEn
 Кандидат `4d18d84`, CI `44150212133` запущен для Windows/macOS Intel/ARM/Linux/Flatpak/audit. Локально на том же runtime-коде: workspace 253 PASS / 0 FAIL, Clippy PASS, 7 staging-тестов PASS, self-test публикации PASS, gitleaks для коммита 0 находок. Логи `updates-release-{workspace,clippy}.log` в `~/.local/share/videodock/research/release-0.2.3-2026-11-17/`. После producer запустить независимый Flatpak verifier и забрать результат нового macOS update gate. Клиентские Windows 10/11 требуют артефакт нового прогона. Последний публичный выпуск 0.2.2.
 
 ARM CI `134276136979` остановился до сборки на трёх тестах с неканоническим `TMPDIR`. Символическая ссылка на TMPDIR воспроизвела те же 3 FAIL на Linux. После канонизации корней тестов 6 PASS / 0 FAIL / 1 native fixture ignored на том же TMPDIR. Исправление касается тестовых путей; publisher сохраняет совместимость Windows/Linux с `4d18d84`, потому что `updater/macos.rs` исключён из их производственных сборок. Проверены опубликованные Intel/ARM ZIP 0.2.2: SHA-256, заголовки Mach-O, полная распаковка и ссылки внутри пакета PASS. Локальная Linux-сборка `4d18d84` и `proof_worker.py --proxy --startup` PASS.
+
+CI `44152441752` дошёл до подписанного ARM-пакета. Выяснилось, что `codesign` выводит настоящее требование текущего сертификата как `certificate leaf`, поэтому проверка подстроки `anchor` отклоняла корректную подпись. Из обеих опубликованных архитектур 0.2.2 извлечён один и тот же публичный сертификат; его отпечаток совпал с подписанным требованием Mach-O. Обновлятор передаёт штатному `codesign` точное требование с идентификатором приложения и этим сертификатом, не разбирает человекочитаемый вывод.
+
+Flatpak installed verifier `44155361799` PASS для producer `44150212133`. Windows hosted installer, интерфейс EN/RU, прокси, чистый PATH и полный updater handoff PASS; YouTube без аккаунта в hosted runner FAIL. Точный CI-кандидат `4d18d84` прошёл две установки поверх 0.2.2 с неизменным SQLite и отзывчивым GUI на отдельной Windows 11 Enterprise 26300. Доказательство `client-4d18d84/win11-result.json`; исходные диски 10/11 и Win11 managedsave сохранены. Клиентские updater и RU/EN download checks выполняются отдельно.

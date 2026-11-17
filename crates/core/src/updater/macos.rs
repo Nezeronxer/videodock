@@ -17,6 +17,8 @@ use std::{
 
 const STAGE_PREFIX: &str = ".videodock-update-";
 const ACK_ENV: &str = "VIDEODOCK_UPDATE_STAGE";
+// Leaf certificate of the published VideoDock Intel and Apple Silicon bundles.
+const SIGNATURE_REQUIREMENT: &str = r#"=identifier "com.nezeronxer.videodock" and certificate leaf = H"3ffd8c9fcb44cd392aa2e22f98db38e1b4256a3c""#;
 const PROFILE_FILES: [&str; 4] = [
     "state.sqlite",
     "state.sqlite-wal",
@@ -28,7 +30,6 @@ struct Handoff {
     current: PathBuf,
     profile: PathBuf,
     update: Update,
-    requirement: String,
     parent: u32,
 }
 fn output(command: &mut Command) -> Result<String> {
@@ -77,39 +78,14 @@ fn plist(app: &Path, key: &str) -> Result<String> {
     .trim()
     .into())
 }
-fn requirement(app: &Path) -> Result<String> {
-    // codesign prints the designated requirement on stderr.
-    let result = Command::new("/usr/bin/codesign")
-        .args(["-d", "-r-"])
-        .arg(app)
-        .output()?;
-    ensure!(
-        result.status.success(),
-        "Не найдена подпись установленного приложения"
-    );
-    let text = format!(
-        "{}\n{}",
-        String::from_utf8_lossy(&result.stdout),
-        String::from_utf8_lossy(&result.stderr)
-    );
-    let requirement = text
-        .lines()
-        .find_map(|line| line.strip_prefix("designated => "))
-        .context("Нет требования подписи")?;
-    // Ad-hoc requirements pin a code hash and cannot authenticate the next release.
-    ensure!(
-        requirement.contains("anchor") && !requirement.contains("cdhash"),
-        "Для автообновления нужна постоянная подпись"
-    );
-    Ok(requirement.into())
-}
-fn verify_bundle(app: &Path, expected: &str, requirement: &str) -> Result<()> {
+fn verify_bundle(app: &Path, expected: &str) -> Result<()> {
     output(
         Command::new("/usr/bin/codesign")
             .args(["--verify", "--deep", "--strict", "-R"])
-            .arg(format!("={requirement}"))
+            .arg(SIGNATURE_REQUIREMENT)
             .arg(app),
-    )?;
+    )
+    .context("Не совпала подпись VideoDock или сертификат издателя")?;
     ensure!(
         plist(app, "CFBundleIdentifier")? == "com.nezeronxer.videodock"
             && plist(app, "CFBundleExecutable")? == "VideoDock"
@@ -213,12 +189,7 @@ fn stage_and_handoff(
         !profile.starts_with(&current),
         "Профиль должен находиться вне приложения"
     );
-    let requirement = requirement(&current)?;
-    verify_bundle(
-        &current,
-        &plist(&current, "CFBundleShortVersionString")?,
-        &requirement,
-    )?;
+    verify_bundle(&current, &plist(&current, "CFBundleShortVersionString")?)?;
     let stage = tempfile::Builder::new()
         .prefix(STAGE_PREFIX)
         .tempdir_in(current.parent().context("Нет папки установки")?)?;
@@ -262,12 +233,11 @@ fn stage_and_handoff(
             &mut 0,
         )?;
     }
-    verify_bundle(&candidate, &update.version, &requirement)?;
+    verify_bundle(&candidate, &update.version)?;
     let handoff = Handoff {
         current: current.clone(),
         profile,
         update: update.clone(),
-        requirement,
         parent,
     };
     fs::write(
@@ -499,18 +469,10 @@ fn apply(stage: &Path, handoff: &Handoff) -> Result<()> {
         "Папки установки изменились"
     );
     // Reauthenticate both bundles after the old process exits and before any rename.
-    ensure!(
-        requirement(current)? == handoff.requirement,
-        "Подпись установленного пакета изменилась"
-    );
-    verify_bundle(
-        current,
-        &plist(current, "CFBundleShortVersionString")?,
-        &handoff.requirement,
-    )?;
+    verify_bundle(current, &plist(current, "CFBundleShortVersionString")?)?;
     let candidate = stage.join("VideoDock.app");
     validate_tree(&candidate, &candidate, &mut 0, &mut 0)?;
-    verify_bundle(&candidate, &handoff.update.version, &handoff.requirement)?;
+    verify_bundle(&candidate, &handoff.update.version)?;
     let profile_lease = crate::engine::lock_profile(&handoff.profile)?;
     snapshot_profile(stage, &handoff.profile)?;
     println!("Verified staged bundle; replacing application");
