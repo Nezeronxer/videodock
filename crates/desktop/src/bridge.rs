@@ -12,6 +12,7 @@ mod ffi {
         fn create_application() -> UniquePtr<QGuiApplication>;
         fn create_proof_application(resolver_rules: &QString) -> UniquePtr<QGuiApplication>;
         fn application_data_directory() -> QString;
+        fn system_language() -> QString;
         fn prepare_profile(directory: &QString);
         fn configure_browser_proxy(address: &QString) -> bool;
         fn watch_cookies(backend: Pin<&mut QObject>);
@@ -116,7 +117,7 @@ pub fn prepare_profile() -> anyhow::Result<()> {
         data.is_absolute(),
         "Нужна абсолютная папка данных VideoDock"
     );
-    let engine = Arc::new(Engine::new(data.clone())?);
+    let engine = Arc::new(Engine::new_with_system_language(data.clone(), &ffi::system_language().to_string())?);
     let directory = data.join("browser");
     std::fs::create_dir_all(&directory)?;
     #[cfg(unix)]

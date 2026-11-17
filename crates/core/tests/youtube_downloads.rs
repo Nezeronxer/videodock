@@ -28,7 +28,12 @@ async fn complete_sample(id: &str, quality: u32, expected_duration: f64) {
     }
     let start = Instant::now();
     let address = if id.starts_with("https://") { id.to_owned() } else { format!("https://www.youtube.com/watch?v={id}") };
-    let auth = Auth::default();
+    let preferred_audio_language = std::env::var("VIDEODOCK_TEST_AUDIO_LANGUAGE").ok();
+    let auth = Auth {
+        cookie_header: preferred_audio_language.as_ref()
+            .map(|language| format!("PREF=hl={language}")).unwrap_or_default(),
+    };
+    let selection = Selection { quality, preferred_audio_language, ..Default::default() };
     let media = tokio::time::timeout(
         Duration::from_secs(90),
         adapter.inspect(
@@ -42,12 +47,17 @@ async fn complete_sample(id: &str, quality: u32, expected_duration: f64) {
     let metadata = start.elapsed();
     let selected = videodock_media::choose_formats(
         &media.formats,
-        &Selection {
-            quality,
-            ..Default::default()
-        },
+        &selection,
     )
     .unwrap();
+    if let Some(language) = selection.preferred_audio_language.as_deref() {
+        assert!(selected.iter().filter(|format| format.has_audio()).any(|format| {
+            format.audio_language.as_deref().is_some_and(|actual| {
+                actual.eq_ignore_ascii_case(language)
+                    || actual.to_ascii_lowercase().starts_with(&format!("{}-", language.to_ascii_lowercase()))
+            })
+        }), "sample does not supply the requested audio language: {language}");
+    }
     let expected_height = selected
         .iter()
         .find(|format| format.has_video())
@@ -62,8 +72,8 @@ async fn complete_sample(id: &str, quality: u32, expected_duration: f64) {
     let advertised: u64 = selected.iter().filter_map(|format| format.size).sum();
     for format in &selected {
         println!(
-            "selected {id} itag={} video={:?} audio={:?} size={:?}",
-            format.id, format.video_codec, format.audio_codec, format.size
+            "selected {id} itag={} video={:?} audio={:?} language={:?} size={:?}",
+            format.id, format.video_codec, format.audio_codec, format.audio_language, format.size
         );
     }
     assert!(
@@ -84,10 +94,7 @@ async fn complete_sample(id: &str, quality: u32, expected_duration: f64) {
             media,
             http.build().unwrap(),
             Options {
-                selection: Selection {
-                    quality,
-                    ..Default::default()
-                },
+                selection,
                 output_dir: std::env::var_os("VIDEODOCK_TEST_OUTPUT_DIR")
                     .map(std::path::PathBuf::from)
                     .unwrap_or_else(|| temp.path().join("output")),
@@ -211,6 +218,13 @@ async fn reported_shorts_complete_1080p() {
 #[ignore = "complete anonymous download of the exact user-reported watch ID"]
 async fn reported_watch_complete_1080p() {
     complete_sample("w1Pr_lXdW2A", 1080, 0.0).await;
+}
+
+#[tokio::test]
+#[ignore = "complete public video download to verify localized audio, configure VIDEODOCK_TEST_AUDIO_LANGUAGE"]
+async fn viewing_language_complete_360p() {
+    let source = std::env::var("VIDEODOCK_TEST_VIDEO").unwrap_or_else(|_| "w1Pr_lXdW2A".into());
+    complete_sample(&source, 360, 0.0).await;
 }
 
 #[tokio::test]

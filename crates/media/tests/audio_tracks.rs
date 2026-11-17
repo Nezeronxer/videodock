@@ -39,6 +39,57 @@ fn ids(formats: &[Format], tracks: &[&str]) -> Vec<String> {
 }
 
 #[test]
+fn automatic_audio_follows_viewing_language_and_preserves_manual_choices() {
+    let formats = [
+        audio("english", Some("en.0"), Some("en-US"), Some(true), Some(true), 256),
+        audio("russian", Some("ru.0"), Some("ru"), Some(false), Some(false), 128),
+    ];
+    for (language, tracks, expected) in [
+        ("ru-RU", vec![], "russian"),
+        ("ru", vec!["default"], "russian"),
+        ("ru", vec!["-"], "russian"),
+        ("en-GB", vec![], "english"),
+        ("de", vec![], "english"),
+        ("ru", vec!["original"], "english"),
+        ("ru", vec!["en"], "english"),
+        ("en", vec!["ru"], "russian"),
+    ] {
+        let mut value = serde_json::to_value(selection(&tracks)).unwrap();
+        value["preferred_audio_language"] = json!(language);
+        let selected: Selection = serde_json::from_value(value).unwrap();
+        assert_eq!(choose_formats(&formats, &selected).unwrap()[0].id, expected,
+            "language={language}, tracks={tracks:?}");
+    }
+}
+
+#[test]
+fn automatic_audio_does_not_switch_languages_to_satisfy_a_codec() {
+    let mut russian = audio("ru", Some("ru.0"), Some("ru"), Some(false), Some(false), 128);
+    russian.audio_codec = Some("opus".into());
+    let english = audio("en", Some("en.0"), Some("en"), Some(true), Some(true), 256);
+    let selected: Selection = serde_json::from_value(json!({
+        "media_type":"audio", "audio_codec":"aac", "preferred_audio_language":"ru"
+    })).unwrap();
+    assert!(choose_formats(&[english, russian], &selected).is_err());
+}
+
+#[test]
+fn manual_audio_format_and_all_tracks_override_the_viewing_language() {
+    let formats = [
+        audio("en", Some("en.0"), Some("en"), Some(true), Some(true), 256),
+        audio("ru", Some("ru.0"), Some("ru"), Some(false), Some(false), 128),
+    ];
+    let selected: Selection = serde_json::from_value(json!({
+        "media_type":"audio", "format_id":"en", "preferred_audio_language":"ru"
+    })).unwrap();
+    assert_eq!(choose_formats(&formats, &selected).unwrap()[0].id, "en");
+    let selected: Selection = serde_json::from_value(json!({
+        "media_type":"audio", "audio_tracks":["all"], "preferred_audio_language":"ru"
+    })).unwrap();
+    assert_eq!(choose_formats(&formats, &selected).unwrap().len(), 2);
+}
+
+#[test]
 fn original_is_explicit_metadata_not_the_loudest_or_default_language() {
     let formats = [
         audio(

@@ -17,6 +17,23 @@ use std::{
 const ENTRY_LIMIT: usize = 10_000;
 const ACCOUNT_JSON_LIMIT: usize = 2 * 1024 * 1024;
 
+fn language_code(value: &str) -> Option<String> {
+    let base = value.split(['-', '_', '.', '@', ':']).next()?;
+    ((2..=3).contains(&base.len()) && base.bytes().all(|byte| byte.is_ascii_alphabetic()))
+        .then(|| base.to_ascii_lowercase())
+}
+
+/// Resolve viewing preferences locally; never return or persist the cookie header.
+pub fn preferred_audio_language(source: &str, auth: &Auth, system_language: &str) -> String {
+    url::Url::parse(source).ok().and_then(|url| {
+        url.query_pairs().find(|(key, _)| key == "hl").and_then(|(_, value)| language_code(&value))
+    }).or_else(|| {
+        auth.cookie_header.split(';').filter_map(|cookie| cookie.trim().strip_prefix("PREF="))
+            .flat_map(|value| url::form_urlencoded::parse(value.as_bytes()))
+            .find(|(key, _)| key == "hl").and_then(|(_, value)| language_code(&value))
+    }).or_else(|| language_code(system_language)).unwrap_or_else(|| "en".into())
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct AccountInfo {
     pub user_name: String,
@@ -113,9 +130,7 @@ impl YouTube {
                     let proof =
                         crate::proof::request(worker, &id, self.proxy_url.as_deref()).await?;
                     let attested = self.client_identity(auth, Some(&proof)).await?;
-                    let attested = attested
-                        .query()
-                        .unauthenticated()
+                    let attested = self::query(&attested, auth)
                         .visitor_data(&proof.visitor_data);
                     let (raw, version) = attested
                         .attested_player(&id, &proof.visitor_data, &proof.content_po)
@@ -268,10 +283,12 @@ fn has_account_cookie(auth: &Auth) -> bool {
 }
 
 fn query(client: &RustyPipe, auth: &Auth) -> RustyPipeQuery {
+    let query = client.query().lang(preferred_audio_language("", auth, "en")
+        .parse().unwrap_or(rustypipe::param::Language::En));
     if !has_account_cookie(auth) {
-        client.query().unauthenticated()
+        query.unauthenticated()
     } else {
-        client.query()
+        query
     }
 }
 
@@ -633,6 +650,20 @@ fn parse_account_info(response: &str) -> Result<AccountInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn viewing_language_uses_link_then_youtube_preference_then_system() {
+        for (source, cookie, system, expected) in [
+            ("https://www.youtube.com/watch?v=fixture&hl=ru", "PREF=hl=en", "de-DE", "ru"),
+            ("", "PREF=f6=400&hl=ru&tz=UTC", "en-US", "ru"),
+            ("", "other=hl=ru; PREF=hl=en%2DGB", "ru_RU.UTF-8", "en"),
+            ("", "", "ru_RU.UTF-8", "ru"),
+            ("", "PREF=hl=%0Aru", "en-US", "en"),
+            ("", "", "C.UTF-8", "en"),
+        ] {
+            let auth = Auth { cookie_header: cookie.into() };
+            assert_eq!(preferred_audio_language(source, &auth, system), expected);
+        }
+    }
     #[test]
     fn bounded_ranges_handle_unknown_zero_and_max_size_without_changing_shared_headers() {
         let base = BTreeMap::from([("User-Agent".into(), "Fixture public agent".into())]);

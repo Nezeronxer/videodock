@@ -1161,6 +1161,12 @@ int main(int argc, char **argv) {
             // A restart can discover local files without changing download addition order.
             const auto discoveredPath = QDir(profile.path()).filePath("downloads/new-library-fixture.mp4");
             check(QFile::copy(path, discoveredPath), "Could not prepare a newly discovered library file");
+            // Library scans exclude files written in the last five seconds as potentially incomplete.
+            QFile discoveredFile(discoveredPath);
+            check(discoveredFile.open(QIODevice::ReadWrite)
+                && discoveredFile.setFileTime(QDateTime::currentDateTimeUtc().addSecs(-10), QFileDevice::FileModificationTime),
+                "Could not prepare a stable library file timestamp");
+            discoveredFile.close();
             backend->stopEngine();
             backend->startEngine(driver, profile.path());
             waitFor([&]() {

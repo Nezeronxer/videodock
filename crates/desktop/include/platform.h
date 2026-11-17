@@ -7,6 +7,7 @@ void initialize_webengine();
 std::unique_ptr<QGuiApplication> create_application();
 std::unique_ptr<QGuiApplication> create_proof_application(const QString &resolver_rules);
 QString application_data_directory();
+QString system_language();
 void prepare_profile(const QString &directory);
 bool configure_browser_proxy(const QString &address);
 void watch_cookies(QObject &backend);

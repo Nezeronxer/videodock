@@ -743,6 +743,14 @@ pub async fn run(
     } else {
         args.extend(["-map_metadata".into(), "-1".into()]);
     }
+    for (index, format) in selected.iter().filter(|format| format.has_audio()).enumerate() {
+        if let Some(language) = &format.audio_language {
+            args.extend([
+                format!("-metadata:s:a:{index}"),
+                format!("language={}", crate::subtitles::language_tag(language)),
+            ]);
+        }
+    }
     if ext == "mp4" || ext == "m4a" {
         args.extend(["-movflags".into(), "+faststart".into()]);
     }

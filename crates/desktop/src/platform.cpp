@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QStandardPaths>
+#include <QLocale>
 #include <QDateTime>
 #include <QResource>
 #include <cstdint>
@@ -35,6 +36,11 @@ std::unique_ptr<QGuiApplication> create_application() {
 
 QString application_data_directory() {
     return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+}
+
+QString system_language() {
+    const auto languages = QLocale::system().uiLanguages();
+    return languages.isEmpty() ? QLocale::system().bcp47Name() : languages.first();
 }
 
 std::unique_ptr<QGuiApplication> create_proof_application(const QString &resolver_rules) {

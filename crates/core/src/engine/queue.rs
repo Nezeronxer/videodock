@@ -78,10 +78,21 @@ fn source_kind(media: &Media) -> String {
         .and_then(|v| v.as_str().map(str::to_owned))
         .unwrap_or_else(|| "video".into())
 }
+fn localize_audio(inner: &Inner, source: &str, auth_origin: Option<&str>, selection: &mut Selection) {
+    if selection.preferred_audio_language.is_none()
+        && origin(source).as_deref() == Some("https://www.youtube.com")
+    {
+        let auth = secrets::auth_in_context(inner, "https://www.youtube.com/",
+            auth_origin.unwrap_or("https://www.youtube.com"));
+        selection.preferred_audio_language = Some(videodock_media::youtube::preferred_audio_language(
+            source, &auth, &inner.system_language));
+    }
+}
 fn row(url: &str, title: &str, kind: &str, spec: &Spec) -> Value {
     json!({"id":uuid::Uuid::new_v4().to_string(),"url":url,"title":title,"kind":kind,"media_type":spec.selection.media_type,"state":"queued","progress":0,"created_at":now(),"error":"","thumbnail":"","format":spec.selection.container.to_ascii_uppercase(),"quality":if spec.selection.media_type=="audio"{if spec.selection.audio_bitrate==0{"Original".into()}else{format!("{} kbps",spec.selection.audio_bitrate)}}else if spec.selection.quality==0{"Original".into()}else{format!("≤{}p",spec.selection.quality)},"requested_quality":spec.selection.quality,"requested_audio_bitrate":spec.selection.audio_bitrate,"_spec":spec})
 }
 fn add_media(
+    inner: &Inner,
     state: &mut Value,
     media: &Media,
     action: &Value,
@@ -89,6 +100,7 @@ fn add_media(
     subscription: Option<&str>,
 ) -> Result<Vec<String>> {
     let mut spec = spec(settings, action)?;
+    localize_audio(inner, &media.url, spec.auth_origin.as_deref(), &mut spec.selection);
     if media.kind == MediaKind::Audio && spec.smart && spec.selection.media_type == "video" {
         spec.selection.media_type = "audio".into();
         if ["mp4", "mkv", "webm"].contains(&spec.selection.container.as_str()) {
@@ -216,6 +228,7 @@ fn add_subscription(inner: &Inner, media: &Media, action: &Value) -> Result<Vec<
     );
     let settings = lock(&inner.state)["settings"].clone();
     let mut spec = spec(&settings, action)?;
+    localize_audio(inner, &media.url, spec.auth_origin.as_deref(), &mut spec.selection);
     if spec.auth_origin.is_none() {
         spec.auth_origin = origin(&media.url);
     }
@@ -243,7 +256,7 @@ fn add_subscription(inner: &Inner, media: &Media, action: &Value) -> Result<Vec<
         let ids = if action["download_existing"] == true {
             let mut action = action.clone();
             action.as_object_mut().unwrap().remove("selected_ids");
-            add_media(state, media, &action, &settings, Some(&id))?
+            add_media(inner, state, media, &action, &settings, Some(&id))?
         } else {
             Vec::new()
         };
@@ -290,7 +303,7 @@ pub(super) fn download(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
     } else {
         let settings = lock(&inner.state)["settings"].clone();
         change(inner, |state| {
-            add_media(state, &media, action, &settings, None)
+            add_media(inner, state, &media, action, &settings, None)
         })?
     };
     *lock(&inner.manual) = None;
@@ -326,6 +339,7 @@ pub(super) fn parse(inner: &Arc<Inner>, action: &Value) -> Result<Value> {
     if smart {
         let mut spec = spec(&settings, &json!({"_smart":true}))?;
         spec.auth_origin = origin(&source);
+        localize_audio(inner, &source, spec.auth_origin.as_deref(), &mut spec.selection);
         change(inner, |state| {
             state["manual"] = Value::Null;
             state["notice"] = json!("");
@@ -1022,8 +1036,9 @@ async fn run_job(weak: Weak<Inner>, id: String, cancel: CancellationToken) {
     let result=async{
         let saved=job(&lock(&inner.state),&id).cloned().context("Элемент удалён")?;
         if saved["_reset_stage"]==true{if staging.exists(){tokio::fs::remove_dir_all(&staging).await?;}change(&inner,|state|{job_mut(state,&id).context("Элемент удалён")?.as_object_mut().unwrap().remove("_reset_stage");Ok(())})?;}
-        let spec:Spec=serde_json::from_value(saved["_spec"].clone()).context("Повреждены настройки элемента")?;
+        let mut spec:Spec=serde_json::from_value(saved["_spec"].clone()).context("Повреждены настройки элемента")?;
         let source=secrets::source(&inner,&saved)?;
+        localize_audio(&inner,&source,spec.auth_origin.as_deref(),&mut spec.selection);
         let (mut media,client)=inspect_in_context(&inner,&source,spec.auth_origin.as_deref(),&cancel).await?;
         media.url=source.clone();
         ensure!(!cancel.is_cancelled(), "Загрузка отменена");
@@ -1032,7 +1047,7 @@ async fn run_job(weak: Weak<Inner>, id: String, cancel: CancellationToken) {
             let action=json!({"format":serde_json::to_value(&spec.selection)?,"output_dir":spec.output_dir,"filename":spec.filename,"_smart":spec.smart,"_auth_origin":spec.auth_origin});
             change(&inner,|state|{
                 state["jobs"].as_array_mut().unwrap().retain(|item|item["id"]!=id);
-                add_media(state,&media,&action,&settings,None)?;
+                add_media(&inner,state,&media,&action,&settings,None)?;
                 let replacement=state["jobs"].as_array().unwrap().iter().rev().find(|item|item["_group"]==true&&item["url"]==media.url).map(|item|item["id"].clone()).context("Не создана группа импорта")?;
                 for item in state["jobs"].as_array_mut().unwrap(){if item["id"]==replacement{item["id"]=json!(id);item["added_order"]=saved["added_order"].clone();}
 if item["_parent"]==replacement{item["_parent"]=json!(id);}}
@@ -1700,7 +1715,7 @@ async fn scan_subscription(inner: &Arc<Inner>, id: &str) -> Result<()> {
             let mut fresh = media.clone();
             fresh.entries = new.clone();
             let action = json!({"format":selected.selection,"output_dir":selected.output_dir,"_smart":true,"_auth_origin":selected.auth_origin});
-            add_media(state, &fresh, &action, &settings, Some(id))?;
+            add_media(inner, state, &fresh, &action, &settings, Some(id))?;
             if settings["remindNotificationEnabled"] == true {
                 notify(
                     state,
@@ -1776,6 +1791,64 @@ if let Some(paths)=item["files"].as_array(){for path in paths.iter().filter_map(
 #[cfg(test)]
 mod user_error_tests {
     use super::*;
+    #[test]
+    fn smart_enqueue_snapshots_youtube_language_before_browser_cookie_replay() {
+        let profile = tempfile::tempdir().unwrap();
+        let engine = Engine::new_with_system_language(profile.path().join("profile"), "en-US").unwrap();
+        engine.dispatch(json!({"action":"settings","values":{"proxyEnabled":true,
+            "proxyType":"HTTP","proxyHost":"127.0.0.1","proxyPort":9}})).unwrap();
+        engine.dispatch(json!({"action":"account","command":"cookie", "name":"PREF",
+            "value":"hl=ru", "domain":".youtube.com", "path":"/", "secure":true})).unwrap();
+        engine.dispatch(json!({"action":"parse","url":"https://www.youtube.com/watch?v=fixture0001"})).unwrap();
+        let state = lock(&engine.inner.state);
+        assert_eq!(state["jobs"][0]["_spec"]["selection"]["preferred_audio_language"], "ru");
+    }
+    #[test]
+    fn playlist_children_keep_the_parent_viewing_language() {
+        let profile = tempfile::tempdir().unwrap();
+        let engine = Engine::new_with_system_language(profile.path().join("profile"), "en-US").unwrap();
+        let media = Media {
+            url: "https://www.youtube.com/playlist?list=fixture&hl=ru".into(),
+            kind: MediaKind::Playlist,
+            entries: vec![Entry {
+                id: "fixture0001".into(),
+                url: "https://www.youtube.com/watch?v=fixture0001".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut state = engine.snapshot();
+        add_media(&engine.inner, &mut state, &media, &json!({}), &defaults(), None).unwrap();
+        for item in state["jobs"].as_array().unwrap() {
+            assert_eq!(item["_spec"]["selection"]["preferred_audio_language"], "ru");
+        }
+    }
+    #[test]
+    fn youtube_audio_uses_native_system_language_and_only_scoped_live_preferences() {
+        let profile = tempfile::tempdir().unwrap();
+        let engine = Engine::new_with_system_language(profile.path().join("profile"), "ru-RU").unwrap();
+        let source = "https://youtu.be/fixture0001";
+        let choose = || {
+            let mut selection = Selection::default();
+            localize_audio(&engine.inner, source, None, &mut selection);
+            selection.preferred_audio_language.unwrap()
+        };
+        assert_eq!(choose(), "ru");
+        for (domain, path, expires, expected) in [
+            (".example.invalid", "/", None, "ru"),
+            (".youtube.com", "/other", None, "ru"),
+            (".youtube.com", "/", Some(1_u64), "ru"),
+            (".youtube.com", "/", None, "en"),
+        ] {
+            engine.dispatch(json!({"action":"account","command":"cookie", "name":"PREF",
+                "value":"hl=en&f6=400", "domain":domain, "path":path, "secure":true,
+                "expires":expires})).unwrap();
+            assert_eq!(choose(), expected);
+        }
+        let mut selection = Selection::default();
+        localize_audio(&engine.inner, "https://example.invalid/video.mp4", None, &mut selection);
+        assert!(selection.preferred_audio_language.is_none());
+    }
     #[test]
     fn attestation_refresh_is_bounded_and_preserves_job_identity() {
         for error in [

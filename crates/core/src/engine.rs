@@ -64,6 +64,7 @@ struct Inner {
     library_last: AtomicU64,
     library_scanning: AtomicBool,
     updating: AtomicBool,
+    system_language: String,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -99,6 +100,13 @@ impl Engine {
     }
 
     pub fn new(directory: PathBuf) -> Result<Self> {
+        let locale = ["LC_ALL", "LC_MESSAGES", "LANG"].into_iter()
+            .filter_map(|key| std::env::var(key).ok()).find(|value| !value.is_empty());
+        Self::new_with_system_language(directory, locale.as_deref().unwrap_or("en"))
+    }
+
+    /// Desktop callers supply the native OS UI language through Qt, including Windows/macOS.
+    pub fn new_with_system_language(directory: PathBuf, system_language: &str) -> Result<Self> {
         ensure!(
             directory.is_absolute() && directory.file_name().is_some(),
             "Нужна отдельная абсолютная папка данных VideoDock"
@@ -228,6 +236,7 @@ impl Engine {
             library_last: AtomicU64::new(0),
             library_scanning: AtomicBool::new(false),
             updating: AtomicBool::new(false),
+            system_language: system_language.to_owned(),
         });
         runtime()?;
         let engine = Self {

@@ -552,6 +552,8 @@ pub(super) fn selection(settings: &Value, action: &Value) -> Result<Selection> {
         },
         subtitles: serde_json::from_value(values["subtitles"].clone())?,
         audio_tracks: serde_json::from_value(values["audioTracks"].clone())?,
+        preferred_audio_language: format["preferred_audio_language"].as_str()
+            .map(|value| bounded(&json!(value), 32)).transpose()?,
         format_id: action["format_id"]
             .as_str()
             .filter(|v| !v.is_empty())

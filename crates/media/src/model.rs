@@ -256,6 +256,8 @@ pub struct Selection {
     pub vr_mode: VideoVrMode,
     pub subtitles: Vec<String>,
     pub audio_tracks: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferred_audio_language: Option<String>,
     pub format_id: Option<String>,
 }
 
@@ -273,6 +275,7 @@ impl Default for Selection {
             vr_mode: VideoVrMode::Any,
             subtitles: vec![],
             audio_tracks: vec![],
+            preferred_audio_language: None,
             format_id: None,
         }
     }

@@ -190,7 +190,23 @@ pub fn choose_formats(formats: &[Format], settings: &Selection) -> Result<Vec<Fo
         };
         for requested in requested {
             let selected = if requested == "-" || requested.eq_ignore_ascii_case("default") {
-                if has_default_metadata {
+                let language = settings
+                    .preferred_audio_language
+                    .as_deref()
+                    .filter(|_| preferred_id.is_none())
+                    .map(language_tag);
+                let language = language
+                    .as_deref()
+                    .map(|value| value.split('-').next().unwrap_or(value));
+                let localized = |format: &Format| {
+                    language.is_some_and(|language| {
+                        format.audio_language.as_deref()
+                            .is_some_and(|actual| matches_language(actual, language))
+                    })
+                };
+                if formats.iter().any(|format| format.has_audio() && localized(format)) {
+                    best_audio(candidates.iter().copied().filter(|format| localized(format)), preferred_id)
+                } else if has_default_metadata {
                     best_audio(
                         candidates
                             .iter()

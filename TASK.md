@@ -985,3 +985,25 @@ Win11 working-route snapshot ранее показал настоящую фор
 17.11 confirmed results: Windows producer 43949321067 / runtime9237fa9 completed. Real verified update_handoff PASS32.90s (stable0.2.2,165453350bytes), responsive packaged restart/profile lease/history/file all verified. Executed fixture update_handoff-6044fc46e434c649.exe retained in windows-native-tests. Browser proxy4modes PASS; public cloud YouTube/Shorts still Google anonymous rejection. EN/RU exact-row assertion FAIL: before/after backend job snapshots equal,3positive-order downloads +1zero-order discovered library row. Corrected fixture distinguishes persisted downloads from asynchronous library scanning, explicitly adds a new untracked media file and requires discovery below all3downloads; focused C++ harness compile PASS,720MiB peak. Fresh runtime check pending.
 Linux native producer43947890945 and independent Flatpak verifier43953486115 SUCCESS. Installed CI0.2.3 native binary with previous binary/profile backups; all38personal IDs/states/paths/files/dates/order preserved, proxy remains enabled. Installed worker7offline/proxy-refusal/bad-system-proxy-startup PASS,620.8MiB peak. Native Wayland QA separate profile: Paste Link zoo744478bytes19.063583s H264320x240+AAC, Shorts24130310bytes52.594s H2641080x1200+Opus, both complete and fullFFmpeg decode exit0. Zoo survived restart. QA window and temporary input daemon closed; normal user window stays running0.2.3. Evidence linux-live-{zoo,shorts}-proof.json/linux-installed-worker-0.2.3.log/linux-install-0.2.3-proof.json. No personal network strategy changed.
 Mac producer43950356238/e42199d: both Intel/ARM browser-focus and EN/RU actualEngine stages passed; bundles still being verified. Windows10/11 final client installer/full download/update tests remain open; original Win11 managedsave intact, working clone off while local C++ compile ran. Candidate package/native tests downloaded under ci-9237-{package,native-tests,interface}.
+
+## Продолжение 17.11: язык озвучки YouTube
+
+Результат: автоматическая дорожка следует языку просмотра YouTube (PREF hl), иначе системному языку; ручные original/язык/all сохраняют приоритет. Если нужной дорожки нет, использовать доступную default без выдуманного перевода. Effort текущий, jobs=1, локальные тяжёлые команды MemoryMax<=2GiB/MemorySwapMax<=512MiB, без VM одновременно.
+
+- [x] Восстановить актуальный TASK/ветку и найти причину: пустой audioTracks выбирает серверный default без языка пользователя.
+- [x] RED/GREEN регрессии: русский/английский, cookie/system, отсутствующая озвучка и ручной выбор.
+- [x] Провести язык через Qt native locale, Core и общий выбор дорожек; сохранить совместимость профилей. Smart Mode сохраняет выбор до restart; дочерние видео/подписки наследуют язык.
+- [x] Проверить полный файл с несколькими языками, ffprobe/full decode, релевантные регрессии и сборку. Тот же public sample826s полностью скачан RU/EN; локальный ASR подтвердил ru0.998739/en0.998765; ISO-метки совпали. Workspace243/0, Clippy и native build PASS.
+- [x] Сверить вчерашние CI/native gates, исправить подтверждённые остатки и обновить отчёт. Windows370335b прошёл order/installer handoff; native10/11 и общий release gate остаются открыты. Qt library-discovery fixture на Linux ожидал слишком свежий файл; исправлена подготовка стабильного файла, EN/RU actualEngine PASS.
+
+Установлен Linux native candidate с backup бинаря/SQLite; персональная база и symlink launcher сохранены. Настоящее Wayland-окно запущено в отдельном профиле, снимок проверен, QA unit закрыт. Отчёт: docs/youtube-audio-language-2026-11-17.md. Старые исследовательские примеры не менялись. Google PO rejection на1086 остаётся воспроизводимым; полный EN успешно прошёл через уже подготовленный11086, личная сеть не менялась. Язык внешнего браузера автоматически не читается: используются hl ссылки/PREF встроенного YouTube, затем native OS locale.
+
+## Выпуск 0.2.3 Windows/macOS с языком озвучки, запрос 17.11
+
+Результат: проверить окончательные Windows-пакеты и выпустить Windows/macOS Intel/ARM без замены старых релизов. Effort текущий; remote CI, одна скрытая VM за раз, пользовательские профили и исходный managedsave сохраняются.
+
+- [ ] Зафиксировать проверенный audio-language source и запустить CI native/Flatpak/audit.
+- [ ] Пройти mandatory Windows/macOS package/interface/worker gates, проверить подписи и контрольные суммы.
+- [ ] Проверить installer, профиль/restart, полные RU/EN загрузки и updater на клиентских Windows 10/11.
+- [ ] Подтвердить Linux/Flatpak source-compatible package gates, подготовить manifest/release notes.
+- [ ] Опубликовать 0.2.3, проверить анонимную доступность и digest всех пакетов; закрыть собственные QA процессы.

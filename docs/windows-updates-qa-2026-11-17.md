@@ -40,3 +40,11 @@ The interface failure retained identical backend job snapshots before/after rest
 Linux CI43947890945 and independent Flatpak verifier43953486115 passed. The native candidate was installed locally with binary/profile backups; all38personal entries and their state/path/date/order were preserved. Installed worker checks passed. In a separate real Wayland profile, Paste Link completed a19.063583second YouTube video (744478bytes,H264320x240+AAC) and a52.594second Shorts sample (24130310bytes,H2641080x1200+Opus). Both files passed fullFFmpeg decoding. The first completed entry also survived restart. The prepared local VPN route was used; personal history was not used for synthetic QA jobs.
 
 Both Mac architectures passed the browser-focus fixture and EN/RU actualEngine stages after waiting for window exposure. Bundle verification was still running at this checkpoint.
+
+## Audio-language continuation
+
+Windows run43955973047/source370335b subsequently passed EN/RU order checks and the complete installer handoff (35.51seconds). The public YouTube/Shorts checks still failed Google's anonymous verification; TikTok passed. Both macOS jobs in43950356238 ended at the separate public-download check after their interface/Engine gates had passed. Native Windows10/11 final client gates and publication remain open.
+
+On Linux, repeating the new library-discovery fixture exposed a test setup difference: QFile::copy produces a freshly modified file, while library scanning intentionally excludes files younger than five seconds and then waits for the next scan. The fixture now prepares a stable modification time before restart. It still requires real library discovery and verifies that every discovered row remains below the three persisted downloads. EN and RU passed with the corrected fixture and audio-language candidate. Product scan timing was not changed.
+
+The new language implementation and full RU/EN download evidence are described in [youtube-audio-language-2026-11-17.md](youtube-audio-language-2026-11-17.md). Earlier Windows/macOS checks do not validate this new runtime.

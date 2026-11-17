@@ -164,7 +164,10 @@ pub(super) fn map(
             "Некорректная аудиодорожка SABR"
         );
         let track_id = text(&track["id"]).or_else(|| audio_codec.as_ref().and(xtags.clone()));
-        let language = tags.get("lang").map(|v| (*v).to_owned());
+        let language = tags.get("lang").map(|v| (*v).to_owned()).or_else(|| {
+            audio_track_id.as_deref()?.split_once('.')
+                .and_then(|(language, _)| super::language_code(language))
+        });
         let original = tags.get("acont").map(|v| *v == "original");
         let duration_ms = integer(&f["approxDurationMs"]).unwrap_or(duration.saturating_mul(1000));
         let projection = text(&f["projectionType"]);
@@ -388,6 +391,7 @@ mod tests {
         {
             let delivery = audio.sabr.as_ref().unwrap();
             assert_eq!(delivery.audio_track_id.as_deref(), Some("en.4"));
+            assert_eq!(audio.audio_language.as_deref(), Some("en"));
             assert_eq!(
                 (delivery.drc_enabled, delivery.voice_boost),
                 (drc, voice_boost)

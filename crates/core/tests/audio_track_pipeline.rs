@@ -263,6 +263,39 @@ fn audio_streams(info: &Value) -> Vec<&Value> {
         .filter(|stream| stream["codec_type"] == "audio")
         .collect()
 }
+
+#[tokio::test]
+async fn automatic_viewing_language_replaces_embedded_english_with_russian() {
+    let fixture = Fixture::new().await;
+    let selection = serde_json::from_value(serde_json::json!({
+        "container":"mkv", "preferred_audio_language":"ru-RU"
+    })).unwrap();
+    let output = fixture.run("automatic-russian", vec![
+        fixture.format("muxed.mp4", "video", Some("en.0"), Some(true), Some(true), true),
+        fixture.format("russian.m4a", "ru", Some("ru.0"), Some(false), Some(false), false),
+    ], selection).await.unwrap();
+    assert_eq!(audio_streams(&output.info).len(), 1);
+    assert_eq!(packet_hashes(&output.path, 0).await,
+        packet_hashes(&fixture.root.path().join("russian.m4a"), 0).await);
+    assert!(Command::new("ffmpeg").args(["-v", "error", "-xerror", "-i"])
+        .arg(&output.path).args(["-f", "null", "-"]).status().await.unwrap().success());
+}
+
+#[tokio::test]
+async fn selected_language_overrides_incorrect_source_container_metadata() {
+    let fixture = Fixture::new().await;
+    let output = fixture.run("correct-language-tag", vec![
+        fixture.format("original.m4a", "ru", Some("ru.0"), Some(true), Some(true), false),
+    ], Selection { media_type: "audio".into(), container: "m4a".into(),
+        audio_bitrate: 0, audio_tracks: vec!["ru".into()], ..Default::default()
+    }).await.unwrap();
+    let probe = Command::new("ffprobe")
+        .args(["-v", "error", "-select_streams", "a:0", "-show_entries", "stream_tags=language", "-of", "json"])
+        .arg(&output.path).output().await.unwrap();
+    assert!(probe.status.success());
+    let info: Value = serde_json::from_slice(&probe.stdout).unwrap();
+    assert_eq!(info["streams"][0]["tags"]["language"], "rus");
+}
 async fn packet_hashes(path: &Path, index: usize) -> Vec<String> {
     let output = Command::new("ffprobe")
         .args([
