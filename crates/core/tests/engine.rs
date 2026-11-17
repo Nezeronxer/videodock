@@ -8,11 +8,20 @@ fn cached_update_survives_startup_and_failed_network_check() {
     let data = TempDir::new().unwrap();
     std::fs::create_dir(data.path().join("updates")).unwrap();
     std::fs::write(
-        data.path().join("updates/VideoDock-999.0.0-Setup.exe"),
+        videodock_core::updater::cache_path(data.path(), "999.0.0").unwrap(),
         b"fixture",
     )
     .unwrap();
-    let update = json!({"status":"ready","version":"999.0.0","url":"https://github.com/Nezeronxer/videodock/releases/download/v999.0.0/VideoDock-999.0.0-windows-x64-Setup.exe","bytes":7,"sha256":format!("{:x}",Sha256::digest(b"fixture"))});
+    let suffix = if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") {
+            "macos-arm64.zip"
+        } else {
+            "macos-x64.zip"
+        }
+    } else {
+        "windows-x64-Setup.exe"
+    };
+    let update = json!({"status":"ready","version":"999.0.0","url":format!("https://github.com/Nezeronxer/videodock/releases/download/v999.0.0/VideoDock-999.0.0-{suffix}"),"bytes":7,"sha256":format!("{:x}",Sha256::digest(b"fixture"))});
     let saved = json!({"_automatic_updates_v1":true,"update":update,"settings":{"autoUpdate":false,"path":data.path().join("output"),"proxyEnabled":true,"proxyType":"HTTP","proxyHost":"127.0.0.1","proxyPort":9}});
     let store = rusqlite::Connection::open(data.path().join("state.sqlite")).unwrap();
     store
@@ -51,7 +60,7 @@ fn cached_update_survives_startup_and_failed_network_check() {
     assert_eq!(reopened.snapshot()["update"], update);
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 #[test]
 fn automatic_updates_can_be_disabled_enabled_and_survive_restart() {
     let data = TempDir::new().unwrap();
@@ -70,6 +79,21 @@ fn automatic_updates_can_be_disabled_enabled_and_survive_restart() {
         .dispatch(json!({"action":"settings","values":{"autoUpdate":true}}))
         .unwrap();
     assert_eq!(reopened.snapshot()["settings"]["autoUpdate"], true);
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+#[test]
+fn automatic_installation_is_disabled_on_unsupported_platforms() {
+    let data = TempDir::new().unwrap();
+    let engine = Engine::new(data.path().to_owned()).unwrap();
+    assert_eq!(engine.snapshot()["settings"]["autoUpdate"], false);
+    assert_eq!(engine.snapshot()["capabilities"]["auto_update"], false);
+    assert!(
+        engine
+            .dispatch(json!({"action":"settings","values":{"autoUpdate":true}}))
+            .is_err()
+    );
+    assert_eq!(engine.snapshot()["settings"]["autoUpdate"], false);
 }
 
 #[test]

@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use settings::{defaults, selection};
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex, MutexGuard, OnceLock, Weak,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -33,6 +33,22 @@ struct Owner {
     inner: Weak<Inner>,
     _lease: std::fs::File,
 }
+
+pub(crate) fn lock_profile(directory: &Path) -> Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).read(true).write(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let lease = options.open(directory.join("state.lock"))?;
+    lease
+        .try_lock()
+        .map_err(|_| anyhow!("Этот каталог данных уже открыт другим экземпляром VideoDock"))?;
+    Ok(lease)
+}
+
 impl Drop for Owner {
     fn drop(&mut self) {
         self.cancel.cancel();
@@ -131,17 +147,7 @@ impl Engine {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
         }
-        let mut options = std::fs::OpenOptions::new();
-        options.create(true).read(true).write(true).truncate(false);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let lease = options.open(directory.join("state.lock"))?;
-        lease
-            .try_lock()
-            .map_err(|_| anyhow!("Этот каталог данных уже открыт другим экземпляром VideoDock"))?;
+        let lease = lock_profile(&directory)?;
         let store = Store::open(&directory.join("state.sqlite"))?;
         let secrets = secrets::load(&directory)?;
         let mut state = store.read()?.unwrap_or_else(initial_state);
@@ -159,8 +165,8 @@ impl Engine {
                 }
             }
         }
-        #[cfg(windows)]
-        if state["_automatic_updates_v1"] != true {
+        #[cfg(any(windows, target_os = "macos"))]
+        if crate::updater::automatic_updates_supported() && state["_automatic_updates_v1"] != true {
             settings["autoUpdate"] = json!(true);
             state["_automatic_updates_v1"] = json!(true);
         }
@@ -205,8 +211,7 @@ impl Engine {
         let order_changed = initialize_job_order(&mut state);
         state["manual"] = Value::Null;
         state["account"] = json!({"logged_in":false,"user_name":"","avatar_url":""});
-        state["capabilities"] =
-            json!({"browser":true,"tray":true,"auto_start":true,"auto_update":cfg!(windows)});
+        state["capabilities"] = json!({"browser":true,"tray":true,"auto_start":true,"auto_update":crate::updater::automatic_updates_supported()});
         #[cfg(target_os = "linux")]
         if crate::platform::flatpak() {
             state["capabilities"]["auto_start"] = json!(false);
@@ -255,18 +260,20 @@ impl Engine {
 
     /// Called after the GUI event loop ends; the installer waits for this process to exit.
     pub fn finish(&self) -> Result<()> {
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         {
             let state = lock(&self.inner.state).clone();
-            if state["settings"]["autoUpdate"] == true && state["update"]["status"] == "ready" {
+            if crate::updater::automatic_updates_supported()
+                && state["settings"]["autoUpdate"] == true
+                && state["update"]["status"] == "ready"
+            {
                 let update: crate::updater::Update =
                     serde_json::from_value(state["update"].clone())?;
-                let path = self
-                    .inner
-                    .directory
-                    .join("updates")
-                    .join(format!("VideoDock-{}-Setup.exe", update.version));
+                let path = crate::updater::cache_path(&self.inner.directory, &update.version)?;
+                #[cfg(windows)]
                 crate::updater::install_on_exit(&path, &update)?;
+                #[cfg(target_os = "macos")]
+                crate::updater::macos::install_on_exit(&path, &update, &self.inner.directory)?;
             }
         }
         self.inner.shutdown.cancel();
@@ -284,7 +291,9 @@ impl Engine {
         match kind {
             "settings" => {
                 settings::update(&self.inner, &action["values"])?;
-                if cfg!(windows) && action["values"]["autoUpdate"] == true {
+                if crate::updater::automatic_updates_supported()
+                    && action["values"]["autoUpdate"] == true
+                {
                     updates::check(&self.inner, false)?;
                 }
                 Ok(json!({}))

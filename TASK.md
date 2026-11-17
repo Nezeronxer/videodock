@@ -1007,3 +1007,17 @@ Mac producer43950356238/e42199d: both Intel/ARM browser-focus and EN/RU actualEn
 - [ ] Проверить installer, профиль/restart, полные RU/EN загрузки и updater на клиентских Windows 10/11.
 - [ ] Подтвердить Linux/Flatpak source-compatible package gates, подготовить manifest/release notes.
 - [ ] Опубликовать 0.2.3, проверить анонимную доступность и digest всех пакетов; закрыть собственные QA процессы.
+
+17.11 release checkpoint: source d57b25b, producer44112899740. Linux/native/Flatpak/audit PASS; Windows mandatory tests/EN-RU UI/proxy/installer/clean-PATH/updater PASS, public Google challenge FAIL. Intel Mac bundle/signature/worker/interface PASS, public Google FAIL. ARM original queue cancelled due hosted-runner capacity; selective retry now building bundle. Flatpak verifier44123959396 was premature (producer still running), must rerun only after final producer completion. Final Windows artifact range-downloaded with API SHA256 fe83970...; installer f4beb467... / exe fe547a55...; Windows10 LTSC19044 two 0.2.2->0.2.3 installs/profile preservation/clean-PATH responsive window PASS in isolated cloned disk. Native11 cold clone cannot reach credential UI; original6GiB managedsave retained. All other original disk files unchanged. Local QA tests use a guest-only controller/relay; no visible host VM windows.
+
+## Дополнение пользователя: автообновление Windows и macOS
+
+Пользователь подтвердил обе ОС. Выпуск до реализации macOS не публиковать. Использовать общий проверенный release/download/cache и native signed bundle replacement с rollback, без новых runtime зависимостей.
+
+- [x] RED/GREEN: выбор точного Windows/macOS Intel/ARM asset, digest/size/source/cache; сохранить старый Windows cache.
+- [ ] macOS: безопасная распаковка, та же подпись, версия/архитектура, замена после закрытия, запуск с подтверждением и rollback; профиль вне bundle сохраняется.
+- [ ] Включить общий UI/настройки/запуск и проверить кэш/ошибки; добавить native signed-app update fixture в CI.
+- [ ] Запустить проверки новой окончательной версии и заново собрать source-compatible пакеты.
+- [ ] Завершить native Windows QA и опубликовать проверенный выпуск с manifest/digests.
+
+17.11 возобновление: обязательный CI macOS-проход проверяет подписанную замену, запуск GUI, откат, историю и браузерные данные на Intel/ARM. Проверка Mach-O читает заголовок файла без инструментов Xcode. Устранено срабатывание Clippy в восстановлении профиля. Старый producer 44112899740 собрал оба Mac-пакета, Windows, Linux и Flatpak; публичные YouTube-проверки на hosted Windows/macOS отклонены Google. Новый код автообновления требует собственного CI-прогона.

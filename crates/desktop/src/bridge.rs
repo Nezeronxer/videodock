@@ -117,7 +117,10 @@ pub fn prepare_profile() -> anyhow::Result<()> {
         data.is_absolute(),
         "Нужна абсолютная папка данных VideoDock"
     );
-    let engine = Arc::new(Engine::new_with_system_language(data.clone(), &ffi::system_language().to_string())?);
+    let engine = Arc::new(Engine::new_with_system_language(
+        data.clone(),
+        &ffi::system_language().to_string(),
+    )?);
     let directory = data.join("browser");
     std::fs::create_dir_all(&directory)?;
     #[cfg(unix)]

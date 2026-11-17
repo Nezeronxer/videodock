@@ -193,7 +193,8 @@ def validate_producer(repo, number, source, kind):
                 'Windows package gates did not pass')
     else:
         needed = ['Verify native macOS interface and real Engine in English and Russian',
-                  'Build and verify application bundle']
+                  'Build and verify application bundle',
+                  'Verify native macOS automatic update and rollback']
         for arch in ['x64', 'arm64']:
             require(any(job['name'].startswith('macos (') and '(' + arch + ',' in job['name']
                         and succeeded(job, needed) for job in jobs), 'macOS ' + arch + ' gates did not pass')

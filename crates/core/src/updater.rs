@@ -11,6 +11,56 @@ use std::{
 use tokio::io::AsyncWriteExt;
 use tokio_util::sync::CancellationToken;
 
+#[cfg(any(target_os = "macos", all(test, unix)))]
+pub mod macos;
+
+#[derive(Clone, Copy)]
+enum Target {
+    Windows,
+    MacosX64,
+    MacosArm64,
+}
+impl Target {
+    fn current() -> Self {
+        if cfg!(target_os = "macos") {
+            if cfg!(target_arch = "aarch64") {
+                Self::MacosArm64
+            } else {
+                Self::MacosX64
+            }
+        } else {
+            // Keep Linux's existing manual release checks; automatic installation is disabled there.
+            Self::Windows
+        }
+    }
+    fn asset(self, version: &str) -> String {
+        let suffix = match self {
+            Self::Windows => "windows-x64-Setup.exe",
+            Self::MacosX64 => "macos-x64.zip",
+            Self::MacosArm64 => "macos-arm64.zip",
+        };
+        format!("VideoDock-{version}-{suffix}")
+    }
+    fn cache_path(self, directory: &Path, number: &str) -> Result<PathBuf> {
+        version(number)?;
+        let name = match self {
+            Self::Windows => format!("VideoDock-{number}-Setup.exe"),
+            _ => self.asset(number),
+        };
+        Ok(directory.join("updates").join(name))
+    }
+}
+pub(crate) fn automatic_updates_supported() -> bool {
+    cfg!(windows)
+        || cfg!(all(
+            target_os = "macos",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))
+}
+pub fn cache_path(directory: &Path, number: &str) -> Result<PathBuf> {
+    Target::current().cache_path(directory, number)
+}
+
 const RELEASES: &str = "https://api.github.com/repos/Nezeronxer/videodock/releases/latest";
 const MAX_INSTALLER: u64 = 512 * 1024 * 1024;
 #[derive(Clone, Serialize, Deserialize)]
@@ -38,6 +88,9 @@ fn version(value: &str) -> Result<[u64; 3]> {
     Ok(result)
 }
 fn release(data: &Value, current: &str) -> Result<Option<Update>> {
+    release_for(data, current, Target::current())
+}
+fn release_for(data: &Value, current: &str, target: Target) -> Result<Option<Update>> {
     let tag = data["tag_name"]
         .as_str()
         .context("Не указана версия обновления")?;
@@ -48,7 +101,7 @@ fn release(data: &Value, current: &str) -> Result<Option<Update>> {
         return Ok(None);
     }
     let number = tag.strip_prefix('v').unwrap_or(tag);
-    let expected = format!("VideoDock-{number}-windows-x64-Setup.exe");
+    let expected = target.asset(number);
     let assets = data["assets"].as_array().context("Нет файлов обновления")?;
     let matching: Vec<_> = assets
         .iter()
@@ -56,7 +109,7 @@ fn release(data: &Value, current: &str) -> Result<Option<Update>> {
         .collect();
     ensure!(
         matching.len() == 1,
-        "Не найден единственный установщик Windows"
+        "Не найден единственный пакет обновления для платформы"
     );
     let asset = matching[0];
     let url = asset["browser_download_url"]
@@ -187,7 +240,7 @@ pub async fn download(
     directory: &Path,
     cancel: &CancellationToken,
 ) -> Result<PathBuf> {
-    version(&update.version)?;
+    let destination = cache_path(directory, &update.version)?;
     let directory = directory.join("updates");
     tokio::fs::create_dir_all(&directory).await?;
     // A private temporary file is removed on cancellation or error; only verified bytes become an installer.
@@ -198,7 +251,6 @@ pub async fn download(
         result = async { verified_body(get(client, &update.url).await?, update, &mut file).await } => result?,
     }
     drop(file);
-    let destination = directory.join(format!("VideoDock-{}-Setup.exe", update.version));
     temporary.persist(&destination).map_err(|e| e.error)?;
     Ok(destination)
 }
@@ -225,6 +277,9 @@ pub fn verify_file(path: &Path, update: &Update) -> Result<()> {
     Ok(())
 }
 pub(crate) fn cached(directory: &Path, value: &Value) -> Option<Update> {
+    cached_for(directory, value, Target::current())
+}
+fn cached_for(directory: &Path, value: &Value, target: Target) -> Option<Update> {
     if value["status"] != "ready" {
         return None;
     }
@@ -232,7 +287,7 @@ pub(crate) fn cached(directory: &Path, value: &Value) -> Option<Update> {
     if version(&update.version).ok()? <= version(env!("CARGO_PKG_VERSION")).ok()? {
         return None;
     }
-    let expected = format!("VideoDock-{}-windows-x64-Setup.exe", update.version);
+    let expected = target.asset(&update.version);
     if ![
         format!(
             "https://github.com/Nezeronxer/videodock/releases/download/v{}/{}",
@@ -249,9 +304,7 @@ pub(crate) fn cached(directory: &Path, value: &Value) -> Option<Update> {
     {
         return None;
     }
-    let path = directory
-        .join("updates")
-        .join(format!("VideoDock-{}-Setup.exe", update.version));
+    let path = target.cache_path(directory, &update.version).ok()?;
     verify_file(&path, &update).ok()?;
     Some(update)
 }
@@ -305,8 +358,93 @@ pub fn install_on_exit(path: &Path, update: &Update) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn fixture_for(target: Target) -> Value {
+        let name = target.asset("0.3.0");
+        serde_json::json!({"tag_name":"v0.3.0","draft":false,"prerelease":false,"assets":[{"name":name,"browser_download_url":format!("https://github.com/Nezeronxer/videodock/releases/download/v0.3.0/{name}"),"digest":format!("sha256:{}", "ab".repeat(32)),"size":123}]})
+    }
     fn fixture() -> Value {
-        serde_json::json!({"tag_name":"v0.3.0","draft":false,"prerelease":false,"assets":[{"name":"VideoDock-0.3.0-windows-x64-Setup.exe","browser_download_url":"https://github.com/Nezeronxer/videodock/releases/download/v0.3.0/VideoDock-0.3.0-windows-x64-Setup.exe","digest":format!("sha256:{}", "ab".repeat(32)),"size":123}]})
+        fixture_for(Target::current())
+    }
+    #[test]
+    fn macos_release_assets_are_selected_and_verified_for_both_architectures() {
+        for target in [Target::Windows, Target::MacosX64, Target::MacosArm64] {
+            let data = fixture_for(target);
+            let update = release_for(&data, "0.2.9", target).unwrap().unwrap();
+            assert_eq!(update.url, data["assets"][0]["browser_download_url"]);
+            assert_eq!(update.version, "0.3.0");
+            assert_eq!(update.bytes, 123);
+            assert_eq!(update.sha256, "ab".repeat(32));
+            for other in [Target::Windows, Target::MacosX64, Target::MacosArm64] {
+                if target.asset("0.3.0") != other.asset("0.3.0") {
+                    assert!(release_for(&data, "0.2.9", other).is_err());
+                }
+            }
+            for (key, value) in [
+                (
+                    "browser_download_url",
+                    serde_json::json!(
+                        "https://github.com/Nezeronxer/videodock/releases/download/v0.3.0/other.zip"
+                    ),
+                ),
+                ("digest", serde_json::json!("sha256:invalid")),
+                ("size", serde_json::json!(0)),
+                ("size", serde_json::json!(MAX_INSTALLER + 1)),
+            ] {
+                let mut bad = data.clone();
+                bad["assets"][0][key] = value;
+                assert!(release_for(&bad, "0.2.9", target).is_err());
+            }
+        }
+    }
+    #[test]
+    fn platform_cache_paths_preserve_windows_name_and_isolate_mac_architectures() {
+        let directory = Path::new("profile");
+        for (target, name) in [
+            (Target::Windows, "VideoDock-0.3.0-Setup.exe"),
+            (Target::MacosX64, "VideoDock-0.3.0-macos-x64.zip"),
+            (Target::MacosArm64, "VideoDock-0.3.0-macos-arm64.zip"),
+        ] {
+            assert_eq!(
+                target.cache_path(directory, "0.3.0").unwrap(),
+                directory.join("updates").join(name)
+            );
+            assert!(target.cache_path(directory, "../bad").is_err());
+        }
+    }
+    #[test]
+    fn each_platform_recovers_only_its_own_verified_cache() {
+        for target in [Target::Windows, Target::MacosX64, Target::MacosArm64] {
+            let directory = tempfile::tempdir().unwrap();
+            std::fs::create_dir(directory.path().join("updates")).unwrap();
+            let path = target.cache_path(directory.path(), "999.0.0").unwrap();
+            std::fs::write(&path, b"fixture").unwrap();
+            let name = target.asset("999.0.0");
+            let good = serde_json::json!({"status":"ready","version":"999.0.0","url":format!("https://github.com/Nezeronxer/videodock/releases/download/v999.0.0/{name}"),"bytes":7,"sha256":format!("{:x}", Sha256::digest(b"fixture"))});
+            assert!(cached_for(directory.path(), &good, target).is_some());
+            let mut unprefixed = good.clone();
+            unprefixed["url"] = serde_json::json!(format!(
+                "https://github.com/Nezeronxer/videodock/releases/download/999.0.0/{name}"
+            ));
+            assert!(cached_for(directory.path(), &unprefixed, target).is_some());
+            for other in [Target::Windows, Target::MacosX64, Target::MacosArm64] {
+                if name != other.asset("999.0.0") {
+                    assert!(cached_for(directory.path(), &good, other).is_none());
+                }
+            }
+            for (key, value) in [
+                ("sha256", serde_json::json!("ab".repeat(32))),
+                ("bytes", serde_json::json!(8)),
+                ("status", serde_json::json!("available")),
+                ("version", serde_json::json!("0.0.0")),
+                ("version", serde_json::json!("../999")),
+            ] {
+                let mut bad = good.clone();
+                bad[key] = value;
+                assert!(cached_for(directory.path(), &bad, target).is_none());
+            }
+            std::fs::write(path, b"changed").unwrap();
+            assert!(cached_for(directory.path(), &good, target).is_none());
+        }
     }
     #[test]
     fn stable_updates_require_newer_version_exact_asset_and_digest() {
@@ -324,6 +462,8 @@ mod tests {
         }
         for (key, value) in [
             ("digest", Value::Null),
+            ("digest", serde_json::json!("sha256:invalid")),
+            ("size", serde_json::json!(0)),
             ("size", serde_json::json!(MAX_INSTALLER + 1)),
             (
                 "browser_download_url",
@@ -334,6 +474,10 @@ mod tests {
             data["assets"][0][key] = value;
             assert!(release(&data, "0.2.0").is_err());
         }
+        let mut duplicate = fixture();
+        let asset = duplicate["assets"][0].clone();
+        duplicate["assets"].as_array_mut().unwrap().push(asset);
+        assert!(release(&duplicate, "0.2.0").is_err());
         for bad in ["0.3", "0.3.0-beta", "../0.3.0", "0.3.0.1"] {
             assert!(version(bad).is_err());
         }
@@ -365,9 +509,10 @@ mod tests {
     fn cached_ready_update_is_recovered_only_after_version_source_and_hash_checks() {
         let directory = tempfile::tempdir().unwrap();
         std::fs::create_dir(directory.path().join("updates")).unwrap();
-        let path = directory.path().join("updates/VideoDock-999.0.0-Setup.exe");
+        let path = cache_path(directory.path(), "999.0.0").unwrap();
         std::fs::write(&path, b"fixture").unwrap();
-        let good = serde_json::json!({"status":"ready","version":"999.0.0","url":"https://github.com/Nezeronxer/videodock/releases/download/v999.0.0/VideoDock-999.0.0-windows-x64-Setup.exe","bytes":7,"sha256":format!("{:x}", Sha256::digest(b"fixture"))});
+        let name = Target::current().asset("999.0.0");
+        let good = serde_json::json!({"status":"ready","version":"999.0.0","url":format!("https://github.com/Nezeronxer/videodock/releases/download/v999.0.0/{name}"),"bytes":7,"sha256":format!("{:x}", Sha256::digest(b"fixture"))});
         assert!(cached(directory.path(), &good).is_some());
         for (key, value) in [
             ("version", serde_json::json!("../999")),

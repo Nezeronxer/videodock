@@ -487,6 +487,16 @@ jobs:
           "$VIDEODOCK_MAC_APP/Contents/MacOS/ffprobe" -version
           PATH=/usr/bin:/bin:/usr/sbin:/sbin /usr/bin/python3 crates/desktop/tests/proof_worker.py "$VIDEODOCK_MAC_APP/Contents/MacOS/VideoDock" --proxy --startup
           ditto -c -k --sequesterRsrc --keepParent "$VIDEODOCK_MAC_APP" "$RUNNER_TEMP/VideoDock-macos-${{ matrix.arch }}.zip"
+      - name: Verify native macOS automatic update and rollback
+        if: always() && steps.macos-package.outcome == 'success'
+        timeout-minutes: 20
+        run: python3 scripts/rust/check-macos-update.py "$RUNNER_TEMP/VideoDock.app" "$RUNNER_TEMP/macos-update-report"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: macos-update-${{ matrix.arch }}
+          path: ${{ runner.temp }}/macos-update-report
+          if-no-files-found: warn
       - name: Preserve macOS crash diagnostics
         if: failure()
         run: |
