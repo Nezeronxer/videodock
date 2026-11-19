@@ -74,6 +74,22 @@ struct State {
     pending_since: Option<Instant>,
 }
 impl State {
+    fn protection(&mut self, status: i32) -> Result<()> {
+        self.last_protection = status;
+        match status {
+            0 | 2 => {}
+            1 => self.attested = true,
+            3 => {
+                return Err(
+                    anyhow::Error::new(videodock_media::AttestationRetryable::Failed)
+                        .context("Google отклонил PO; повторите проверку"),
+                );
+            }
+            _ => bail!("Неизвестное состояние проверки Google"),
+        }
+        Ok(())
+    }
+
     fn new(delivery: &Delivery) -> Result<Self> {
         Ok(Self {
             url: validate_url(&delivery.session.url)?,
@@ -732,13 +748,7 @@ impl Receiver<'_> {
                     57 => state.update(decode(&data)?)?,
                     58 => {
                         let status: Protection = decode(&data)?;
-                        state.last_protection = status.status.unwrap_or(0);
-                        match state.last_protection {
-                            0 | 2 => {}
-                            1 => state.attested = true,
-                            3 => bail!("Google отклонил PO; повторите проверку"),
-                            _ => bail!("Неизвестное состояние проверки Google"),
-                        }
+                        state.protection(status.status.unwrap_or(0))?;
                     }
                     59 => state.policy(decode(&data)?)?,
                     _ => ensure!(
@@ -1112,6 +1122,20 @@ mod tests {
         let mut b = state();
         b.progress((0, 0, false), (5, 0, false)).unwrap();
         assert_eq!(b.stalls, 0);
+    }
+    #[test]
+    fn rejected_proof_requires_new_attestation_instead_of_retrying_the_same_request() {
+        let mut state = state();
+        let error = state.protection(3).unwrap_err();
+        assert!(!state.attested);
+        assert!(error.is::<videodock_media::AttestationRetryable>());
+        assert!(!error.is::<Retryable>());
+        assert!(
+            !state
+                .protection(99)
+                .unwrap_err()
+                .is::<videodock_media::AttestationRetryable>()
+        );
     }
     #[test]
     fn companion_progress_and_new_attestation_do_not_count_as_video_stalls() {
