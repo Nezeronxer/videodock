@@ -116,7 +116,7 @@ impl YouTube {
     pub async fn inspect(&self, value: &str, auth: &Auth) -> Result<Media> {
         let url = checked_video_url(value)?;
         let client = self.client(auth).await?;
-        let query = query(&client, auth);
+        let query = query(&client, auth, value);
         let target = query
             .clone()
             .resolve_url(url.as_str(), false)
@@ -130,7 +130,7 @@ impl YouTube {
                     let proof =
                         crate::proof::request(worker, &id, self.proxy_url.as_deref()).await?;
                     let attested = self.client_identity(auth, Some(&proof)).await?;
-                    let attested = self::query(&attested, auth)
+                    let attested = self::query(&attested, auth, value)
                         .visitor_data(&proof.visitor_data);
                     let (raw, version) = attested
                         .attested_player(&id, &proof.visitor_data, &proof.content_po)
@@ -257,7 +257,7 @@ impl YouTube {
             "Введите поисковый запрос до 2048 символов"
         );
         let client = self.client(auth).await?;
-        let query = query(&client, auth);
+        let query = query(&client, auth, "");
         let mut result = query
             .search::<VideoItem, _>(value)
             .await
@@ -282,8 +282,8 @@ fn has_account_cookie(auth: &Auth) -> bool {
     })
 }
 
-fn query(client: &RustyPipe, auth: &Auth) -> RustyPipeQuery {
-    let query = client.query().lang(preferred_audio_language("", auth, "en")
+fn query(client: &RustyPipe, auth: &Auth, source: &str) -> RustyPipeQuery {
+    let query = client.query().lang(preferred_audio_language(source, auth, "en")
         .parse().unwrap_or(rustypipe::param::Language::En));
     if !has_account_cookie(auth) {
         query.unauthenticated()
@@ -654,6 +654,7 @@ mod tests {
     fn viewing_language_uses_link_then_youtube_preference_then_system() {
         for (source, cookie, system, expected) in [
             ("https://www.youtube.com/watch?v=fixture&hl=ru", "PREF=hl=en", "de-DE", "ru"),
+            ("https://www.youtube.com/shorts/4wayF-jA2Os?hl=ru", "PREF=hl=en", "en-US", "ru"),
             ("", "PREF=f6=400&hl=ru&tz=UTC", "en-US", "ru"),
             ("", "other=hl=ru; PREF=hl=en%2DGB", "ru_RU.UTF-8", "en"),
             ("", "", "ru_RU.UTF-8", "ru"),
