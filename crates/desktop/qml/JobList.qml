@@ -71,6 +71,7 @@ Item {
             readonly property bool previousSelected: index > 0 && root.app.selectedIds.indexOf(root.rows[index - 1].id) >= 0
             readonly property bool nextSelected: index + 1 < root.rows.length && root.app.selectedIds.indexOf(root.rows[index + 1].id) >= 0
             readonly property bool nextCurrent: index + 1 < root.rows.length && root.app.focusedJob && root.app.focusedJob.id === root.rows[index + 1].id
+            readonly property bool resumable: modelData.state === "paused" || modelData.state === "error"
             readonly property bool busy: ["queued", "parsing", "downloading", "processing"].indexOf(modelData.state) >= 0
 
             objectName: "downloadRow"
@@ -178,33 +179,25 @@ Item {
                             anchors.centerIn: parent
                             width: 24
                             height: 24
-                            visible: row.busy || row.modelData.state === "paused" || (row.modelData.state === "complete" && !!row.modelData.path)
-                            text: row.busy ? qsTr("Stop Download") : row.modelData.state === "paused" ? qsTr("Resume Download") : qsTr("Play")
+                            visible: row.busy || row.resumable || (row.modelData.state === "complete" && !!row.modelData.path)
+                            text: row.busy ? qsTr("Stop Download") : row.resumable ? qsTr("Resume Download") : qsTr("Play")
                             Accessible.name: (row.modelData.title || "") + ". " + text
                             display: AbstractButton.IconOnly
-                            icon.source: row.busy ? "" : row.modelData.state === "paused" ? "icons/download.svg" : "icons/play.svg"
+                            icon.source: row.busy ? "" : row.resumable ? "icons/download.svg" : "icons/play.svg"
                             icon.width: 20
                             icon.height: 20
-                            icon.color: "white"
+                            icon.color: row.modelData.state === "error" && thumbnailImage.status !== Image.Ready ? root.app.theme.error : "white"
                             background: Rectangle { color: parent.hovered ? root.app.theme.secondary : "transparent"; radius: 2 }
                             Rectangle { anchors.centerIn: parent; width: 8; height: 8; color: "white"; visible: row.busy }
                             onClicked: {
                                 root.app.chooseJob(row.modelData, false);
                                 if (row.busy)
                                     root.app.jobs("pause", [row.modelData.id]);
-                                else if (row.modelData.state === "paused")
+                                else if (row.resumable)
                                     root.app.jobs("resume", [row.modelData.id]);
                                 else
                                     root.openCompleted(row.modelData);
                             }
-                        }
-                        Label {
-                            anchors.centerIn: parent
-                            text: "!"
-                            font.pixelSize: 22
-                            font.bold: true
-                            color: root.app.theme.error
-                            visible: row.modelData.state === "error"
                         }
                         BusyIndicator {
                             anchors.centerIn: parent

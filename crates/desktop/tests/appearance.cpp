@@ -994,14 +994,20 @@ int main(int argc, char **argv) {
             QFile sample(QString::fromLocal8Bit(argv[5]));
             check(sample.open(QIODevice::ReadOnly), "Local media sample missing");
             const QByteArray media = sample.readAll();
+            bool mediaAvailable = true;
             QTcpServer server;
             check(server.listen(QHostAddress::LocalHost), "Cannot start local media fixture");
             QObject::connect(&server, &QTcpServer::newConnection, [&]() {
                 while (auto *socket = server.nextPendingConnection()) {
-                    QObject::connect(socket, &QTcpSocket::readyRead, socket, [socket, media]() {
+                    QObject::connect(socket, &QTcpSocket::readyRead, socket, [socket, media, &mediaAvailable]() {
                         auto request = socket->property("request").toByteArray() + socket->readAll();
                         socket->setProperty("request", request);
                         if (!request.contains("\r\n\r\n")) return;
+                        if (!mediaAvailable) {
+                            socket->write("HTTP/1.1 410 Gone\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                            socket->disconnectFromHost();
+                            return;
+                        }
                         qint64 offset = 0;
                         for (const auto &line : request.split('\n')) {
                             if (line.toLower().startsWith("range: bytes=")) offset = line.mid(13).split('-').first().toLongLong();
@@ -1029,9 +1035,28 @@ int main(int argc, char **argv) {
             };
             waitFor([&]() { return backend->state["manual"].toObject()["state"] == "ready"; }, "Real media parsing did not reach ready");
             capture("real-engine-manual");
+            mediaAvailable = false;
             click(window, named(window, "downloadButton"));
+            waitFor([&]() { const auto jobs = backend->state["jobs"].toArray(); return !jobs.isEmpty() && jobs.first().toObject()["state"] == "error"; },
+                    "Unavailable media did not reach the error state");
+            const auto failedId = backend->state["jobs"].toArray().first().toObject().value("id").toString();
+            evaluate("ui.activeTab = 'All'");
+            QQuickItem *retryButton = nullptr;
+            waitFor([&]() {
+                rows.clear(); checkRows(list);
+                for (auto *row : rows) {
+                    if (engine.newQObject(row).property("modelData").property("id").toString() == failedId) {
+                        retryButton = qobject_cast<QQuickItem *>(named(row, "thumbnailAction"));
+                        return retryButton && retryButton->isVisible();
+                    }
+                }
+                return false;
+            }, "Failed row has no visible resume button");
+            mediaAvailable = true;
+            click(window, retryButton);
             waitFor([&]() { const auto jobs = backend->state["jobs"].toArray(); return !jobs.isEmpty() && jobs.first().toObject()["state"] == "complete"; }, "Real UI download did not complete");
             const auto job = backend->state["jobs"].toArray().first().toObject();
+            check(job["id"].toString() == failedId && backend->state["jobs"].toArray().size() == 1, "Retry replaced or duplicated the failed job");
             const QString path = job["path"].toString();
             check(QDir::fromNativeSeparators(path).startsWith(profile.path() + "/downloads/") && QFileInfo(path).size() > 0, "Download escaped isolated output or is empty");
             QProcess probe;
