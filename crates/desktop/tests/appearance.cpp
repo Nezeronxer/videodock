@@ -775,6 +775,19 @@ int main(int argc, char **argv) {
                     check(backend->lastAction == beforeInvalidPath && dialog->property("visible").toBool(), "Invalid file path was dispatched");
                     invoke(dialog, "close");
                     auto manual = backend->state["manual"].toObject();
+                    const auto videoManual = manual;
+                    manual["kind"] = "audio";
+                    manual["formats"] = QJsonArray{QJsonObject{{"id", "english-first"}, {"media_type", "audio"}, {"audio_codec", "opus"}}};
+                    backend->state["manual"] = manual;
+                    backend->publish();
+                    invoke(dialog, "open");
+                    auto audioAction = [&]() { return QJsonObject::fromVariantMap(engine.newQObject(dialog).property("downloadAction").call().toVariant().toMap()); };
+                    check(audioAction()["format_id"] == "" && audioAction()["format"].toObject()["audio_codec"] == "Any",
+                          "Automatic audio language pinned the first available stream");
+                    dialog->setProperty("selectedFormatId", "english-first");
+                    check(audioAction()["format_id"] == "english-first", "Explicit audio stream selection was discarded");
+                    invoke(dialog, "close");
+                    manual = videoManual;
                     manual["kind"] = "playlist";
                     manual["items"] = QJsonArray{QJsonObject{{"id", "one"}, {"title", "First item"}}, QJsonObject{{"id", "two"}, {"title", "Second item"}}};
                     backend->state["manual"] = manual;

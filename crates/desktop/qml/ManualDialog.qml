@@ -108,18 +108,19 @@ AppDialog {
 
     function downloadAction() {
         var chosen = selectedFormat;
+        var automaticAudio = mediaType.currentText === "audio" && chosen.id !== selectedFormatId;
         var action = {
             "action": "download",
             "url": manual.url,
             "kind": manual.kind,
             "mode": subscribe ? "subscribe" : "download",
-            "format_id": chosen.id || "",
+            "format_id": automaticAudio ? "" : chosen.id || "",
             "format": {
                 "media_type": mediaType.currentText,
                 "container": container.currentText,
                 "quality": chosen.quality || "Any",
                 "video_codec": chosen.video_codec || codec.currentText,
-                "audio_codec": chosen.audio_codec || "Any",
+                "audio_codec": automaticAudio ? codec.currentText : chosen.audio_codec || "Any",
                 "fps": fps.currentText
             },
             "selected_ids": selectedItems,
