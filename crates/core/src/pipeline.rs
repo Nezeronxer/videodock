@@ -17,7 +17,7 @@ use tokio::{
     process::Command,
 };
 use tokio_util::sync::CancellationToken;
-use videodock_media::{Media, Protocol, Selection, choose_formats};
+use videodock_media::{Media, MediaKind, Protocol, Selection, choose_formats};
 
 #[derive(Clone)]
 pub struct Options {
@@ -383,6 +383,129 @@ async fn prepare_http_partial(path: &Path, identity: &str) -> Result<()> {
     Ok(())
 }
 
+async fn download_photos(
+    media: &Media,
+    client: &Client,
+    options: &Options,
+    staging_dir: &Path,
+    cancel: &CancellationToken,
+    limiter: &Limiter,
+    on_progress: &(dyn Fn(PipelineProgress) + Send + Sync),
+) -> Result<Output> {
+    const PHOTO_LIMIT: usize = 24 * 1024 * 1024;
+    ensure!(
+        options.output_dir.is_absolute(),
+        "Нужен абсолютный путь к папке загрузок"
+    );
+    ensure!(
+        !media.formats.is_empty() && media.formats.len() <= 100,
+        "Неверное число фотографий"
+    );
+    tokio::fs::create_dir_all(&options.output_dir).await?;
+    tokio::fs::create_dir_all(staging_dir).await?;
+    let scratch = tempfile::NamedTempFile::new_in(staging_dir)?;
+    let stem = output_stem(media, options.filename.as_deref());
+    let mut published = PublishedFiles(Vec::new());
+    let mut size = 0;
+    for (index, photo) in media.formats.iter().enumerate() {
+        let cookies = photo
+            .cookies
+            .iter()
+            .chain(&media.cookies)
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut response = transfer::get_response_with_cookies(
+            client,
+            &photo.url,
+            &photo.headers,
+            &cookies,
+            cancel,
+        )
+        .await?;
+        ensure!(
+            response.status() == reqwest::StatusCode::OK,
+            "Сервер фотографий вернул HTTP{}",
+            response.status().as_u16()
+        );
+        let mut data = Vec::new();
+        loop {
+            let chunk = tokio::select! {
+                _ = cancel.cancelled() => bail!("Загрузка приостановлена"),
+                chunk = response.chunk() => chunk.map_err(|_| anyhow::anyhow!("Поток фотографии прерван"))?,
+            };
+            let Some(chunk) = chunk else { break };
+            ensure!(
+                data.len() + chunk.len() <= PHOTO_LIMIT,
+                "Фотография превышает 24 МиБ"
+            );
+            limiter.wait(chunk.len() as u64, cancel).await?;
+            data.extend_from_slice(&chunk);
+        }
+        let ext = match data.as_slice() {
+            [0xff, 0xd8, 0xff, ..] if data.ends_with(&[0xff, 0xd9]) => "jpg",
+            [137, b'P', b'N', b'G', 13, 10, 26, 10, ..] => "png",
+            [
+                b'R',
+                b'I',
+                b'F',
+                b'F',
+                _,
+                _,
+                _,
+                _,
+                b'W',
+                b'E',
+                b'B',
+                b'P',
+                ..,
+            ] => "webp",
+            _ => bail!("Сервер вернул фотографию в неподдерживаемом формате"),
+        };
+        tokio::fs::write(scratch.path(), &data).await?;
+        let name = format!("{stem} - {:02}", index + 1);
+        loop {
+            ensure!(!cancel.is_cancelled(), "Загрузка приостановлена");
+            let path = unique_path(&options.output_dir, &name, ext);
+            #[cfg(windows)]
+            {
+                use std::os::windows::ffi::OsStrExt;
+                ensure!(
+                    path.as_os_str().encode_wide().count() < 245,
+                    "Слишком длинный путь. Выбери более короткую папку"
+                );
+            }
+            match publish(scratch.path(), &path).await {
+                Ok(()) => {
+                    published.0.push(path);
+                    break;
+                }
+                Err(error)
+                    if error
+                        .downcast_ref::<std::io::Error>()
+                        .is_some_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists) => {
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        size += data.len() as u64;
+        on_progress(PipelineProgress {
+            phase: "downloading".into(),
+            downloaded: size,
+            total: None,
+            speed: 0.0,
+            percent: 100.0 * published.0.len() as f64 / media.formats.len() as f64,
+        });
+    }
+    ensure!(!cancel.is_cancelled(), "Загрузка приостановлена");
+    let files = std::mem::take(&mut published.0);
+    Ok(Output {
+        path: files[0].clone(),
+        info: serde_json::json!({"photo_count": files.len()}),
+        files,
+        size,
+    })
+}
+
 pub async fn run(
     mut media: Media,
     client: Client,
@@ -392,6 +515,18 @@ pub async fn run(
     limiter: Arc<Limiter>,
     on_progress: Arc<dyn Fn(PipelineProgress) + Send + Sync>,
 ) -> Result<Output> {
+    if media.kind == MediaKind::Photos {
+        return download_photos(
+            &media,
+            &client,
+            &options,
+            &staging_dir,
+            &cancel,
+            &limiter,
+            &*on_progress,
+        )
+        .await;
+    }
     let ext = options.selection.container.to_ascii_lowercase();
     preview_output_path(
         &media,

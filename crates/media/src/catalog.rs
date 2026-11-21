@@ -138,7 +138,15 @@ impl Catalog {
             return self.naver(&url, auth).await;
         }
         let mut response = self.source_get(&url, &url, auth).await?;
-        let tiktok_cookie = if domain(host, "tiktok.com") && auth.cookie_header.is_empty() {
+        let tiktok = domain(host, "tiktok.com");
+        if tiktok && let Some(watch) = tiktok_photo_watch_url(response.url()) {
+            response = self.source_get(&watch, &url, auth).await?;
+            ensure!(
+                response.url().origin() == watch.origin() && response.url().path() == watch.path(),
+                "TikTok: открытая страница фотопубликации недоступна"
+            );
+        }
+        let tiktok_cookie = if tiktok && auth.cookie_header.is_empty() {
             issued_cookie(
                 response.url(),
                 response.headers(),
@@ -176,11 +184,14 @@ impl Catalog {
             return Ok(direct_media(&final_url, &content_type, size));
         }
         let text = body(response).await?;
-        if domain(host, "tiktok.com") {
+        if tiktok {
+            let mut media = parse_tiktok(&final_url, &text)?;
             let cookie = if auth.cookie_header.is_empty() {
                 tiktok_cookie
             } else {
-                let anonymous = self.source_get(&url, &url, &Auth::default()).await?;
+                let anonymous = self
+                    .source_get(&final_url, &final_url, &Auth::default())
+                    .await?;
                 issued_cookie(
                     anonymous.url(),
                     anonymous.headers(),
@@ -188,7 +199,6 @@ impl Catalog {
                     "tiktok.com",
                 )
             };
-            let mut media = parse_tiktok(&final_url, &text)?;
             if let Some(cookie) = cookie {
                 for stream in &mut media.formats {
                     if Url::parse(&stream.url).ok().is_some_and(|target| {
@@ -288,7 +298,13 @@ impl Catalog {
                 )?;
                 continue;
             }
-            check_status(response.status())?;
+            let status = response.status();
+            if domain(current.host_str().unwrap_or_default(), "tiktok.com")
+                && matches!(status.as_u16(), 401 | 403)
+            {
+                bail!("TikTok: публикация недоступна (HTTP{})", status.as_u16());
+            }
+            check_status(status)?;
             return Ok(response);
         }
         bail!("Слишком много перенаправлений")
@@ -546,7 +562,9 @@ fn finish(mut media: Media) -> Result<Media> {
         "Список превышает 10000 элементов"
     );
     let mut seen = HashSet::new();
-    media.formats.retain(|f| seen.insert(f.url.clone()));
+    if media.kind != MediaKind::Photos {
+        media.formats.retain(|f| seen.insert(f.url.clone()));
+    }
     ensure!(
         !media.formats.is_empty() || !media.entries.is_empty(),
         "Сервис не вернул доступных медиапотоков или элементов списка"
@@ -2165,21 +2183,97 @@ fn parse_naver(origin: &Url, data: &Value) -> Result<Media> {
     finish(media)
 }
 
+fn tiktok_photo_watch_url(url: &Url) -> Option<Url> {
+    if !domain(url.host_str()?, "tiktok.com") {
+        return None;
+    }
+    let (author, path) = url
+        .path()
+        .trim_end_matches('/')
+        .strip_prefix('/')?
+        .split_once('/')?;
+    let id = path.strip_prefix("photo/")?;
+    if !author.starts_with('@') || id.is_empty() || !id.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let mut watch = url.clone();
+    watch.set_path(&format!("/{author}/video/{id}"));
+    watch.set_query(None);
+    watch.set_fragment(None);
+    Some(watch)
+}
+
 fn parse_tiktok(origin: &Url, html: &str) -> Result<Media> {
     let wanted = capture(origin.path(), r"/video/([0-9]+)");
     let hydration = script_json(html, "__UNIVERSAL_DATA_FOR_REHYDRATION__");
+    let detail = hydration
+        .as_ref()
+        .and_then(|root| root.pointer("/__DEFAULT_SCOPE__/webapp.video-detail"));
+    if detail.and_then(|detail| uint(&detail["statusCode"])) == Some(10204) {
+        bail!("TikTok: публикация недоступна в регионе текущего подключения");
+    }
     let legacy = script_json(html, "SIGI_STATE");
-    let item=hydration.as_ref().and_then(|root|root.pointer("/__DEFAULT_SCOPE__/webapp.video-detail/itemInfo/itemStruct")).filter(|item|item.is_object()).cloned().or_else(||legacy.as_ref().and_then(|root|root["ItemModule"].as_object()).and_then(|items|wanted.as_ref().and_then(|id|items.get(id)).or_else(||if items.len()==1{items.values().next()}else{None})).cloned()).ok_or_else(||anyhow!("TikTok: публичный video-detail отсутствует; может требоваться вход или проверка браузера"))?;
+    let item = detail
+        .and_then(|detail| detail.pointer("/itemInfo/itemStruct"))
+        .filter(|item| item.is_object())
+        .or_else(|| {
+            let items = legacy.as_ref()?["ItemModule"].as_object()?;
+            if let Some(id) = &wanted {
+                items.get(id)
+            } else if items.len() == 1 {
+                items.values().next()
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| anyhow!("TikTok: публичные данные публикации недоступны"))?;
+    ensure!(
+        ![
+            "privateItem",
+            "forFriend",
+            "secret",
+            "isProhibited",
+            "takeDown"
+        ]
+        .iter()
+        .any(|key| item[*key] == true),
+        "TikTok: публикация имеет ограниченный доступ"
+    );
     if let Some(wanted) = wanted {
-        ensure!(text(&item, "id") == wanted, "TikTok вернул другое видео");
+        ensure!(text(item, "id") == wanted, "TikTok вернул другое видео");
     }
     let mut media = base_media(origin);
-    media.id = text(&item, "id");
-    media.title = text(&item, "desc");
+    media.id = text(item, "id");
+    media.title = text(item, "desc");
     media.duration = number(&item["video"]["duration"]);
     media.thumbnail = text(&item["video"], "cover");
     media.channel_id = text(&item["author"], "id");
     media.channel_title = text(&item["author"], "uniqueId");
+    if let Some(images) = item.pointer("/imagePost/images").and_then(Value::as_array) {
+        ensure!(
+            !images.is_empty() && images.len() <= 100,
+            "TikTok: неверное число фотографий"
+        );
+        media.kind = MediaKind::Photos;
+        for (index, image) in images.iter().enumerate() {
+            let url = image
+                .pointer("/imageURL/urlList")
+                .and_then(Value::as_array)
+                .and_then(|urls| {
+                    urls.iter()
+                        .filter_map(Value::as_str)
+                        .find(|url| !url.is_empty())
+                })
+                .ok_or_else(|| anyhow!("TikTok: отсутствует оригинал фотографии {}", index + 1))?;
+            media.formats.push(Format {
+                id: (index + 1).to_string(),
+                url: media_address(origin, url)?,
+                headers: source_headers(origin),
+                ..Default::default()
+            });
+        }
+        return finish(media);
+    }
     let video = &item["video"];
     for key in ["playAddr", "downloadAddr"] {
         if let Some(value) = video[key].as_str().filter(|v| !v.is_empty()) {
@@ -3237,6 +3331,18 @@ mod tests {
         );
         assert!(!signed.query_pairs().any(|(key, _)| key.starts_with("amp;")));
         assert!(parse_tiktok(&origin("www.tiktok.com"), "<title>Login</title>").is_err());
+    }
+    #[test]
+    fn tiktok_regional_block_does_not_suggest_registration() {
+        let url = origin("www.tiktok.com");
+        let page = r#"<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">{
+            "__DEFAULT_SCOPE__":{"webapp.video-detail":{
+                "statusCode":10204,"statusMsg":"ru_cross_border_block,ru_watch_video"
+            }}
+        }</script>"#;
+        let error = parse_tiktok(&url, page).unwrap_err().to_string();
+        assert!(error.contains("регион"));
+        assert!(!error.contains("вход"));
     }
     #[test]
     fn tiktok_dash_video_selects_separate_audio() {

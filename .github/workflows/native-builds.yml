@@ -539,15 +539,17 @@ jobs:
           set +e
           cargo test -p videodock-core --test catalog_downloads tiktok_adaptive_audio --locked -- --ignored --exact --nocapture > "$RUNNER_TEMP/native-downloads/tiktok.log" 2>&1
           tiktok_status=$?
+          cargo test -p videodock-core --test catalog_downloads tiktok_public_carousel --locked -- --ignored --exact --nocapture > "$RUNNER_TEMP/native-downloads/tiktok-carousel.log" 2>&1
+          carousel_status=$?
           cargo test -p videodock-core --test youtube_downloads zoo_complete_240p --locked -- --ignored --exact --nocapture > "$RUNNER_TEMP/native-downloads/youtube.log" 2>&1
           youtube_status=$?
           cargo test -p videodock-core --test youtube_downloads reported_shorts_complete_1080p --locked -- --ignored --exact --nocapture > "$RUNNER_TEMP/native-downloads/shorts.log" 2>&1
           shorts_status=$?
-          python3 - "$tiktok_status" "$youtube_status" "$shorts_status" "$RUNNER_TEMP/native-downloads/result.json" <<'PYTHON'
+          python3 - "$tiktok_status" "$carousel_status" "$youtube_status" "$shorts_status" "$RUNNER_TEMP/native-downloads/result.json" <<'PYTHON'
           import json, pathlib, sys
-          pathlib.Path(sys.argv[4]).write_text(json.dumps(dict(zip(['tiktok','youtube','shorts'], map(int, sys.argv[1:4])))) + "\n")
+          pathlib.Path(sys.argv[5]).write_text(json.dumps(dict(zip(['tiktok','tiktok-carousel','youtube','shorts'], map(int, sys.argv[1:5])))) + "\n")
           PYTHON
-          test "$tiktok_status" -eq 0 && test "$youtube_status" -eq 0 && test "$shorts_status" -eq 0
+          test "$tiktok_status" -eq 0 && test "$carousel_status" -eq 0 && test "$youtube_status" -eq 0 && test "$shorts_status" -eq 0
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -678,6 +680,7 @@ jobs:
           $results = [ordered]@{}
           $cases = @(
             @('tiktok', 'catalog_downloads', 'tiktok_adaptive_audio'),
+            @('tiktok-carousel', 'catalog_downloads', 'tiktok_public_carousel'),
             @('youtube', 'youtube_downloads', 'zoo_complete_240p'),
             @('shorts', 'youtube_downloads', 'reported_shorts_complete_1080p')
           )

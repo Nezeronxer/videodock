@@ -28,6 +28,7 @@ AppDialog {
     readonly property var requestedVR: vrTouched ? vr.currentText : manual.editing ? (savedPreferences.vr === true ? true : savedPreferences.vr_mode || "Any") : app.settings.videoVR
     property string outputDirectory: ""
     property string outputFilename: ""
+    readonly property bool photos: manual.kind === "photos"
     property bool batch: ["playlist", "channel", "search"].indexOf(manual.kind) >= 0
     property var formats: (manual.formats || []).filter(function (f) {
         return (!mediaType.currentText || !f.media_type || f.media_type === mediaType.currentText || (mediaType.currentText === "audio" && !!f.audio_codec)) && (codec.currentText === "Any" || String(f.video_codec || f.audio_codec || "") === codec.currentText) && (fps.currentText === "Any" || String(f.fps || "") === fps.currentText) && root.matchesVR(f);
@@ -191,11 +192,11 @@ AppDialog {
     }
 
     objectName: "manualDownloadDialog"
-    title: manual.editing ? qsTranslate("JobList", "Edit Subscription Settings") : subscribe ? (existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : batch ? qsTr("Download %1").arg(manual.kind === "search" ? qsTr("Search Results") : manual.kind === "channel" ? qsTr("Channel") : qsTr("Playlist")) : mediaType.currentText === "audio" ? qsTr("Download Audio") : qsTr("Download Video")
+    title: manual.editing ? qsTranslate("JobList", "Edit Subscription Settings") : subscribe ? (existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : batch ? qsTr("Download %1").arg(manual.kind === "search" ? qsTr("Search Results") : manual.kind === "channel" ? qsTr("Channel") : qsTr("Playlist")) : photos ? qsTr("Download Photos") : mediaType.currentText === "audio" ? qsTr("Download Audio") : qsTr("Download Video")
     modal: true
     anchors.centerIn: parent
     width: Math.min(800, parent.width - 40)
-    height: Math.min(batch && !collapsed ? parent.height - 40 : 520, parent.height - 40)
+    height: Math.min(batch && !collapsed ? parent.height - 40 : photos ? 216 : 520, parent.height - 40)
     padding: 0
     header: null
     footer: null
@@ -422,7 +423,7 @@ AppDialog {
                     }
                     Label {
                         textFormat: Text.PlainText
-                        text: root.manual.error || root.manual.duration || ""
+                        text: root.manual.error || (root.photos ? qsTr("%n photo(s)", "", root.manual.photo_count) : root.manual.duration || "")
                         color: root.manual.error ? root.app.theme.error : root.app.theme.secondary
                         Layout.fillWidth: true
                         elide: Text.ElideRight
@@ -510,6 +511,7 @@ AppDialog {
         }
 
         Rectangle {
+            visible: !root.photos
             Layout.fillWidth: true
             Layout.fillHeight: !root.batch
             Layout.preferredHeight: root.batch ? 225 : -1
@@ -823,7 +825,7 @@ AppDialog {
                     id: outputPath
                     objectName: "manualPath"
                     property bool edited: false
-                    visible: !root.batch
+                    visible: !root.batch && !root.photos
                     Layout.fillWidth: true
                     Layout.preferredHeight: 40
                     rightPadding: 42
@@ -847,7 +849,7 @@ AppDialog {
                     }
                 }
                 ToolButton {
-                    visible: root.batch
+                    visible: root.batch || root.photos
                     id: outputFolder
                     objectName: "manualOutputFolder"
                     text: qsTr("Save To") + ": " + root.outputDirectory
@@ -884,7 +886,7 @@ AppDialog {
                     Layout.preferredHeight: 40
                     text: root.manual.editing ? qsTranslate("SettingsDialog", "Save") : root.subscribe ? (root.existing ? qsTr("Subscribe and Download") : qsTr("Subscribe")) : root.batch ? qsTr("Download %1").arg(root.selectedItems.length) : qsTr("Download")
                     highlighted: true
-                    enabled: root.manual.state === "ready" && !root.manual.error && (root.formats.length > 0 || (root.manual.editing === true && Object.keys(root.editedFormat).length === 0)) && (!root.batch || root.selectedItems.length > 0 || root.subscribe)
+                    enabled: root.manual.state === "ready" && !root.manual.error && (root.photos || root.formats.length > 0 || (root.manual.editing === true && Object.keys(root.editedFormat).length === 0)) && (!root.batch || root.selectedItems.length > 0 || root.subscribe)
                     onClicked: root.submit()
                 }
             }

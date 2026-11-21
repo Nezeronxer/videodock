@@ -699,7 +699,9 @@ fn manual_view(media: &Media, settings: &Value, errors: &HashMap<String, String>
         "can_translate_subtitles":media.subtitles.iter().any(|subtitle|subtitle.translatable),
         "audio_tracks":tracks.into_iter().map(|(language,title)|json!({"id":language,"language":language,"label":title,"default":language=="default"})).collect::<Vec<_>>(),
         "output_dir":settings["path"]});
-    if !matches!(
+    if media.kind == MediaKind::Photos {
+        view["photo_count"] = json!(media.formats.len());
+    } else if !matches!(
         media.kind,
         MediaKind::Playlist | MediaKind::Channel | MediaKind::Search
     ) {
@@ -1063,7 +1065,7 @@ if item["_parent"]==replacement{item["_parent"]=json!(id);}}
         let mut selection=spec.selection.clone();
         crate::pipeline::prepare(&client,&mut media,&cancel).await?;
         if spec.smart&&selection.media_type=="video"&&!media.formats.iter().any(Format::has_video)&&media.formats.iter().any(Format::has_audio){selection.media_type="audio".into();if ["mp4","mkv","webm"].contains(&selection.container.as_str()){selection.container="m4a".into();}change(&inner,|state|{if let Some(item)=job_mut(state,&id){item["kind"]=json!("audio");item["media_type"]=json!("audio");item["_spec"]["selection"]=json!(selection);item["format"]=json!(selection.container.to_ascii_uppercase());}Ok(())})?;}
-        if spec.smart&&videodock_media::choose_formats(&media.formats,&selection).is_err(){
+        if media.kind!=MediaKind::Photos&&spec.smart&&videodock_media::choose_formats(&media.formats,&selection).is_err(){
             selection.format_id=None;selection.video_codec="any".into();selection.audio_codec="any".into();selection.fps=0;
             if videodock_media::choose_formats(&media.formats,&selection).is_err(){selection.quality=media.formats.iter().filter_map(videodock_media::Format::video_quality).min().unwrap_or(0);}
             notice(&inner,"Для одного из источников выбрано ближайшее доступное качество к настройкам умного режима.");
@@ -1119,6 +1121,15 @@ if item["_parent"]==replacement{item["_parent"]=json!(id);}}
                             item["size"] = json!(bytes(output.size));
                             item["speed"] = json!("");
                             actual_info(item, &output.info);
+                            if let Some(count) = output.info["photo_count"].as_u64() {
+                                item["kind"] = json!("photos");
+                                item["media_type"] = json!("photos");
+                                item["format"] = json!(output.path.extension()
+                                    .and_then(|extension| extension.to_str())
+                                    .unwrap_or_default().to_ascii_uppercase());
+                                item["quality"] = json!("");
+                                item["photo_count"] = json!(count);
+                            }
                             if !queued_again {
                                 item["state"] = json!("complete");
                                 item["progress"] = json!(100);

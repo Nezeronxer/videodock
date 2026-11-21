@@ -757,6 +757,18 @@ Independent implementation.</source>
 <context>
     <name>ManualDialog</name>
     <message>
+        <source>Download Photos</source>
+        <translation>Скачать фотографии</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n photo(s)</source>
+        <translation>
+            <numerusform>%n фотография</numerusform>
+            <numerusform>%n фотографии</numerusform>
+            <numerusform>%n фотографий</numerusform>
+        </translation>
+    </message>
+    <message>
         <location filename="../ManualDialog.qml" line="154"/>
         <location filename="../ManualDialog.qml" line="773"/>
         <source>Subscribe and Download</source>

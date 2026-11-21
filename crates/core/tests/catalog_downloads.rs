@@ -289,6 +289,62 @@ sample!(
     "https://www.tiktok.com/@shintaro.editor/video/7701930464302435615",
     false
 );
+#[tokio::test]
+#[ignore = "complete public TikTok photo download with FFmpeg"]
+async fn tiktok_public_carousel() {
+    let proxy = std::env::var("VIDEODOCK_TEST_PROXY").ok();
+    let catalog = Catalog::new(proxy.as_deref()).unwrap();
+    let media = catalog
+        .inspect(
+            "https://www.tiktok.com/@evyl1nn/photo/7705884855501884690",
+            &Auth::default(),
+        )
+        .await
+        .expect("public photo metadata requires no account");
+    assert_eq!(media.id, "7705884855501884690");
+    let temp = tempfile::tempdir().unwrap();
+    let result = pipeline::run(
+        media,
+        catalog.client(),
+        Options {
+            selection: Selection::default(),
+            output_dir: std::env::var_os("VIDEODOCK_TEST_OUTPUT_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| temp.path().join("output")),
+            filename: Some("TikTok-carousel".into()),
+            embed_subtitles: false,
+            tags: false,
+            skip_duplicates: false,
+        },
+        temp.path().join("staging"),
+        CancellationToken::new(),
+        Arc::new(Limiter::new(0)),
+        Arc::new(|_| {}),
+    )
+    .await
+    .expect("download all public TikTok slides");
+    assert_eq!(result.files.len(), 6);
+    assert_eq!(result.path, result.files[0]);
+    let mut bytes = 0;
+    for path in &result.files {
+        bytes += std::fs::metadata(path).unwrap().len();
+        assert!(
+            tokio::process::Command::new("ffmpeg")
+                .args(["-nostdin", "-v", "error", "-xerror", "-i"])
+                .arg(path)
+                .args(["-frames:v", "1", "-f", "null", "-"])
+                .kill_on_drop(true)
+                .status()
+                .await
+                .unwrap()
+                .success(),
+            "could not decode a downloaded photo"
+        );
+    }
+    assert_eq!(result.size, bytes);
+    println!("TikTok carousel: PASS photos=6 bytes={bytes}");
+}
+
 sample!(
     tumblr,
     "Tumblr",

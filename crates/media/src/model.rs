@@ -7,6 +7,7 @@ pub enum MediaKind {
     #[default]
     Video,
     Audio,
+    Photos,
     Playlist,
     Channel,
     Search,
