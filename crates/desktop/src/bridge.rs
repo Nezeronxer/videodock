@@ -8,6 +8,9 @@ mod ffi {
         include!("cxx-qt-lib/qguiapplication.h");
         type QGuiApplication = cxx_qt_lib::QGuiApplication;
         include!("platform.h");
+        include!("clipboard.h");
+        fn clipboard_host() -> QString;
+        fn watch_clipboard(backend: Pin<&mut QObject>);
         fn initialize_webengine();
         fn create_application() -> UniquePtr<QGuiApplication>;
         fn create_proof_application(resolver_rules: &QString) -> UniquePtr<QGuiApplication>;
@@ -38,6 +41,15 @@ mod ffi {
         #[qinvokable]
         #[cxx_name = "initializeProfile"]
         fn initialize_profile(self: Pin<&mut Self>);
+        #[qinvokable]
+        #[cxx_name = "clipboardHost"]
+        fn clipboard_host(self: &Self) -> QString;
+        #[qinvokable]
+        #[cxx_name = "clipboardEvent"]
+        fn clipboard_event(self: Pin<&mut Self>);
+        #[qsignal]
+        #[cxx_name = "clipboardChanged"]
+        fn clipboard_changed(self: Pin<&mut Self>);
         #[qinvokable]
         #[cxx_name = "referenceAsset"]
         fn reference_asset(self: &Self, name: &QString) -> QString;
@@ -173,6 +185,14 @@ impl Default for BackendRust {
     }
 }
 impl ffi::Backend {
+    pub fn clipboard_host(&self) -> QString {
+        ffi::clipboard_host()
+    }
+
+    pub fn clipboard_event(self: Pin<&mut Self>) {
+        self.clipboard_changed();
+    }
+
     pub fn reference_asset(&self, name: &QString) -> QString {
         ffi::reference_asset(name)
     }
@@ -181,6 +201,7 @@ impl ffi::Backend {
             return;
         }
         self.as_mut().rust_mut().profile_connected = true;
+        ffi::watch_clipboard(self.as_mut().upcast_pin());
         ffi::watch_cookies(self.upcast_pin());
     }
     pub fn cookie_event(

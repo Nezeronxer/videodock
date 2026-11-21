@@ -1,4 +1,5 @@
 // Isolated frontend fixture: exercises the shipped QML without accounts or network requests.
+#include "../include/clipboard.h"
 #include <QApplication>
 #include <QResource>
 #include <QClipboard>
@@ -81,7 +82,12 @@ public:
     Q_INVOKABLE void refresh() {
         if (engineProcess.state() == QProcess::Running) exchange(QJsonObject{{"snapshot", true}});
     }
-    Q_INVOKABLE void initializeProfile() { emit snapshotChanged(); }
+    Q_INVOKABLE void initializeProfile() {
+        watch_clipboard(*this);
+        emit snapshotChanged();
+    }
+    Q_INVOKABLE QString clipboardHost() const { return clipboard_host(); }
+    Q_INVOKABLE void clipboardEvent() { emit clipboardChanged(); }
     Q_INVOKABLE QString referenceAsset(const QString &name) {
         if (name.contains('/') || name.contains('\\')) return {};
         const auto path = QStringLiteral(":/videodock/reference/") + name;
@@ -105,6 +111,7 @@ public:
     void publish() { emit snapshotChanged(); }
 signals:
     void snapshotChanged();
+    void clipboardChanged();
 };
 
 static void check(bool condition, const QString &message) {
@@ -232,19 +239,32 @@ int main(int argc, char **argv) {
                   "Service logo is stretched: " + image->objectName());
         }
         capture("service-icons-proportions");
-        // The action stays recognizable regardless of clipboard contents.
-        for (const auto &sample : QStringList{
-                 "https://www.youtube.com/watch?v=fixture",
-                 "https://www.tiktok.com/@fixture/video/1",
-                 "private-fixture-marker"}) {
+        const QList<QPair<QString, QString>> clipboardSamples{
+            {"https://www.youtube.com/watch?v=fixture", "paste-youtube.svg"},
+            {"https://youtu.be/fixture", "paste-youtube.svg"},
+            {"https://vm.tiktok.com/fixture", "paste-tiktok.svg"},
+            {"https://open.spotify.com/track/fixture", "paste-spotify.svg"},
+            {"https://on.soundcloud.com/fixture", "service-soundcloud.svg"},
+            {"https://vimeo.com/123", "service-vimeo.svg"},
+            {"https://youtube.com.example.test/", "connection.svg"},
+            {"https://youtube.com@evil.example/", "connection.svg"},
+            {"private-fixture-marker", "connection.svg"},
+            {"", "connection.svg"},
+        };
+        for (const auto &[sample, expectedIcon] : clipboardSamples) {
             QApplication::clipboard()->setText(sample);
             backend->lastAction = {};
             window->requestActivate();
             QTest::qWait(30);
             const auto icon = engine.newQObject(named(window, "pasteButton")).property("icon");
             const QString source = icon.property("source").toString();
-            check(source.endsWith("icons/connection.svg"), "Paste action icon changed with the clipboard");
-            check(icon.property("color").toVariant().value<QColor>().alpha() == 255, "Paste action icon lost its contrast");
+            check(source.endsWith("icons/" + expectedIcon), "Incorrect clipboard icon, expected " + expectedIcon);
+            const QColor color = icon.property("color").toVariant().value<QColor>();
+            check(color.alpha() == 255 && color.red() == color.green() && color.green() == color.blue(),
+                  "Paste icon is not an opaque monochrome color");
+            const QUrl iconUrl = icon.property("source").toVariant().toUrl();
+            const auto iconPath = QQmlEngine::contextForObject(named(window, "pasteButton"))->resolvedUrl(iconUrl).toLocalFile();
+            check(QImageReader(iconPath).size().isValid(), "Paste icon source is unreadable");
             check(icon.property("width").toInt() == 20 && icon.property("height").toInt() == 20, "Paste action icon size changed");
             check(backend->lastAction.isEmpty(), "Clipboard preview dispatched private input");
             check(named(window, "clipboardBuffer")->property("text").toString().isEmpty(), "Clipboard preview retained private input");

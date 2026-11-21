@@ -44,4 +44,12 @@
   <file alias="service-tumblr.svg">icons/service-tumblr.svg</file>
   <file alias="service-flickr.svg">icons/service-flickr.svg</file>
   <file alias="service-bitchute.svg">icons/service-bitchute.svg</file>
+  <file alias="paste-youtube.svg">icons/paste-youtube.svg</file>
+  <file alias="paste-tiktok.svg">icons/paste-tiktok.svg</file>
+  <file alias="paste-spotify.svg">icons/paste-spotify.svg</file>
+  <file alias="paste-rumble.svg">icons/paste-rumble.svg</file>
+  <file alias="paste-twitch.svg">icons/paste-twitch.svg</file>
+  <file alias="paste-nicovideo.svg">icons/paste-nicovideo.svg</file>
+  <file alias="paste-tumblr.svg">icons/paste-tumblr.svg</file>
+  <file alias="paste-bitchute.svg">icons/paste-bitchute.svg</file>
 </qresource><qresource prefix="/qt/qml/VideoDock/qml"><file alias="LanguageOptions.js">LanguageOptions.js</file></qresource></RCC>

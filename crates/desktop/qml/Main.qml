@@ -112,11 +112,21 @@ ApplicationWindow {
         var match = /^https?:\/\/(?:[^/@\s]+@)?([^/:?#\s]+)/i.exec(String(url || ""));
         if (!match)
             return "";
-        var host = match[1].toLowerCase();
-        var services = {
+        const service = platformService(match[1].toLowerCase());
+        if (!service)
+            return "icons/browser.svg";
+        if (service === "spotify")
+            return "icons/paste-spotify.svg";
+        return asset((service === "tiktok" ? "tik-tok" : service) + "-icon.svg", "icons/service-" + service + ".svg");
+    }
+
+    function platformService(host) {
+        const services = {
             "youtube.com": "youtube", "youtu.be": "youtube", "youtube-nocookie.com": "youtube",
-            "tiktok.com": "tiktok", "vimeo.com": "vimeo", "soundcloud.com": "soundcloud",
-            "facebook.com": "facebook", "fb.watch": "facebook", "twitch.tv": "twitch",
+            "tiktok.com": "tiktok", "vimeo.com": "vimeo",
+            "soundcloud.com": "soundcloud", "snd.sc": "soundcloud",
+            "spotify.com": "spotify", "spotify.link": "spotify", "spoti.fi": "spotify",
+            "facebook.com": "facebook", "fb.watch": "facebook", "fb.com": "facebook", "twitch.tv": "twitch",
             "dailymotion.com": "dailymotion", "dai.ly": "dailymotion",
             "bilibili.com": "bilibili", "b23.tv": "bilibili", "rumble.com": "rumble",
             "tv.naver.com": "naver", "tv.naver.tv": "naver", "tumblr.com": "tumblr",
@@ -124,13 +134,11 @@ ApplicationWindow {
             "likee.video": "likee", "likee.com": "likee", "likeevideo.ru": "likee",
             "flickr.com": "flickr", "flic.kr": "flickr", "bitchute.com": "bitchute"
         };
-        for (var domain in services) {
-            if (host === domain || host.endsWith("." + domain)) {
-                var service = services[domain];
-                return asset((service === "tiktok" ? "tik-tok" : service) + "-icon.svg", "icons/service-" + service + ".svg");
-            }
+        for (const domain in services) {
+            if (host === domain || host.endsWith("." + domain))
+                return services[domain];
         }
-        return "icons/browser.svg";
+        return "";
     }
 
     function asset(name, fallback) {
@@ -198,6 +206,24 @@ ApplicationWindow {
             "ids": ids || selectedIds,
             "delete_files": !!deleteFiles
         });
+    }
+
+    property string pasteIcon: "icons/connection.svg"
+
+    function updatePasteIcon() {
+        const service = platformService(backend.clipboardHost());
+        if (!service) {
+            pasteIcon = "icons/connection.svg";
+            return;
+        }
+        const silhouettes = ["youtube", "tiktok", "spotify", "rumble", "twitch", "nicovideo", "tumblr", "bitchute"];
+        const prefix = silhouettes.includes(service) ? "icons/paste-" : "icons/service-";
+        pasteIcon = prefix + service + ".svg";
+    }
+
+    onActiveChanged: {
+        if (active)
+            updatePasteIcon();
     }
 
     function pasteLink() {
@@ -369,8 +395,15 @@ ApplicationWindow {
                     tray.showMessage(notification.title || "VideoDock", notification.body || "");
             }
         }
+        onClipboardChanged: {
+            if (window.active)
+                window.updatePasteIcon();
+        }
+
         Component.onCompleted: {
             initializeProfile();
+            if (window.active)
+                window.updatePasteIcon();
             refresh();
         }
     }
@@ -440,7 +473,7 @@ ApplicationWindow {
                     palette.dark: window.theme.accent
                     objectName: "pasteButton"
                     text: qsTr("Paste Link")
-                    icon.source: "icons/connection.svg"
+                    icon.source: window.pasteIcon
                     icon.color: window.theme.accentText
                     icon.width: 20
                     icon.height: 20
